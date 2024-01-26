@@ -87,79 +87,80 @@ class CameraWgt(ttk.Frame) :
         self.state = StringVar()
         ttk.Label(self, textvariable=self.state).grid(column=4,row=1,sticky=(W,E))
 
-root = Tk()
-default_font=tkinter.font.nametofont('TkDefaultFont')
-default_font.configure(size=12,weight=tkinter.font.BOLD)
 
-root.rowconfigure(0, weight=1)
-root.columnconfigure(0, weight=1,minsize=200)
-root.minsize(500,20)
-root.resizable(False,False)
+def status() :
+    root = Tk()
+    default_font=tkinter.font.nametofont('TkDefaultFont')
+    default_font.configure(size=12,weight=tkinter.font.BOLD)
 
-mainframe = ttk.Frame(root, padding="3 3 12 12",width=100,height=10)
-mainframe.grid(column=0, row=0, stick=(N,W,E,S))
-mainframe.columnconfigure(1, minsize=100, weight=1)
+    root.rowconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1,minsize=200)
+    root.minsize(500,20)
+    root.geometry('+0+0')
+    root.resizable(False,False)
 
-telframe=TelescopeWgt(mainframe)
-telframe.grid(column=1,row=1,stick=(W))
-for i in range(1,7) :
-    telframe.columnconfigure(i, minsize=50, weight=1)
+    mainframe = ttk.Frame(root, padding="3 3 12 12",width=100,height=10)
+    mainframe.grid(column=0, row=0, stick=(N,W,E,S))
+    mainframe.columnconfigure(1, minsize=100, weight=1)
 
-line=ttk.Separator(mainframe,orient='horizontal')
-line.grid(column=1,row=2,stick=(E,W))
+    telframe=TelescopeWgt(mainframe)
+    telframe.grid(column=1,row=1,stick=(W))
+    for i in range(1,7) :
+        telframe.columnconfigure(i, minsize=50, weight=1)
 
-domeframe=DomeWgt(mainframe)
-domeframe.columnconfigure(1, minsize=200, weight=1)
-domeframe.grid(column=1,row=3,stick=(W))
+    line=ttk.Separator(mainframe,orient='horizontal')
+    line.grid(column=1,row=2,stick=(E,W))
 
-line=ttk.Separator(mainframe,orient='horizontal')
-line.grid(column=1,row=4,stick=(E,W))
+    domeframe=DomeWgt(mainframe)
+    domeframe.columnconfigure(1, minsize=200, weight=1)
+    domeframe.grid(column=1,row=3,stick=(W))
 
-camframe=CameraWgt(mainframe)
-camframe.grid(column=1,row=5,stick=(W))
+    line=ttk.Separator(mainframe,orient='horizontal')
+    line.grid(column=1,row=4,stick=(E,W))
 
-for child in mainframe.winfo_children(): 
-    child.grid_configure(padx=5, pady=5)
-mainframe.focus()
+    camframe=CameraWgt(mainframe)
+    camframe.grid(column=1,row=5,stick=(W))
 
-svrs =  ['10.75.0.21:32227', '10.75.0.22:11111']
-D=Dome(svrs[0],0)
-S=SafetyMonitor(svrs[0],0)
-T=Telescope(svrs[1],0)
-F=Focuser(svrs[1],0)
-Filt=FilterWheel(svrs[1],0)
-C=Camera(svrs[1],0)
+    for child in mainframe.winfo_children(): 
+        child.grid_configure(padx=5, pady=5)
+    mainframe.focus()
 
-shutter=['Open','Closed','Opening','Closing','Error']
-state=['Idle','Waiting','Exposing','Reading','Download','Error']
+    svrs =  ['10.75.0.21:32227', '10.75.0.22:11111']
+    D=Dome(svrs[0],0)
+    Safe=SafetyMonitor(svrs[0],0)
+    T=Telescope(svrs[1],0)
+    F=Focuser(svrs[1],0)
+    Filt=FilterWheel(svrs[1],0)
+    C=Camera(svrs[1],0)
 
-apo=EarthLocation.of_site('APO')
-def update() :
-    if True :
-        t=Time.now()
-        t.location=apo
-        y,m,d,h,m,s=t.ymdhms
-        telframe.ut.set('{:02d}:{:02d}:{:04.1f}'.format(h,m,s))
-        telframe.lst.set('{:.0f}:{:.0f}:{:04.1f}'.format(*t.sidereal_time('mean').hms))
-        telframe.mjd.set('{:.2f}'.format(t.mjd))
+    shutter=['Open','Closed','Opening','Closing','Error']
+    state=['Idle','Waiting','Exposing','Reading','Download','Error']
 
-        telframe.ra.set('{:f}'.format(T.RightAscension))
-        telframe.dec.set('{:f}'.format(T.Declination))
-        telframe.az.set('{:.2f}'.format(T.Azimuth))
-        telframe.alt.set('{:.2f}'.format(T.Altitude))
-    #except: pass
-    try :
-        domeframe.az.set('{:f}'.format(D.Azimuth))
-        domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
-    except: pass
-    try :
-        camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
-        camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-        camframe.state.set('{:s}'.format(state[C.CameraState]))
-    except: pass
-    root.after(1000,update)
+    apo=EarthLocation.of_site('APO')
+    def update() :
+        try :
+            t=Time.now()
+            t.location=apo
+            y,m,d,h,m,s=t.ymdhms
+            telframe.ut.set('{:02d}:{:02d}:{:04.1f}'.format(h,m,s))
+            telframe.lst.set('{:.0f}:{:.0f}:{:04.1f}'.format(*t.sidereal_time('mean').hms))
+            telframe.mjd.set('{:.2f}'.format(t.mjd))
 
-update()
-root.mainloop()
+            telframe.ra.set('{:f}'.format(T.RightAscension))
+            telframe.dec.set('{:f}'.format(T.Declination))
+            telframe.az.set('{:.2f}'.format(T.Azimuth))
+            telframe.alt.set('{:.2f}'.format(T.Altitude))
+        except: pass
+        try :
+            domeframe.az.set('{:f}'.format(D.Azimuth))
+            domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
+        except: pass
+        try :
+            camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
+            camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
+            camframe.state.set('{:s}'.format(state[C.CameraState]))
+        except: pass
+        root.after(1000,update)
 
-
+    update()
+    root.mainloop()
