@@ -13,6 +13,8 @@ from alpaca.safetymonitor import *
 from astropy.time import Time
 from astropy.coordinates import EarthLocation
 
+#from coordio import sky, site, time, ICRS
+
 class TelescopeWgt(ttk.Frame) :
 
     def __init__(self,container) :
@@ -137,6 +139,8 @@ def status() :
     state=['Idle','Waiting','Exposing','Reading','Download','Error']
 
     apo=EarthLocation.of_site('APO')
+    #aposite=site.Site('APO')
+
     def update() :
         try :
             t=Time.now()
@@ -145,6 +149,17 @@ def status() :
             telframe.ut.set('{:02d}:{:02d}:{:04.1f}'.format(h,m,s))
             telframe.lst.set('{:.0f}:{:.0f}:{:04.1f}'.format(*t.sidereal_time('mean').hms))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
+
+            # convert from topocentric to ICRS
+            #aposite.set_time(time.Time())
+            ##print('telescope: ', T.RightAscension, T.Declination)
+            ##print('time: ', time.Time())
+            ##obs = sky.Observed([[15*T.RightAscension, T.Declination]], site=aposite)
+            #obs = sky.Observed([[T.Altitude, T.Azimuth]], site=aposite)
+            #icrs = sky.ICRS(obs)
+            ##print('ICRS:',icrs)
+            #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
+            #telframe.dec.set('{:f}'.format(icrs[0][1]))
 
             telframe.ra.set('{:f}'.format(T.RightAscension))
             telframe.dec.set('{:f}'.format(T.Declination))

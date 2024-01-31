@@ -21,6 +21,7 @@ from pyvista import tv
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
+from astropy.io import fits
 
 import status
 import multiprocessing as mp
@@ -43,7 +44,14 @@ Filt=FilterWheel(svrs[1],0)
 C=Camera(svrs[1],0)
 
 
-def expose(exptime,filt,binx=3,biny=3,light=True,display=None,file=None) :
+def focrun(cent,step,n,exptime,filt,binx=3,biny=3,display=None) :
+    for foc in np.arange(cent-n//2*step,cent+n//2*step,step) :
+        F.Move(int(foc))
+        print('position: ',F.Position)
+        expose(exptime,filt,binx=binx,biny=biny,display=display)
+        display.fig.canvas.flush_events()
+
+def expose(exptime,filt,binx=3,biny=3,light=True,display=None,write=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -60,8 +68,8 @@ def expose(exptime,filt,binx=3,biny=3,light=True,display=None,file=None) :
            open shuter for exposure?
     display : pyvista tv, default=None
            pyvista display tool to display into if specified
-    file  : str, default=None
-           file to save image to (not yet implemented)
+    write  : str, default=None
+           file to save image to 
     """
     pos = np.where(np.array(Filt.Names) == filt)
     if len(pos) == 0 :
@@ -79,17 +87,26 @@ def expose(exptime,filt,binx=3,biny=3,light=True,display=None,file=None) :
     if display is not None :
         display.tv(data)
 
+    hdu=fits.PrimaryHDU(data)
+    hdu.header['EXPTIME'] = exptime 
+    hdu.header['FILTER'] = filt 
+    hdu.header['FOCUS'] = F.Position
+    if write is not None :
+        hdu.writeto(write)
+
+    return hdu
+
 
 def j2000totopocentric(ra,dec) :
     """ Routine to convert J2000 coordinates to topocentric RA/DEC
     """
-    #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
-    from coordio import sky, site, time
-    coords=sky.ICRS(np.array([[ra,dec]]))
+    #from coordio import sky, site, time
+    coords=sky.ICRS(np.array([[15*ra,dec]]))
     s=site.Site('APO')
     s.set_time(time.Time())    # defaults to now
     obs=sky.Observed(coords,site=s)
-    return obs.ra, obs.dec
+    print('topo: ',obs.ra/15.,obs.dec)
+    return obs.ra/15., obs.dec
 
     # tpm routines
     #apo=EarthLocation.of_site('APO')
@@ -97,6 +114,7 @@ def j2000totopocentric(ra,dec) :
     #utc = tpm.gcal2j(d.year,d.month,d.day)
     #tt = tpm.utc3tdb(utc)
     #v6 = convert.cat2v6(ra*np.pi/180,dec*np.pi/180)
+    #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
 
 def slew(ra, dec) :
     """ Slew to RA/DEC
@@ -129,7 +147,9 @@ def domesync(update=60) :
 
     t=mp.Process(target=sync)
     t.start()
-   
-proc = mp.Process(target=status.status)
-proc.start()
+
+def start_status() :   
+    global proc
+    proc = mp.Process(target=status.status)
+    proc.start()
 
