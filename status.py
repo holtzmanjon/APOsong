@@ -65,7 +65,7 @@ class DomeWgt(ttk.Frame) :
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="SHUTTER STATUS",width=16).grid(column=1,row=1,sticky=(W))
+        ttk.Label(self,text="SHUTTER ",width=10).grid(column=1,row=1,sticky=(W))
         self.shutter = StringVar()
         ttk.Label(self, textvariable=self.shutter).grid(column=2,row=1,sticky=(W),padx=10)
 
@@ -78,17 +78,22 @@ class CameraWgt(ttk.Frame) :
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="FILTER",width=15).grid(column=1,row=1,sticky=(W))
+        ttk.Label(self,text="FILTER",width=8).grid(column=1,row=1,sticky=(W))
         self.filter = StringVar()
         ttk.Label(self, textvariable=self.filter).grid(column=2,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="BINNING",width=15).grid(column=3,row=1,sticky=(W))
+        ttk.Label(self,text="BINNING",width=8).grid(column=3,row=1,sticky=(W))
         self.binning = StringVar()
         ttk.Label(self, textvariable=self.binning).grid(column=4,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="STATE",width=20).grid(column=3,row=1,sticky=(W))
+        ttk.Label(self,text="STATE",width=8).grid(column=5,row=1,sticky=(W))
         self.state = StringVar()
-        ttk.Label(self, textvariable=self.state).grid(column=4,row=1,sticky=(W,E))
+        ttk.Label(self, textvariable=self.state).grid(column=6,row=1,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="TEMP",width=8).grid(column=7,row=1,sticky=(W))
+        self.temperature = StringVar()
+        ttk.Label(self, textvariable=self.temperature).grid(column=8,row=1,sticky=(W,E),padx=10)
+
 
 
 def status(pwi=None) :
@@ -148,7 +153,8 @@ def status(pwi=None) :
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
             telframe.ut.set('{:02d}:{:02d}:{:04.1f}'.format(h,m,s))
-            telframe.lst.set('{:.0f}:{:.0f}:{:04.1f}'.format(*t.sidereal_time('mean').hms))
+            h,m,s=t.sidereal_time('mean').hms
+            telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
             if pwi is None :
@@ -179,13 +185,14 @@ def status(pwi=None) :
             telframe.alt.set('{:.2f}'.format(T.Altitude))
         except: pass
         try :
-            domeframe.az.set('{:f}'.format(D.Azimuth))
+            domeframe.az.set('{:.1f}'.format(D.Azimuth))
             domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
         except: pass
         try :
             camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
             camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
             camframe.state.set('{:s}'.format(state[C.CameraState]))
+            camframe.temperature.set('{:.1f}/{:.1f}'.format(C.CCDTemperature,C.SetCCDTemperature))
         except: pass
         root.after(1000,update)
 
