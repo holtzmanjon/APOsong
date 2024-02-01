@@ -11,7 +11,8 @@ from alpaca.filterwheel import *
 from alpaca.safetymonitor import *
 
 from astropy.time import Time
-from astropy.coordinates import EarthLocation
+from astropy.coordinates import EarthLocation, SkyCoord
+import astropy.units as u
 
 #from coordio import sky, site, time, ICRS
 
@@ -90,7 +91,7 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self, textvariable=self.state).grid(column=4,row=1,sticky=(W,E))
 
 
-def status() :
+def status(pwi=None) :
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
     default_font.configure(size=12,weight=tkinter.font.BOLD)
@@ -150,19 +151,30 @@ def status() :
             telframe.lst.set('{:.0f}:{:.0f}:{:04.1f}'.format(*t.sidereal_time('mean').hms))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
-            # convert from topocentric to ICRS
-            #aposite.set_time(time.Time())
-            ##print('telescope: ', T.RightAscension, T.Declination)
-            ##print('time: ', time.Time())
-            ##obs = sky.Observed([[15*T.RightAscension, T.Declination]], site=aposite)
-            #obs = sky.Observed([[T.Altitude, T.Azimuth]], site=aposite)
-            #icrs = sky.ICRS(obs)
-            ##print('ICRS:',icrs)
-            #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
-            #telframe.dec.set('{:f}'.format(icrs[0][1]))
+            if pwi is None :
+                ra = T.RightAscension
+                dec = T.Declination
+                # convert from topocentric to ICRS
+                #aposite.set_time(time.Time())
+                ##print('telescope: ', T.RightAscension, T.Declination)
+                ##print('time: ', time.Time())
+                ##obs = sky.Observed([[15*T.RightAscension, T.Declination]], site=aposite)
+                #obs = sky.Observed([[T.Altitude, T.Azimuth]], site=aposite)
+                #icrs = sky.ICRS(obs)
+                ##print('ICRS:',icrs)
+                #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
+                #telframe.dec.set('{:f}'.format(icrs[0][1]))
+            else :
+                stat = pwi.status()
+                ra = stat.mount.ra_j2000_hours
+                dec = stat.mount.dec_j2000_degs
+            c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
+            radec=c.to_string('hmsdms',sep=':',precision=1) 
+            ras=radec.split()[0]
+            decs=radec.split()[1]
+            telframe.ra.set('{:s}'.format(ras))
+            telframe.dec.set('{:s}'.format(decs))
 
-            telframe.ra.set('{:f}'.format(T.RightAscension))
-            telframe.dec.set('{:f}'.format(T.Declination))
             telframe.az.set('{:.2f}'.format(T.Azimuth))
             telframe.alt.set('{:.2f}'.format(T.Altitude))
         except: pass
