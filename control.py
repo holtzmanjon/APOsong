@@ -1,11 +1,15 @@
+#interactive plots
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
 
 import numpy as np
+import os
 import pdb
+import glob
 
+# alpaca imports
 from alpaca import discovery, management
 from alpaca.telescope import *
 from alpaca.dome import *
@@ -14,28 +18,39 @@ from alpaca.focuser import *
 from alpaca.filterwheel import *
 from alpaca.camera import *
 
+# pwi4 HTTP interface
+import pwi4_client
+
 import time
 from datetime import datetime
 
 from pyvista import tv
+import focus
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
 from astropy.io import fits
+from astropy.time import Time
 
 import status
 import multiprocessing as mp
 
+dataroot='/data/1m/'
+
+# discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
 svrs=['10.75.0.21:32227','10.75.0.22:11111']
+print("Alpaca devices: ")
 for svr in svrs:
-    print(f"At {svr}")
-    print (f"  V{management.apiversions(svr)} server")
-    print (f"  {management.description(svr)['ServerName']}")
+    print(f"  At {svr}")
+    print (f"    V{management.apiversions(svr)} server")
+    print (f"    {management.description(svr)['ServerName']}")
     devs = management.configureddevices(svr)
     for dev in devs:
-        print(f"    {dev['DeviceType']}[{dev['DeviceNumber']}]: {dev['DeviceName']}")
+        print(f"      {dev['DeviceType']}[{dev['DeviceNumber']}]: {dev['DeviceName']}")
 
+# open Alpaca devices
+print('Opening Alpaca devices...')
 D=Dome(svrs[0],0)
 S=SafetyMonitor(svrs[0],0)
 T=Telescope(svrs[1],0)
@@ -43,15 +58,12 @@ F=Focuser(svrs[1],0)
 Filt=FilterWheel(svrs[1],0)
 C=Camera(svrs[1],0)
 
+print('Starting PWI4 client...')
+pwi=pwi4_client.PWI4(host='pwi1m')
+for axis in [0,1] : pwi.mount_enable(axis)
 
-def focrun(cent,step,n,exptime,filt,binx=3,biny=3,display=None) :
-    for foc in np.arange(cent-n//2*step,cent+n//2*step,step) :
-        F.Move(int(foc))
-        print('position: ',F.Position)
-        expose(exptime,filt,binx=binx,biny=biny,display=display)
-        display.fig.canvas.flush_events()
-
-def expose(exptime,filt,binx=3,biny=3,light=True,display=None,write=None) :
+# Camera commands
+def expose(exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,light=True,display=None,name=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -68,8 +80,12 @@ def expose(exptime,filt,binx=3,biny=3,light=True,display=None,write=None) :
            open shuter for exposure?
     display : pyvista tv, default=None
            pyvista display tool to display into if specified
-    write  : str, default=None
-           file to save image to 
+    name  : str, default=None
+           root file to save image to 
+
+    Returns
+    -------
+           HDU of image [,output file name if name!=None]
     """
     pos = np.where(np.array(Filt.Names) == filt)
     if len(pos) == 0 :
@@ -80,21 +96,108 @@ def expose(exptime,filt,binx=3,biny=3,light=True,display=None,write=None) :
     Filt.Position=pos[0]
     C.BinX=binx
     C.BinY=biny
+    if x0 is not None :
+        C.StartX = x0
+    if y0 is not None :
+        C.StartY = y0
+    if nx is not None :
+        C.NumX = nx
+    if ny is not None :
+        C.NumY = ny
+    t = Time.now()
     C.StartExposure(exptime,light)
     while not C.ImageReady :
         time.sleep(0.5)
     data = np.array(C.ImageArray).T
     if display is not None :
         display.tv(data)
+        display.fig.canvas.flush_events()
 
     hdu=fits.PrimaryHDU(data)
+    hdu.header['DATE-OBS'] = t.fits
+    hdu.header['JD'] = t.jd
+    hdu.header['MJD'] = t.mjd
     hdu.header['EXPTIME'] = exptime 
     hdu.header['FILTER'] = filt 
     hdu.header['FOCUS'] = F.Position
-    if write is not None :
-        hdu.writeto(write)
+    stat = pwi.status()
+    hdu.header['RA'] = stat.mount.ra_j2000_hours
+    hdu.header['DEC'] = stat.mount.dec_j2000_degs
+    hdu.header['AZ'] = stat.mount.azimuth_degs
+    hdu.header['ALT'] = stat.mount.altitude_degs
+    hdu.header['ROT'] = stat.rotator.mech_position_degs
+    hdu.header['TELESCOP'] = 'APO SONG 1m'
+    hdu.header['CCD-TEMP'] = C.CCDTemperature
+    hdu.header['XBINNING'] = C.BinX
+    hdu.header['YBINNING'] = C.BinY
+    if light: hdu.header['IMAGTYP'] = 'LIGHT'
+    else: hdu.header['IMAGTYP'] = 'DARK'
 
-    return hdu
+    if name is not None :
+        y,m,d,hr,mi,se = t.ymdhms
+        dirname = '{:s}/UT{:d}{:02d}{:02d}'.format(dataroot,y-2000,m,d)
+        try: os.mkdir(dirname)
+        except : pass
+        files = glob.glob(dirname+'/*.fits')
+        exts = []
+        for f in files :
+            exts.append(int(f.split('.')[-2]))
+        if len(exts) > 0 : ext = np.array(exts).max() + 1
+        else : ext=1
+        outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,name,ext)
+        hdu.writeto(outname)
+        return hdu, outname
+    else :
+        return hdu
+
+def focrun(cent,step,n,exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,display=None) :
+    """ Obtain a focus run
+
+    Parameters
+    ----------
+    cent : int
+           Middle focus value
+    step : int
+           Focus step size
+    n : int
+           Number of steps to take, centered on middle value
+    exptime : float
+           Exposure time
+    filt : str
+           Filter to use
+    binx : int, default=3
+           Binning factor in x
+    biny : int, default=3
+           Binning factor in y
+    display : pyvista tv, default=None
+           If given, display each image as it is being taken
+
+    Returns
+    -------
+           List of file names taken for focus run
+    """
+
+    files=[]
+    for foc in np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step)) :
+        F.Move(int(foc))
+        print('position: ',F.Position)
+        hdu,name = expose(exptime,filt,x0=x0,y0=y0,nx=nx,ny=ny,binx=binx,biny=biny,display=display,name='focus_{:d}'.format(foc))
+        files.append(name)
+    focus.focus(files)
+    return files
+
+def slew(ra, dec) :
+    """ Slew to RA/DEC
+    """
+    pwi.mount_goto_ra_dec_j2000(ra,dec)
+
+    #tra, tdec = j2000totopocentric(ra,dec) 
+    #T.SlewToCoordinatesAsync(tra,tdec)
+    while T.Slewing :
+        time.sleep(1)
+    T.Tracking = True
+    D.Slaved = True
+    #domesync()
 
 
 def j2000totopocentric(ra,dec) :
@@ -116,27 +219,25 @@ def j2000totopocentric(ra,dec) :
     #v6 = convert.cat2v6(ra*np.pi/180,dec*np.pi/180)
     #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
 
-def slew(ra, dec) :
-    """ Slew to RA/DEC
+def tracking(tracking) :
+    """ Set telescope tracking on (True) or off (False)
+
+    Paramters
+    ---------
+    tracking : bool
+               if True, turn tracking on, if False, turn tracking off
     """
-    tra, tdec = j2000totopocentric(ra,dec) 
-    T.SlewToCoordinatesAsync(tra,tdec)
-    while T.Slewing :
-        time.sleep(1)
-    T.Tracking = True
-    D.Slaved = True
-    #domesync()
+    T.Tracking(tracking)
 
 def park() :
+    """ Park telescope
+    """
     T.Park()
     while T.Slewing :
         time.sleep(1)
 
     D.Slaved = False
     D.Park()
-
-def stop_status() :
-    proc.terminate()
 
 def domesync(update=60) :
 
@@ -149,7 +250,30 @@ def domesync(update=60) :
     t.start()
 
 def start_status() :   
+    """ Start status window thread
+    """
     global proc
-    proc = mp.Process(target=status.status)
+    proc = mp.Process(target=status.status,kwargs={'pwi' : pwi})
     proc.start()
 
+def stop_status() :
+    """ Stop status window thread
+    """
+    proc.terminate()
+
+def commands() :
+    print()
+    print("Telescope commands")
+    print("  slew: ")
+    print("  park: ")
+    print("  tracking: ")
+    print()
+    print("Camera commands")
+    print("  expose: ")
+    print("  focrun: ")
+    print()
+    print("Status commands")
+    print("  start_status: ")
+    print("  stop_status: ")
+
+commands()
