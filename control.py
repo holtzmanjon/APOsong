@@ -63,7 +63,7 @@ pwi=pwi4_client.PWI4(host='pwi1m')
 for axis in [0,1] : pwi.mount_enable(axis)
 
 # Camera commands
-def expose(exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,light=True,display=None,name=None) :
+def expose(exptime,filt,bin=3,box=None,light=True,display=None,name=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -72,10 +72,10 @@ def expose(exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,light=True
            Exposure time in seconds
     filt : str
            Name of filter
-    binx : int, default=3
-           binning factor in x
-    biny : int, default=3
-           binning factor in y
+    bin : int, default=3
+           binning factor (both x and y)
+    box : pyvista BOX, default=None
+           if specified, window to box parameters 
     light : bool, default=True
            open shuter for exposure?
     display : pyvista tv, default=None
@@ -94,16 +94,18 @@ def expose(exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,light=True
         return
 
     Filt.Position=pos[0]
-    C.BinX=binx
-    C.BinY=biny
-    if x0 is not None :
-        C.StartX = x0
-    if y0 is not None :
-        C.StartY = y0
-    if nx is not None :
-        C.NumX = nx
-    if ny is not None :
-        C.NumY = ny
+    C.BinX=bin
+    C.BinY=bin
+    if box is not None :
+        C.StartX = box.xmin
+        C.StartY = box.ymin
+        C.NumX = box.ncol()
+        C.NumY = box.nrow()
+    else :
+        C.StartX = 0
+        C.StartY = 0
+        C.NumX = C.CameraXSize//bin
+        C.NumY = C.CameraYSize//bin
     t = Time.now()
     C.StartExposure(exptime,light)
     while not C.ImageReady :
@@ -150,7 +152,7 @@ def expose(exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,light=True
     else :
         return hdu
 
-def focrun(cent,step,n,exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=None,display=None) :
+def focrun(cent,step,n,exptime,filt,bin=3,box=None,display=None) :
     """ Obtain a focus run
 
     Parameters
@@ -165,10 +167,10 @@ def focrun(cent,step,n,exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=Non
            Exposure time
     filt : str
            Filter to use
-    binx : int, default=3
-           Binning factor in x
-    biny : int, default=3
-           Binning factor in y
+    bin : int, default=3
+           Binning factor in x and y
+    box : pyvista BOX, default=None
+           if specified, window to box parameters 
     display : pyvista tv, default=None
            If given, display each image as it is being taken
 
@@ -181,15 +183,26 @@ def focrun(cent,step,n,exptime,filt,binx=3,biny=3,x0=None,y0=None,nx=None,ny=Non
     for foc in np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step)) :
         F.Move(int(foc))
         print('position: ',F.Position)
-        hdu,name = expose(exptime,filt,x0=x0,y0=y0,nx=nx,ny=ny,binx=binx,biny=biny,display=display,name='focus_{:d}'.format(foc))
+        hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,name='focus_{:d}'.format(foc))
         files.append(name)
     focus.focus(files)
     return files
 
 def slew(ra, dec) :
     """ Slew to RA/DEC
+
+    Parameters
+    ----------
+    ra : float or str
+         RA in degrees (float), or hh:mm:ss (str)
+    dec : float or str
+         DEC in degrees (float), or dd:mm:ss (str)
     """
-    pwi.mount_goto_ra_dec_j2000(ra,dec)
+    if isinstance(ra,float) and isinstance(dec,float) :
+        pwi.mount_goto_ra_dec_j2000(ra,dec)
+    elif isinstance(ra,str) and isinstance(dec,str) :
+        coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
+        pwi.mount_goto_ra_dec_j2000(coords.ra.value/15.,coords.dec.value)
 
     #tra, tdec = j2000totopocentric(ra,dec) 
     #T.SlewToCoordinatesAsync(tra,tdec)
@@ -227,7 +240,7 @@ def tracking(tracking) :
     tracking : bool
                if True, turn tracking on, if False, turn tracking off
     """
-    T.Tracking(tracking)
+    T.Tracking= tracking
 
 def park() :
     """ Park telescope
@@ -264,16 +277,18 @@ def stop_status() :
 def commands() :
     print()
     print("Telescope commands")
-    print("  slew: ")
-    print("  park: ")
-    print("  tracking: ")
+    print("  slew: slew to coordinates")
+    print("  park: park telescope")
+    print("  tracking: turn tracking on/off")
     print()
     print("Camera commands")
-    print("  expose: ")
-    print("  focrun: ")
+    print("  expose: take an exposure")
+    print("  focrun: take series of exposures at different focus positions")
     print()
     print("Status commands")
-    print("  start_status: ")
-    print("  stop_status: ")
+    print("  start_status: start status window")
+    print("  stop_status: stop status window ")
+    print()
+    print("Use help(command) for more details")
 
 commands()
