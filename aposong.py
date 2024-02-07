@@ -229,6 +229,37 @@ def slew(ra, dec) :
     D.Slaved = True
     #domesync()
 
+def offset(dra, ddec) :
+        """
+        One or more of the following offsets can be specified as a keyword argument:
+
+        AXIS_reset: Clear all position and rate offsets for this axis. Set this to any value to issue the command.
+        AXIS_stop_rate: Set any active offset rate to zero. Set this to any value to issue the command.
+        AXIS_add_arcsec: Increase the current position offset by the specified amount
+        AXIS_set_rate_arcsec_per_sec: Continually increase the offset at the specified rate
+
+        As of PWI 4.0.11 Beta 7, the following options are also supported:
+        AXIS_stop: Stop both the offset rate and any gradually-applied commands
+        AXIS_stop_gradual_offset: Stop only the gradually-applied offset, and maintain the current rate
+        AXIS_set_total_arcsec: Set the total accumulated offset at the time the command is received to the specified value. Any in-progress rates or gradual offsets will continue to be applied on top of this.
+        AXIS_add_gradual_offset_arcsec: Gradually add the specified value to the total accumulated offset. Must be paired with AXIS_gradual_offset_rate or AXIS_gradual_offset_seconds to determine the timeframe over which the gradual offset is applied.
+        AXIS_gradual_offset_rate: Paired with AXIS_add_gradual_offset_arcsec; Specifies the rate at which a gradual offset should be applied. For example, if an offset of 10 arcseconds is to be applied at a rate of 2 arcsec/sec, then it will take 5 seconds for the offset to be applied.
+        AXIS_gradual_offset_seconds: Paired with AXIS_add_gradual_offset_arcsec; Specifies the time it should take to apply the gradual offset. For example, if an offset of 10 arcseconds is to be applied over a period of 2 seconds, then the offset will be increasing at a rate of 5 arcsec/sec.
+
+        Where AXIS can be one of:
+
+        ra: Offset the target Right Ascension coordinate
+        dec: Offset the target Declination coordinate
+        axis0: Offset the mount's primary axis position 
+               (roughly Azimuth on an Alt-Az mount, or RA on In equatorial mount)
+        axis1: Offset the mount's secondary axis position 
+               (roughly Altitude on an Alt-Az mount, or Dec on an equatorial mount)
+        path: Offset along the direction of travel for a moving target
+        transverse: Offset perpendicular to the direction of travel for a moving target
+        """
+        pwi.mount_offset(ra_add_arcsec=dra)
+        pwi.mount_offset(dec_add_arcsec=ddec)
+
 
 def j2000totopocentric(ra,dec) :
     """ Routine to convert J2000 coordinates to topocentric RA/DEC
@@ -325,5 +356,7 @@ def commands() :
 
 ascom_init()
 pwi_init()
-start_status()
-commands()
+
+if __name__ == '__main__' :
+    start_status()
+    commands()
