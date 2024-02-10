@@ -32,6 +32,10 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.time import Time
 
+from astroquery.vo_conesearch import ConeSearch, conesearch
+import astroquery.utils
+astroquery.utils.suppress_vo_warnings()
+
 import status
 import multiprocessing as mp
 
@@ -64,7 +68,7 @@ def ascom_init() :
     print('    T : telescope commands')
     print('    C : camera commands')
     print('    F : focusser command')
-    print('    FILT : filter wheel commands')
+    print('    Filt : filter wheel commands')
     print('    D : dome commands')
 
 def pwi_init() :
@@ -74,7 +78,12 @@ def pwi_init() :
     for axis in [0,1] : pwi.mount_enable(axis)
 
 # Camera commands
-def expose(exptime,filt,bin=3,box=None,light=True,display=None,name=None) :
+def qck(exptime,filt='current') :
+    """ (shorthand) Take exposure without saving to disk, current filter by default
+    """
+    expose(exptime,filt)
+
+def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -98,13 +107,16 @@ def expose(exptime,filt,bin=3,box=None,light=True,display=None,name=None) :
     -------
            HDU of image [,output file name if name!=None]
     """
-    pos = np.where(np.array(Filt.Names) == filt)
-    if len(pos) == 0 :
-        print('no such filter')
-        print('available filters: ', Filt.Names)
-        return
+    if filt is not None and filt != 'current': 
+        pos = np.where(np.array(Filt.Names) == filt)
+        if len(pos) == 0 :
+            print('no such filter')
+            print('available filters: ', Filt.Names)
+            return
+        Filt.Position=pos[0]
+    elif filt == 'current' :
+        filt = Filt.Names[Filt.Position]
 
-    Filt.Position=pos[0]
     C.BinX=bin
     C.BinY=bin
     if box is not None :
@@ -168,7 +180,7 @@ def settemp(temp) :
     """
     C.SetCCDTemperature = temp
 
-def focrun(cent,step,n,exptime,filt,bin=3,box=None,display=None) :
+def focrun(cent,step,n,extime=1.0,filt='V',bin=3,box=None,display=None) :
     """ Obtain a focus run
 
     Parameters
@@ -196,14 +208,18 @@ def focrun(cent,step,n,exptime,filt,bin=3,box=None,display=None) :
     """
 
     files=[]
+    images=[]
     for foc in np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step)) :
         F.Move(int(foc))
+        while F.IsMoving :
+            time.sleep(1)
         print('position: ',F.Position)
         hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,name='focus_{:d}'.format(foc))
         files.append(name)
+        images.append(hdu)
     pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
     focus.focus(files,pixscale=pixscale,display=display)
-    return files
+    return images,files
 
 def slew(ra, dec) :
     """ Slew to RA/DEC
@@ -228,6 +244,42 @@ def slew(ra, dec) :
     T.Tracking = True
     D.Slaved = True
     #domesync()
+
+def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True) :
+    """ Find/goto nearest USNO stars from specified position (default current telescope) and mag range
+
+    Parameters
+    ----------
+    ra : str or float, default=None
+         RA to search around, default current telescope position
+    dec : str or float, default=None
+         DEC to search around, default current telescope position
+    rad : angular quantity, default = 1*u.degree
+         Radius to use for sear4ch
+    bmin, bmax : float, default=(0,15)
+         Minimum, maximum Bmag
+    rmin, rmax : float, default=(0,15)
+         Minimum, maximum Rmag
+    goto : bool, default=True
+         If True, slew to closest returned object
+    """
+    if ra is None :
+        stat = pwi.status()
+        ra = stat.mount.ra_j2000_hours
+        dec = stat.mount.dec_j2000_degs
+        coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
+    else :
+        coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
+    cat= 'The USNO-A2.0 Catalogue 1'
+    result = conesearch.conesearch(coords,rad,catalog_db=cat,verbose=False)
+    gd=np.where((result['Bmag']<bmax) & (result['Bmag']>bmin) &
+                (result['Rmag']<rmax) & (result['Rmag']>rmin))[0]
+    if len(gd) <= 0 :
+        print('no USNO A2.0 stars found within specified rad and mag range')
+        return
+    best = result['_r'][gd].argmin()
+    print(result[gd[best]])
+    if goto: slew(result['RAJ2000'][gd[best]], result['DEJ2000'][gd[best]])
 
 def offset(dra, ddec) :
         """
@@ -259,7 +311,6 @@ def offset(dra, ddec) :
         """
         pwi.mount_offset(ra_add_arcsec=dra)
         pwi.mount_offset(dec_add_arcsec=ddec)
-
 
 def j2000totopocentric(ra,dec) :
     """ Routine to convert J2000 coordinates to topocentric RA/DEC
@@ -340,6 +391,8 @@ def commands() :
     print()
     print("Telescope commands")
     print("  slew(ra,dec): slew to coordinates")
+    print("  offset(ra,dec): offset telescope")
+    print("  usno([ra,dec]) : find/slew to USNO A2.0 star")
     print("  park(): park telescope")
     print("  tracking(True|False): turn tracking on/off")
     print()
