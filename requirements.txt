@@ -1,0 +1,14 @@
+docutils<0.18
+matplotlib
+numpy
+scipy
+astropy
+photutils
+holtz-tools
+importlib_resources
+pyautogui
+pyyaml
+astroplan
+astroquery
+astroscrappy
+scikit-learn
