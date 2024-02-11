@@ -1,0 +1,14 @@
+robotic module
+*********
+
+Introduction
+++++++++++++
+
+
+
+
+Module functions
+++++++++++++++++
+.. automodule:: robotic
+   :members:
+
