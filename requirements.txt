@@ -11,3 +11,5 @@ astroplan
 astroquery
 astroscrappy
 scikit-learn
+alpaca
+
