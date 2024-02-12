@@ -3,12 +3,15 @@ from tkinter import ttk
 import tkinter.font
 import numpy as np
 from numpy.random import randint
-from alpaca.camera import *
-from alpaca.telescope import *
-from alpaca.dome import *
-from alpaca.focuser import *
-from alpaca.filterwheel import *
-from alpaca.safetymonitor import *
+try :
+    from alpaca.camera import *
+    from alpaca.telescope import *
+    from alpaca.dome import *
+    from alpaca.focuser import *
+    from alpaca.filterwheel import *
+    from alpaca.safetymonitor import *
+except :
+    print('no alpaca in status')
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord

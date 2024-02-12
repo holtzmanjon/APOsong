@@ -46,6 +46,7 @@ dataroot='/data/1m/'
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
+global D, S, T, F, Filt, C
 def ascom_init() :
     svrs=['10.75.0.21:32227','10.75.0.22:11111']
     print("Alpaca devices: ")
@@ -73,6 +74,7 @@ def ascom_init() :
     print('    F : focusser command')
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
+ 
 
 def pwi_init() :
     global pwi
@@ -409,6 +411,13 @@ def commands() :
     print("  stop_status(): stop status window ")
     print()
     print("Use help(command) for more details")
+
+def start() :
+    global D, S, T, F, Filt, C
+    ascom_init()
+    pwi_init()
+    start_status()
+    commands()
 
 ascom_init()
 pwi_init()
