@@ -18,4 +18,3 @@ typing-extensions
 python-dateutil
 enum-tools
 astro-pyvista
-tkinter
