@@ -19,7 +19,7 @@ try:
   from alpaca.filterwheel import *
   from alpaca.camera import *
 except:
-  print('no alpaca'
+  print('no alpaca')
 
 # pwi4 HTTP interface
 import pwi4_client
