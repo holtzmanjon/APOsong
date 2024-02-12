@@ -419,8 +419,10 @@ def start() :
     start_status()
     commands()
 
-ascom_init()
-pwi_init()
+try :
+    ascom_init()
+    pwi_init()
+except: pass
 
 if __name__ == '__main__' :
     start_status()
