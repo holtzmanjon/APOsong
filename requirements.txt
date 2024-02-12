@@ -12,4 +12,8 @@ astroquery
 astroscrappy
 scikit-learn
 alpaca
-
+requests
+netifaces
+typing-extensions
+python-dateutil
+enum-tools
