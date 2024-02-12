@@ -10,13 +10,16 @@ import pdb
 import glob
 
 # alpaca imports
-from alpaca import discovery, management
-from alpaca.telescope import *
-from alpaca.dome import *
-from alpaca.safetymonitor import *
-from alpaca.focuser import *
-from alpaca.filterwheel import *
-from alpaca.camera import *
+try:
+  from alpaca import discovery, management
+  from alpaca.telescope import *
+  from alpaca.dome import *
+  from alpaca.safetymonitor import *
+  from alpaca.focuser import *
+  from alpaca.filterwheel import *
+  from alpaca.camera import *
+except:
+  print('no alpaca'
 
 # pwi4 HTTP interface
 import pwi4_client
