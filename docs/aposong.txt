@@ -11,4 +11,5 @@ Module functions
 ++++++++++++++++
 .. automodule:: aposong
    :members:
+   :member-order: bysource
 
