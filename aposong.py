@@ -88,7 +88,8 @@ def qck(exptime,filt='current') :
     """
     expose(exptime,filt)
 
-def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None) :
+def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
+           min=None, max=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -140,7 +141,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         time.sleep(0.5)
     data = np.array(C.ImageArray).T
     if display is not None :
-        display.tv(data)
+        display.tv(data,min=min,max=max)
         display.fig.canvas.flush_events()
 
     hdu=fits.PrimaryHDU(data)
@@ -185,7 +186,7 @@ def settemp(temp) :
     """
     C.SetCCDTemperature = temp
 
-def focrun(cent,step,n,extime=1.0,filt='V',bin=3,box=None,display=None) :
+def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,max=30000) :
     """ Obtain a focus run
 
     Parameters
@@ -214,17 +215,27 @@ def focrun(cent,step,n,extime=1.0,filt='V',bin=3,box=None,display=None) :
 
     files=[]
     images=[]
-    for foc in np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step)) :
+    for i,foc in enumerate(
+             np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))) :
         F.Move(int(foc))
+        if i==0 : time.sleep(5)
         while F.IsMoving :
             time.sleep(1)
-        print('position: ',F.Position)
-        hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,name='focus_{:d}'.format(foc))
+        print('position: ',F.Position,F.IsMoving)
+        hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,
+                          max=max,name='focus_{:d}'.format(foc))
+        if i == 0 :
+            nr,nc=hdu.data.shape
+            mosaic = np.zeros([nr,n*nc])
+        mosaic[:,i*nc:(i+1)*nc] = hdu.data
         files.append(name)
         images.append(hdu)
+    plt.figure()
+    plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
+    plt.axis('off')
     pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
-    focus.focus(files,pixscale=pixscale,display=display)
-    return images,files
+    focus.focus(files,pixscale=pixscale,display=display,max=max)
+    return mosaic,images,files
 
 def slew(ra, dec) :
     """ Slew to RA/DEC
@@ -236,7 +247,8 @@ def slew(ra, dec) :
     dec : float or str
          DEC in degrees (float), or dd:mm:ss (str)
     """
-    if isinstance(ra,float) and isinstance(dec,float) :
+    if (isinstance(ra,float) or isinstance(ra,int) ) and  \
+       (isinstance(dec,float) or isinstance(dec,int) ) :
         pwi.mount_goto_ra_dec_j2000(ra,dec)
     elif isinstance(ra,str) and isinstance(dec,str) :
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
@@ -247,10 +259,21 @@ def slew(ra, dec) :
     while T.Slewing :
         time.sleep(1)
     T.Tracking = True
-    D.Slaved = True
     #domesync()
 
-def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True) :
+def altaz(az,alt) :
+    """ Slew to specified az / alt
+    Parameters
+    ----------
+    az : float
+         az in degrees 
+    alt : float
+         alt in degrees
+    """
+    pwi.mount_goto_alt_az(self, alt, az)
+
+def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True,
+         cat= 'The USNO-A2.0 Catalogue 1') :
     """ Find/goto nearest USNO stars from specified position (default current telescope) and mag range
 
     Parameters
@@ -267,6 +290,8 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
          Minimum, maximum Rmag
     goto : bool, default=True
          If True, slew to closest returned object
+    cat : str, default= 'The USNO-A2.0 Catalogue 1'
+         astroquery conesearch catgalog to search from
     """
     if ra is None :
         stat = pwi.status()
@@ -275,8 +300,8 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
         coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
     else :
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
-    cat= 'The USNO-A2.0 Catalogue 1'
-    result = conesearch.conesearch(coords,rad,catalog_db=cat,verbose=False)
+    result = conesearch.conesearch(coords,rad,catalog_db=cat,verbose=True)
+    print(result)
     gd=np.where((result['Bmag']<bmax) & (result['Bmag']>bmin) &
                 (result['Rmag']<rmax) & (result['Rmag']>rmin))[0]
     if len(gd) <= 0 :
@@ -284,7 +309,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
         return
     best = result['_r'][gd].argmin()
     print(result[gd[best]])
-    if goto: slew(result['RAJ2000'][gd[best]], result['DEJ2000'][gd[best]])
+    if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
 def offset(dra, ddec) :
         """
@@ -339,8 +364,8 @@ def j2000totopocentric(ra,dec) :
 def tracking(tracking) :
     """ Set telescope tracking on (True) or off (False)
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     tracking : bool
                if True, turn tracking on, if False, turn tracking off
     """
@@ -356,6 +381,20 @@ def park() :
     D.Slaved = False
     D.Park()
 
+def foc(val, relative=False) :
+    """ Change focus, absolute (default) or relative
+
+    Parameters
+    ----------
+    val : int
+          new focus value, absolute value unless relative=True
+    relative : bool, default=False
+          if True, then move amount relative to current position
+    """
+    if relative :
+        val += F.Position
+    F.Move(val)
+
 def open() :
     """ Open dome
     """
@@ -369,9 +408,8 @@ def close() :
 def domesync(update=60) :
 
     def sync(update=60) :
-        while D.Slaved :
-            D.SlewToAzimuth(T.Azimuth)
-            time.sleep(update)
+        D.SlewToAzimuth(T.Azimuth)
+        time.sleep(update)
 
     t=mp.Process(target=sync)
     t.start()
@@ -398,6 +436,7 @@ def commands() :
     print("  slew(ra,dec): slew to coordinates")
     print("  offset(ra,dec): offset telescope")
     print("  usno([ra,dec]) : find/slew to USNO A2.0 star")
+    print("  foc(focus) : set focus to specified value")
     print("  park(): park telescope")
     print("  tracking(True|False): turn tracking on/off")
     print()
@@ -422,7 +461,8 @@ def start() :
 try :
     ascom_init()
     pwi_init()
-except: pass
+except: 
+    print('failed init..')
 
 if __name__ == '__main__' :
     start_status()
