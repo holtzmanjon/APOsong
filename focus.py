@@ -8,13 +8,15 @@ from photutils.detection import find_peaks
 from photutils import DAOStarFinder
 from holtztools import plots
 
-def focus(files, apers=np.arange(0.3,10,0.2), thresh=25, fwhm=2, skyrad=[10,15], pixscale=0.5, display=None) :
+def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12], 
+          pixscale=0.5, display=None, plot=False,max=max) :
 
     pixapers=apers/pixscale
-    pdb.set_trace()
     hfmed=np.zeros([len(files)])
     foc=np.zeros([len(files)])
-    fig,ax=plots.multi(1,len(files),hspace=0.001,figsize=(4,6))
+    if plot : fig,ax=plots.multi(1,len(files),hspace=0.001,figsize=(4,6))
+    if display is not None :
+        display.plotax2.cla()
     for ifile,file in enumerate(files) :
         # read file and get focus value
         a=fits.open(file)[0]
@@ -29,7 +31,7 @@ def focus(files, apers=np.arange(0.3,10,0.2), thresh=25, fwhm=2, skyrad=[10,15],
         # display
         if display is not None :
             display.tvclear()
-            display.tv(a)
+            display.tv(a,max=max)
 
         # find stars
         mad=np.nanmedian(np.abs(im-np.nanmedian(im)))
@@ -57,13 +59,12 @@ def focus(files, apers=np.arange(0.3,10,0.2), thresh=25, fwhm=2, skyrad=[10,15],
         cum=np.zeros([len(phot),len(pixapers)-1])
         for i,aper in enumerate(pixapers[0:-1]) :
             cum[:,i] = phot['aper{:.1f}'.format(aper)]/phot['aper{:.1f}'.format(pixapers[-1])]
-            #ax[ifile].scatter([aper]*len(phot),phot['aper{:.1f}'.format(aper)]/phot['aper29.0'])
 
         # identify half flux point
         hf=np.zeros(len(phot))
         for istar in range(len(phot)) :
             if cum[istar].max() > 1.1 : continue
-            ax[ifile].plot(pixapers[0:-1],cum[istar,:].T)
+            if plot : ax[ifile].plot(pixapers[0:-1],cum[istar,:].T)
             j=np.where(cum[istar]>0.5)[0]
             if len(j) > 0 :
                 j0=j[0]-1
@@ -72,24 +73,27 @@ def focus(files, apers=np.arange(0.3,10,0.2), thresh=25, fwhm=2, skyrad=[10,15],
                 hf[istar] = pixapers[j0] + (0.5-cum[istar,j0])/(cum[istar,j1]-cum[istar,j0])*(pixapers[j1]-pixapers[j0])
                 #hfold=(pixapers[j[0]-1]+pixapers[j[0]])/2.
         gd = np.where(hf>0)[0]
-        ax[ifile].scatter(hf[gd],[0.5]*len(gd),c='k')
-        ax[ifile].scatter(np.median(hf[gd]),0.5,c='b',s=75)
-        ax[ifile].set_ylim(0,1.2)
-        ax[ifile].text(0.05,0.8,str(a.header['FOCUS']),transform=ax[ifile].transAxes)
         hfmed[ifile]=np.median(hf[gd])
-        plt.figure(fig.number)
-        plt.draw()
-        #fig.canvas.flush_events()
+        if plot :
+            ax[ifile].scatter(hf[gd],[0.5]*len(gd),c='k')
+            ax[ifile].scatter(np.median(hf[gd]),0.5,c='b',s=75)
+            ax[ifile].set_ylim(0,1.2)
+            ax[ifile].text(0.05,0.8,str(a.header['FOCUS']),transform=ax[ifile].transAxes)
+            plt.figure(fig.number)
+            plt.draw()
+        if display is not None and len(gd) > 0 :
+            plots.plotp(display.plotax2,np.array([foc[ifile]]*len(gd)),hf[gd]*pixscale,xt='Focus',yt='R(half total)',size=5)
 
     if len(hfmed) > 0 :
-        fig2,ax2 = plots.multi(1,1)
         gd=np.where(hfmed>0)[0]
-        plots.plotp(ax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
+        if plot :
+            fig2,ax2 = plots.multi(1,1)
+            plots.plotp(ax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
         if display is not None :
-            display.plotax2.cla()
-            plots.plotp(display.plotax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
+            plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale,xt='Focus',yt='R(half total)',size=50)
 
-    print('Hit RETURN key to close plot windows and continue: ')
-    inp=input()
-    plt.close(fig)
-    plt.close(fig2)
+    if plot :
+        print('Hit RETURN key to close plot windows and continue: ')
+        inp=input()
+        plt.close(fig)
+        plt.close(fig2)
