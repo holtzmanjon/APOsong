@@ -63,6 +63,11 @@ class TelescopeWgt(ttk.Frame) :
         self.rot = StringVar()
         ttk.Label(self, textvariable=self.rot).grid(column=6,row=row,sticky=(E),padx=10)
 
+        row+=1
+        ttk.Label(self,text="FOCUS").grid(column=1,row=row,sticky=(W))
+        self.focus = StringVar()
+        ttk.Label(self, textvariable=self.focus).grid(column=2,row=row,sticky=(E),padx=10) 
+
 class DomeWgt(ttk.Frame) :
 
     def __init__(self,container) :
@@ -186,6 +191,11 @@ def status(pwi=None) :
 
             telframe.az.set('{:.2f}'.format(T.Azimuth))
             telframe.alt.set('{:.2f}'.format(T.Altitude))
+
+            telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
+            telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
+
+            telframe.focus.set('{:d}'.format(F.Position))
         except: pass
         try :
             domeframe.az.set('{:.1f}'.format(D.Azimuth))
