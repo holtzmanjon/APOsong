@@ -182,11 +182,18 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         return hdu
 
 def settemp(temp) :
-    """ Change CCD temperature set point
+    """ Change detector temperature set point and turn cooler on
     """
     C.SetCCDTemperature = temp
+    C.CoolerOn = True
 
-def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,max=30000) :
+def cooler(state=True) :
+    """ Set detector cooler state on/off
+    """
+    C.CoolerOn = state
+
+def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
+           max=30000, thresh=25) :
     """ Obtain a focus run
 
     Parameters
@@ -234,7 +241,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,max=3000
     plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     plt.axis('off')
     pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
-    focus.focus(files,pixscale=pixscale,display=display,max=max)
+    focus.focus(files,pixscale=pixscale,display=display,max=max,thresh=thresh)
     return mosaic,images,files
 
 def slew(ra, dec) :
@@ -297,6 +304,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
         stat = pwi.status()
         ra = stat.mount.ra_j2000_hours
         dec = stat.mount.dec_j2000_degs
+        print(ra,dec)
         coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
     else :
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
@@ -444,6 +452,7 @@ def commands() :
     print("  expose(exptime,filt,**kwargs: take an exposure")
     print("  focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions")
     print("  settemp(temp): set camera temperature set point")
+    print("  cooler(state): set camera cooler state on (True) or off (False)")
     print()
     print("Status commands")
     print("  start_status(): start status window")
