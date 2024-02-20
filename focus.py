@@ -82,18 +82,36 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
             plt.figure(fig.number)
             plt.draw()
         if display is not None and len(gd) > 0 :
-            plots.plotp(display.plotax2,np.array([foc[ifile]]*len(gd)),hf[gd]*pixscale,xt='Focus',yt='R(half total)',size=5)
+            plots.plotp(display.plotax2,np.array([foc[ifile]]*len(gd)),hf[gd]*pixscale*2,
+                        xt='Focus',yt='R(half total)',size=5)
 
     if len(hfmed) > 0 :
         gd=np.where(hfmed>0)[0]
+        besthf=np.min(hfmed[gd])
+        bestind=np.argmin(hfmed[gd])
+        bestfoc=foc[gd[bestind]]
+        print('bestfoc: ', bestfoc)
+        try: 
+            poly=np.polyfit(foc[gd[bestind-2:bestind+3]],hfmed[gd[bestind-2:bestind+3]],2)
+            bestfitfoc = -poly[1]/2/poly[0]
+            bestfithf = poly[0]*bestfitfoc**2+poly[1]*bestfitfoc+poly[2]
+            bestfithf *= 2*pixscale
+            print('bestfoc, bestfitfoc: ', bestfitfoc,bestfithf)
+        except: pdb.set_trace()
+
         if plot :
             fig2,ax2 = plots.multi(1,1)
             plots.plotp(ax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
         if display is not None :
-            plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale,xt='Focus',yt='R(half total)',size=50)
+            plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale*2,
+                        xt='Focus',yt='R(half total)',size=50)
+            x=np.linspace(foc[gd[bestind-2]],foc[gd[bestind+2]],100)
+            plots.plotl(display.plotax2,x,(poly[0]*x**2+poly[1]*x+poly[2])*pixscale*2)
 
     if plot :
         print('Hit RETURN key to close plot windows and continue: ')
         inp=input()
         plt.close(fig)
         plt.close(fig2)
+
+    return bestfitfoc, bestfithf,  bestfoc, besthf*2*pixscale
