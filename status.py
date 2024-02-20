@@ -205,7 +205,7 @@ def status(pwi=None) :
             camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
             camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
             camframe.state.set('{:s}'.format(state[C.CameraState]))
-            camframe.temperature.set('{:.1f}/{:.1f}'.format(C.CCDTemperature,C.SetCCDTemperature))
+            camframe.temperature.set('{:.1f}/{:.1f}/{:.1f}'.format(C.CCDTemperature,C.SetCCDTemperature,C.CoolerPower))
         except: pass
         root.after(1000,update)
 
