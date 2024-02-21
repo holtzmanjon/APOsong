@@ -10,6 +10,15 @@ from holtztools import plots
 
 def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12], 
           pixscale=0.5, display=None, plot=False,max=max) :
+    """ Get best focus position from a set of focus run images
+
+        For each image, find stars and do concentric aperture photometry to 
+        determine half-flux radius. Take median of these across all stars in
+        image and consider result as a function of focus. Find the minimum
+        half-flux image and do a quadratic fit around this point to find minimum
+        best fit focus. Report best fit and minimum focus and half flux diameters
+        in arcsec.
+    """
 
     pixapers=apers/pixscale
     hfmed=np.zeros([len(files)])
@@ -42,10 +51,6 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
             continue
         tab.rename_column('xcentroid','x')
         tab.rename_column('ycentroid','y')
-        #tab=stars.find(a,thresh=500,fwhm=5,sharp=[0.5,1.2],round=[-1,1])
-        #tab=find_peaks(a,3000,box_size=21)
-        #tab.rename_column('x_peak','x')
-        #tab.rename_column('y_peak','y')
 
         # aperture photometry through range of apertures
         phot=stars.photom(im,tab,skyrad=np.array(skyrad)/pixscale,rad=pixapers,mag=False)
@@ -86,19 +91,33 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
                         xt='Focus',yt='R(half total)',size=5)
 
     if len(hfmed) > 0 :
+        # get smallest median half-flux radius
         gd=np.where(hfmed>0)[0]
         besthf=np.min(hfmed[gd])
+        # convert to diameter in arcsec
+        besthf *= 2*pixscale
         bestind=np.argmin(hfmed[gd])
         bestfoc=foc[gd[bestind]]
         print('bestfoc: ', bestfoc)
         try: 
+            # attempt a quadratic fit around the minimum
             poly=np.polyfit(foc[gd[bestind-2:bestind+3]],hfmed[gd[bestind-2:bestind+3]],2)
             bestfitfoc = -poly[1]/2/poly[0]
-            bestfithf = poly[0]*bestfitfoc**2+poly[1]*bestfitfoc+poly[2]
-            bestfithf *= 2*pixscale
+            if bestfitfoc < foc[gd[bestind-2]] or bestfitfoc > foc[gd[bestind+2]] :
+                print('best focus out of fit range!')
+                bestfitfoc=-1
+                bestfithf=-1
+            else :
+                bestfithf = poly[0]*bestfitfoc**2+poly[1]*bestfitfoc+poly[2]
+                bestfithf *= 2*pixscale
             print('bestfoc, bestfitfoc: ', bestfitfoc,bestfithf)
-        except: pdb.set_trace()
+        except: 
+            print('focus fit failed...')
+            bestfitfoc=-1
+            bestfithf=-1
+            pdb.set_trace()
 
+        # plot and/or display
         if plot :
             fig2,ax2 = plots.multi(1,1)
             plots.plotp(ax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
@@ -114,4 +133,5 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
         plt.close(fig)
         plt.close(fig2)
 
-    return bestfitfoc, bestfithf,  bestfoc, besthf*2*pixscale
+    # return best fit values and minimum values
+    return bestfitfoc, bestfithf,  bestfoc, besthf
