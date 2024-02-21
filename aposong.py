@@ -41,12 +41,16 @@ astroquery.utils.suppress_vo_warnings()
 
 import status
 import multiprocessing as mp
+import threading
 
+# some global variables
 dataroot='/data/1m/'
+sync_process = None
+disp = None
+global D, S, T, F, Filt, C
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
-global D, S, T, F, Filt, C
 def ascom_init() :
     svrs=['10.75.0.21:32227','10.75.0.22:11111']
     print("Alpaca devices: ")
@@ -65,8 +69,8 @@ def ascom_init() :
     S=SafetyMonitor(svrs[0],0)
     T=Telescope(svrs[1],0)
     F=Focuser(svrs[1],0)
-    Filt=FilterWheel(svrs[1],0)
-    C=Camera(svrs[1],0)
+    #Filt=FilterWheel(svrs[1],0)
+    C=Camera(svrs[1],1)
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -222,15 +226,15 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
 
     files=[]
     images=[]
-    for i,foc in enumerate(
+    for i,focval in enumerate(
              np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))) :
-        F.Move(int(foc))
+        F.Move(int(focval))
         if i==0 : time.sleep(5)
         while F.IsMoving :
             time.sleep(1)
         print('position: ',F.Position,F.IsMoving)
         hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,
-                          max=max,name='focus_{:d}'.format(foc))
+                          max=max,name='focus_{:d}'.format(focval))
         if i == 0 :
             nr,nc=hdu.data.shape
             mosaic = np.zeros([nr,n*nc])
@@ -241,8 +245,17 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     plt.axis('off')
     pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
-    focus.focus(files,pixscale=pixscale,display=display,max=max,thresh=thresh)
-    return mosaic,images,files
+    bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale,
+                                                display=display,max=max,thresh=thresh)
+    if bestfitfoc > 0 :
+        print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}',
+              bestfitfoc,bestfithf)
+        foc(int(bestfitfoc))
+    else :
+        print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}',
+              bestfitfoc,besthf)
+        foc(int(bestfoc))
+    return images,files
 
 def slew(ra, dec) :
     """ Slew to RA/DEC
@@ -254,6 +267,7 @@ def slew(ra, dec) :
     dec : float or str
          DEC in degrees (float), or dd:mm:ss (str)
     """
+    domesync(False)
     if (isinstance(ra,float) or isinstance(ra,int) ) and  \
        (isinstance(dec,float) or isinstance(dec,int) ) :
         pwi.mount_goto_ra_dec_j2000(ra,dec)
@@ -266,7 +280,7 @@ def slew(ra, dec) :
     while T.Slewing :
         time.sleep(1)
     T.Tracking = True
-    #domesync()
+    domesync()
 
 def altaz(az,alt) :
     """ Slew to specified az / alt
@@ -277,7 +291,7 @@ def altaz(az,alt) :
     alt : float
          alt in degrees
     """
-    pwi.mount_goto_alt_az(self, alt, az)
+    pwi.mount_goto_alt_az(alt, az)
 
 def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True,
          cat= 'The USNO-A2.0 Catalogue 1') :
@@ -305,6 +319,9 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
         ra = stat.mount.ra_j2000_hours
         dec = stat.mount.dec_j2000_degs
         print(ra,dec)
+        coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
+    elif (isinstance(ra,float) or isinstance(ra,int) ) and  \
+         (isinstance(dec,float) or isinstance(dec,int) ) :
         coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
     else :
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
@@ -380,13 +397,10 @@ def tracking(tracking) :
     T.Tracking= tracking
 
 def park() :
-    """ Park telescope
+    """ Park telescope and dome
     """
+    domesync(False)
     T.Park()
-    while T.Slewing :
-        time.sleep(1)
-
-    D.Slaved = False
     D.Park()
 
 def foc(val, relative=False) :
@@ -403,6 +417,11 @@ def foc(val, relative=False) :
         val += F.Position
     F.Move(val)
 
+def domehome() :
+    """ Home dome
+    """
+    D.Home()
+
 def open() :
     """ Open dome
     """
@@ -413,19 +432,33 @@ def close() :
     """
     D.CloseShutter()
 
-def domesync(update=60) :
+def domesync(dosync=True) :
 
-    def sync(update=60) :
-        D.SlewToAzimuth(T.Azimuth)
-        time.sleep(update)
+    global sync_process, run_sync
+    def sync(update=5) :
+        while run_sync :
+            while T.Slewing or D.Slewing : 
+                 print(T.Slewing, D.Slewing)
+                 time.sleep(1)
+            D.SlewToAzimuth(T.Azimuth)
+            time.sleep(update)
 
-    t=mp.Process(target=sync)
-    t.start()
+    if dosync and sync_process is None :
+        print('starting dome sync')
+        sync_process=threading.Thread(target=sync)
+        run_sync = True
+        sync_process.start()
+    elif dosync == False and sync_process is not None :
+        print('stopping dome sync')
+        run_sync = False
+        sync_process.join()
+        sync_process = None
 
 def start_status() :   
     """ Start status window thread
     """
     global proc
+    #proc = threading.Thread(target=status.status,kwargs={'pwi' : pwi})
     proc = mp.Process(target=status.status,kwargs={'pwi' : pwi})
     proc.start()
 
@@ -465,14 +498,17 @@ def start() :
     ascom_init()
     pwi_init()
     start_status()
+    disp=tv.TV(figsize=(8,6))
     commands()
 
 try :
-    ascom_init()
-    pwi_init()
+    start()
+    #ascom_init()
+    #pwi_init()
 except: 
     print('failed init..')
 
 if __name__ == '__main__' :
     start_status()
     commands()
+
