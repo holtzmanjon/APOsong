@@ -1,3 +1,7 @@
+#import tkthread
+#tkthread.patch()
+#tkthread.tkinstall(ensure_root=True)
+
 from tkinter import *
 from tkinter import ttk
 import tkinter.font
@@ -80,6 +84,9 @@ class DomeWgt(ttk.Frame) :
         ttk.Label(self,text="DOME AZ",width=10).grid(column=3,row=1,sticky=(W))
         self.az = StringVar()
         ttk.Label(self, textvariable=self.az).grid(column=4,row=1,sticky=(W),padx=10)
+
+        self.slewing = StringVar()
+        ttk.Label(self, textvariable=self.slewing).grid(column=5,row=1,sticky=(W),padx=10)
      
 class CameraWgt(ttk.Frame) :
 
@@ -98,10 +105,12 @@ class CameraWgt(ttk.Frame) :
         self.state = StringVar()
         ttk.Label(self, textvariable=self.state).grid(column=6,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="TEMP",width=8).grid(column=7,row=1,sticky=(W))
+        ttk.Label(self,text="TEMP",width=8).grid(column=1,row=2,sticky=(W))
         self.temperature = StringVar()
-        ttk.Label(self, textvariable=self.temperature).grid(column=8,row=1,sticky=(W,E),padx=10)
-
+        ttk.Label(self, textvariable=self.temperature).grid(column=2,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=8).grid(column=3,row=2,sticky=(W))
+        self.cooler = StringVar()
+        ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
 
 def status(pwi=None) :
@@ -146,8 +155,9 @@ def status(pwi=None) :
     Safe=SafetyMonitor(svrs[0],0)
     T=Telescope(svrs[1],0)
     F=Focuser(svrs[1],0)
-    Filt=FilterWheel(svrs[1],0)
-    C=Camera(svrs[1],0)
+    #Filt=FilterWheel(svrs[1],0)
+    #C=Camera(svrs[1],0)
+    C=Camera(svrs[1],1)
 
     shutter=['Open','Closed','Opening','Closing','Error']
     state=['Idle','Waiting','Exposing','Reading','Download','Error']
@@ -200,12 +210,17 @@ def status(pwi=None) :
         try :
             domeframe.az.set('{:.1f}'.format(D.Azimuth))
             domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
+            if D.Slewing : domeframe.slewing.set('SLEWING')
+            else : domeframe.slewing.set(' ')
         except: pass
         try :
-            camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
+            try :camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
+            except : camframe.filter.set('None')
             camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
             camframe.state.set('{:s}'.format(state[C.CameraState]))
-            camframe.temperature.set('{:.1f}/{:.1f}/{:.1f}'.format(C.CCDTemperature,C.SetCCDTemperature,C.CoolerPower))
+            camframe.temperature.set('{:.1f}/{:.1f}'.format(
+                     C.CCDTemperature,C.SetCCDTemperature))
+            camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
         except: pass
         root.after(1000,update)
 
