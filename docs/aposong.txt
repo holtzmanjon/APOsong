@@ -23,8 +23,9 @@ if needed.
 
 To run the software, start an ipython session on the song1m
 
-.. code-block:: python
-  from aposong import *
+.. code-block:: 
+
+    from aposong import *
 
 This should open a status window that reports information from telescope, dome,
 and camera(s), and also open a pyvista display window into which images can
