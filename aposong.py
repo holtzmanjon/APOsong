@@ -522,6 +522,13 @@ def commands() :
     print("Use help(command) for more details")
 
 def start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
+    """ Start ascom and pwi connections and pyvista display
+
+    Parameters
+    ----------
+    svrs   : list, default=['10.75.0.22:11111','10.75.0.21:32227']
+             List of server:port strings for ASCOM devices
+    """
     ascom_init(svrs=svrs)
     pwi_init()
     start_status(svrs=svrs)
@@ -529,7 +536,7 @@ def start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
     commands()
 
 try :
-    start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
+    start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) 
 except: 
     print('failed init..')
 
