@@ -4,7 +4,59 @@ aposong module
 Introduction
 ++++++++++++
 
+aposong provides a Python interface to the observing system for the SONG node at Apache
+Point Observatory. It communicates with devices attached to other computers on the
+internal APO network: the Planewave 1m telescope, the Planewave mirror covers,
+the focal plane camera on the telescope, the dome, a safety monitor that checks
+status of other telescopes on site, and, eventually, a spectrograph camera.
 
+Communication with these devices is achieved, for the most part, using the
+ASCOM/Alpaca protocol, although a few more specialized commands are communicated
+through non-standard interfaces. 
+
+The main module, aposong, opens up an Alpaca device for each of the devices. It
+provides routines for many basic observatory tasks, e.g., opening and closing,
+slewing, taking exposures, etc., coordinating commands to different devices
+as needed. Individual devices can also be addressed using the Alpaca device
+instantiations and the standard ASCOM command sets for more experienced users
+if needed.
+
+To run the software, start an ipython session on the song1m
+
+.. code-block:: python
+from aposong import *
+
+This should open a status window that reports information from telescope, dome,
+and camera(s), and also open a pyvista display window into which images can
+be automatically displayed as they are obtained. Otherwise, you get a normal
+python interface, but with a set of observatory commands now defined.
+
+Information about individual commands and parameters is best obtained through
+the docstrings, available below or using interactive help when running the
+Python interface, but a summary of commands is:
+
+Observatory commands:
+  open(): open dome, mirror covers
+  close(): close mirror covers, dome, and park
+
+Dome commands:
+  domehome(): move dome to home position
+
+Telescope commands :
+  slew(ra,dec): slew to coordinates
+  offset(ra,dec): offset telescope
+  usno([ra,dec]) : find/slew to USNO A2.0 star
+  altaz(az,alt): slew to az/alt coordinates
+  foc(focus) : set focus to specified value
+  tracking(True|False): turn tracking on/off
+  mirror_covers(True|False): control mirror covers
+  park(): park telescope and dome
+
+Camera commands :
+  expose(exptime,filt,**kwargs: take an exposure
+  focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
+  settemp(temp): set camera temperature set point
+  cooler(state): set camera cooler state on (True) or off (False)
 
 
 Module functions
