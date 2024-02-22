@@ -433,15 +433,19 @@ def mirror_covers(open=False) :
     elif not open and current != 1 :
         Covers.CloseCover()
 
-def open() :
-    """ Open dome
+def open(dome=True,covers=True) :
+    """ Open dome and mirror covers
     """
-    D.OpenShutter()
+    if dome : D.OpenShutter()
+    if covers : 
+        mirror_covers(True)
 
-def close() :
-    """ Close dome
+def close(dome=True,covers=True) :
+    """ Close mirror covers and dome
     """
-    D.CloseShutter()
+    if covers : mirror_covers(False)
+    if dome : 
+        D.CloseShutter()
 
 def domesync(dosync=True) :
 
@@ -480,17 +484,22 @@ def stop_status() :
 
 def commands() :
     print()
+    print("Observatory commands")
+    print("  open(): open dome, mirror covers")
+    print("  close(): close mirror covers, dome, and park")
+    print()
     print("Dome commands")
-    print("  open(): open dome")
-    print("  close(): close dome")
+    print("  domehome(): move dome to home position")
     print()
     print("Telescope commands")
     print("  slew(ra,dec): slew to coordinates")
     print("  offset(ra,dec): offset telescope")
     print("  usno([ra,dec]) : find/slew to USNO A2.0 star")
+    print("  altaz(az,alt): slew to az/alt coordinates")
     print("  foc(focus) : set focus to specified value")
-    print("  park(): park telescope")
     print("  tracking(True|False): turn tracking on/off")
+    print("  mirror_covers(True|False): control mirror covers")
+    print("  park(): park telescope and dome")
     print()
     print("Camera commands")
     print("  expose(exptime,filt,**kwargs: take an exposure")
