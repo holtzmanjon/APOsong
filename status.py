@@ -154,18 +154,18 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
     # open Alpaca devices
     print('Opening Alpaca devices...',svrs)
     global D, T, F, Filt, C, Covers
-    try : D=Dome(svrs[0],0)
-    except : print('no dome connection')
-    try: T=Telescope(svrs[1],0)
+    try: T=Telescope(svrs[0],0)
     except : print('no telescope connection')
-    try: Covers=CoverCalibrator(svrs[1],0)
+    try: Covers=CoverCalibrator(svrs[0],0)
     except : print('no covers connection')
-    try: F=Focuser(svrs[1],0)
+    try: F=Focuser(svrs[0],0)
     except : print('no focuser connection')
-    try: Filt=FilterWheel(svrs[1],0)
+    try: Filt=FilterWheel(svrs[0],0)
     except : print('no filter wheel connection')
-    try :C=Camera(svrs[1],1)
+    try :C=Camera(svrs[0],1)
     except : print('no camera connection')
+    try : D=Dome(svrs[1],0)
+    except : print('no dome connection')
 
     shutter=['Open','Closed','Opening','Closing','Error']
     state=['Idle','Waiting','Exposing','Reading','Download','Error']
