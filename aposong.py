@@ -54,7 +54,7 @@ pwi = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
-def ascom_init(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
+def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
     print("Alpaca devices: ")
     for svr in svrs:
         print(f"  At {svr}")
@@ -67,20 +67,20 @@ def ascom_init(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
     # open Alpaca devices
     print('Opening Alpaca devices...')
     global D, S, T, F, Filt, C, Covers
-    try : D=Dome(svrs[0],0)
-    except : print('no dome connection')
-    try : S=SafetyMonitor(svrs[0],0)
-    except : print('no safety monitor connection')
-    try: T=Telescope(svrs[1],0)
+    try: T=Telescope(svrs[0],0)
     except : print('no telescope connection')
-    try: Covers=CoverCalibrator(svrs[1],0)
+    try: Covers=CoverCalibrator(svrs[0],0)
     except : print('no covers connection')
-    try: F=Focuser(svrs[1],0)
+    try: F=Focuser(svrs[0],0)
     except : print('no focuser connection')
-    try: Filt=FilterWheel(svrs[1],0)
+    try: Filt=FilterWheel(svrs[0],0)
     except : print('no filter wheel connection')
     try :C=Camera(svrs[1],1)
     except : print('no camera connection')
+    try : D=Dome(svrs[1],0)
+    except : print('no dome connection')
+    try : S=SafetyMonitor(svrs[1],0)
+    except : print('no safety monitor connection')
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -521,7 +521,7 @@ def commands() :
     print()
     print("Use help(command) for more details")
 
-def start(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
+def start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
     ascom_init(svrs=svrs)
     pwi_init()
     start_status(svrs=svrs)
@@ -529,7 +529,7 @@ def start(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
     commands()
 
 try :
-    start(svrs=['10.75.0.21:32227','10.75.0.22:11111'])
+    start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
 except: 
     print('failed init..')
 
