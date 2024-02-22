@@ -13,6 +13,7 @@ import glob
 try:
   from alpaca import discovery, management
   from alpaca.telescope import *
+  from alpaca.covercalibrator import *
   from alpaca.dome import *
   from alpaca.safetymonitor import *
   from alpaca.focuser import *
@@ -64,10 +65,11 @@ def ascom_init() :
 
     # open Alpaca devices
     print('Opening Alpaca devices...')
-    global D, S, T, F, Filt, C
+    global D, S, T, F, Filt, C, Covers
     D=Dome(svrs[0],0)
     S=SafetyMonitor(svrs[0],0)
     T=Telescope(svrs[1],0)
+    Covers=CoverCalibrator(svrs[1],0)
     F=Focuser(svrs[1],0)
     #Filt=FilterWheel(svrs[1],0)
     C=Camera(svrs[1],1)
@@ -420,7 +422,16 @@ def foc(val, relative=False) :
 def domehome() :
     """ Home dome
     """
-    D.Home()
+    D.FindHome()
+
+def mirror_covers(open=False) :
+    """ Open/close mirror covers
+    """
+    current = Covers.CoverState.value
+    if open and current != 0 :
+        Covers.OpenCover()
+    elif not open and current != 1 :
+        Covers.CloseCover()
 
 def open() :
     """ Open dome
