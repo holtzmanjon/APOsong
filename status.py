@@ -21,6 +21,7 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
 
+
 #from coordio import sky, site, time, ICRS
 
 class TelescopeWgt(ttk.Frame) :
@@ -113,7 +114,7 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
 
-def status(pwi=None) :
+def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
     default_font.configure(size=12,weight=tkinter.font.BOLD)
@@ -150,14 +151,21 @@ def status(pwi=None) :
         child.grid_configure(padx=5, pady=5)
     mainframe.focus()
 
-    svrs =  ['10.75.0.21:32227', '10.75.0.22:11111']
-    D=Dome(svrs[0],0)
-    Safe=SafetyMonitor(svrs[0],0)
-    T=Telescope(svrs[1],0)
-    F=Focuser(svrs[1],0)
-    #Filt=FilterWheel(svrs[1],0)
-    #C=Camera(svrs[1],0)
-    C=Camera(svrs[1],1)
+    # open Alpaca devices
+    print('Opening Alpaca devices...',svrs)
+    global D, T, F, Filt, C, Covers
+    try : D=Dome(svrs[0],0)
+    except : print('no dome connection')
+    try: T=Telescope(svrs[1],0)
+    except : print('no telescope connection')
+    try: Covers=CoverCalibrator(svrs[1],0)
+    except : print('no covers connection')
+    try: F=Focuser(svrs[1],0)
+    except : print('no focuser connection')
+    try: Filt=FilterWheel(svrs[1],0)
+    except : print('no filter wheel connection')
+    try :C=Camera(svrs[1],1)
+    except : print('no camera connection')
 
     shutter=['Open','Closed','Opening','Closing','Error']
     state=['Idle','Waiting','Exposing','Reading','Download','Error']
@@ -206,13 +214,26 @@ def status(pwi=None) :
             telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
 
             telframe.focus.set('{:d}'.format(F.Position))
-        except: pass
+        except: 
+            telframe.ra.set('N/A')
+            telframe.dec.set('N/A')
+
+            telframe.az.set('N/A')
+            telframe.alt.set('N/A')
+
+            telframe.rot.set('N/A')
+            telframe.pa.set('N/A')
+
         try :
             domeframe.az.set('{:.1f}'.format(D.Azimuth))
             domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
             if D.Slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
-        except: pass
+        except: 
+            domeframe.az.set('N/A')
+            domeframe.shutter.set('N/A')
+            domeframe.slewing.set('N/A')
+
         try :
             try :camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
             except : camframe.filter.set('None')
@@ -221,7 +242,12 @@ def status(pwi=None) :
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                      C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
-        except: pass
+        except: 
+            camframe.filter.set('N/A')
+            camframe.binning.set('N/A')
+            camframe.state.set('N/A')
+            camframe.temperature.set('N/A')
+            camframe.cooler.set('N/A')
         root.after(1000,update)
 
     update()

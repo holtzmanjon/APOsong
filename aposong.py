@@ -49,11 +49,12 @@ dataroot='/data/1m/'
 sync_process = None
 disp = None
 global D, S, T, F, Filt, C
+global pwi 
+pwi = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
-def ascom_init() :
-    svrs=['10.75.0.21:32227','10.75.0.22:11111']
+def ascom_init(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
     print("Alpaca devices: ")
     for svr in svrs:
         print(f"  At {svr}")
@@ -66,13 +67,20 @@ def ascom_init() :
     # open Alpaca devices
     print('Opening Alpaca devices...')
     global D, S, T, F, Filt, C, Covers
-    D=Dome(svrs[0],0)
-    S=SafetyMonitor(svrs[0],0)
-    T=Telescope(svrs[1],0)
-    Covers=CoverCalibrator(svrs[1],0)
-    F=Focuser(svrs[1],0)
-    #Filt=FilterWheel(svrs[1],0)
-    C=Camera(svrs[1],1)
+    try : D=Dome(svrs[0],0)
+    except : print('no dome connection')
+    try : S=SafetyMonitor(svrs[0],0)
+    except : print('no safety monitor connection')
+    try: T=Telescope(svrs[1],0)
+    except : print('no telescope connection')
+    try: Covers=CoverCalibrator(svrs[1],0)
+    except : print('no covers connection')
+    try: F=Focuser(svrs[1],0)
+    except : print('no focuser connection')
+    try: Filt=FilterWheel(svrs[1],0)
+    except : print('no filter wheel connection')
+    try :C=Camera(svrs[1],1)
+    except : print('no camera connection')
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -469,12 +477,12 @@ def domesync(dosync=True) :
         sync_process.join()
         sync_process = None
 
-def start_status() :   
+def start_status(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
     """ Start status window thread
     """
     global proc
     #proc = threading.Thread(target=status.status,kwargs={'pwi' : pwi})
-    proc = mp.Process(target=status.status,kwargs={'pwi' : pwi})
+    proc = mp.Process(target=status.status,kwargs={'pwi' : pwi, 'svrs' : svrs})
     proc.start()
 
 def stop_status() :
@@ -513,18 +521,15 @@ def commands() :
     print()
     print("Use help(command) for more details")
 
-def start() :
-    global D, S, T, F, Filt, C
-    ascom_init()
+def start(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
+    ascom_init(svrs=svrs)
     pwi_init()
-    start_status()
+    start_status(svrs=svrs)
     disp=tv.TV(figsize=(8,6))
     commands()
 
 try :
-    start()
-    #ascom_init()
-    #pwi_init()
+    start(svrs=['10.75.0.21:32227','10.75.0.22:11111'])
 except: 
     print('failed init..')
 
