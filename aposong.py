@@ -451,7 +451,7 @@ def mirror_covers(open=False) :
 def coverstate() :
     print(Covers.CoverState.value)
 
-def open(dome=True,covers=True) :
+def domeopen(dome=True,covers=True) :
     """ Open dome and mirror covers
     """
     if dome : D.OpenShutter()
@@ -465,7 +465,7 @@ def open(dome=True,covers=True) :
         while Covers.CoverState.value != 3 :
             time.sleep(1)
 
-def close(dome=True,covers=True) :
+def domeclose(dome=True,covers=True) :
     """ Close mirror covers and dome
     """
     if covers : mirror_covers(False)
@@ -514,8 +514,8 @@ def stop_status() :
 def commands() :
     print()
     print("Observatory commands")
-    print("  open(): open dome, mirror covers")
-    print("  close(): close mirror covers, dome, and park")
+    print("  domeopen(): open dome, mirror covers")
+    print("  domeclose(): close mirror covers, dome, and park")
     print()
     print("Dome commands")
     print("  domehome(): move dome to home position")
