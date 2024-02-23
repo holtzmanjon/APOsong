@@ -450,13 +450,19 @@ def open(dome=True,covers=True) :
     """
     if dome : D.OpenShutter()
     if covers : 
-        mirror_covers(True)
+        # Wait for shutter open before opening mirror covers
+        while D.ShutterStatus.name != 'shutterOpen' :
+            time.sleep(1)
+        altaz(T.Azimuth,80.)
+        mirror_covers(True) 
 
 def close(dome=True,covers=True) :
     """ Close mirror covers and dome
     """
     if covers : mirror_covers(False)
     if dome : 
+        time.sleep(10)
+        # don't wait for mirror covers to report closed, in case they don't!
         D.CloseShutter()
 
 def domesync(dosync=True) :
