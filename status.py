@@ -10,6 +10,7 @@ from numpy.random import randint
 try :
     from alpaca.camera import *
     from alpaca.telescope import *
+    from alpaca.covercalibrator import *
     from alpaca.dome import *
     from alpaca.focuser import *
     from alpaca.filterwheel import *
@@ -29,44 +30,44 @@ class TelescopeWgt(ttk.Frame) :
     def __init__(self,container) :
         super().__init__(container)
         row=1
-        ttk.Label(self,text="UT").grid(column=1,row=row,sticky=(W))
-        self.ut = StringVar()
-        ttk.Label(self, textvariable=self.ut).grid(column=2,row=row,sticky=(E),padx=10)
-
-        ttk.Label(self,text="LST").grid(column=3,row=row,sticky=(W))
-        self.lst = StringVar()
-        ttk.Label(self, textvariable=self.lst).grid(column=4,row=row,sticky=(E),padx=10)
-
-        ttk.Label(self,text="MJD").grid(column=5,row=row,sticky=(W))
-        self.mjd = StringVar()
-        ttk.Label(self, textvariable=self.mjd).grid(column=6,row=row,sticky=(E),padx=10)
-
-
-        row+=1
         ttk.Label(self,text="RA").grid(column=1,row=row,sticky=(W))
         self.ra = StringVar()
         ttk.Label(self, textvariable=self.ra).grid(column=2,row=row,sticky=(E),padx=10)
 
-        ttk.Label(self,text="DEC").grid(column=3,row=row,sticky=(W))
-        self.dec = StringVar()
-        ttk.Label(self, textvariable=self.dec).grid(column=4,row=row,sticky=(E),padx=10)
+        ttk.Label(self,text="AZ").grid(column=3,row=row,sticky=(W))
+        self.az = StringVar()
+        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(E),padx=10) 
 
-        ttk.Label(self,text="PA").grid(column=5,row=row,sticky=(W))
-        self.pa = StringVar()
-        ttk.Label(self, textvariable=self.pa).grid(column=6,row=row,sticky=(E),padx=10)
+        ttk.Label(self,text="UT").grid(column=5,row=row,sticky=(W))
+        self.ut = StringVar()
+        ttk.Label(self, textvariable=self.ut).grid(column=6,row=row,sticky=(E),padx=10)
+
 
         row+=1
-        ttk.Label(self,text="AZ").grid(column=1,row=row,sticky=(W))
-        self.az = StringVar()
-        ttk.Label(self, textvariable=self.az).grid(column=2,row=row,sticky=(E),padx=10) 
+        ttk.Label(self,text="DEC").grid(column=1,row=row,sticky=(W))
+        self.dec = StringVar()
+        ttk.Label(self, textvariable=self.dec).grid(column=2,row=row,sticky=(E),padx=10)
 
         ttk.Label(self,text="ALT").grid(column=3,row=row,sticky=(W))
         self.alt = StringVar()
         ttk.Label(self, textvariable=self.alt).grid(column=4,row=row,sticky=(E),padx=10)
 
-        ttk.Label(self,text="ROT").grid(column=5,row=row,sticky=(W))
+        ttk.Label(self,text="LST").grid(column=5,row=row,sticky=(W))
+        self.lst = StringVar()
+        ttk.Label(self, textvariable=self.lst).grid(column=6,row=row,sticky=(E),padx=10)
+
+        row+=1
+        ttk.Label(self,text="PA").grid(column=1,row=row,sticky=(W))
+        self.pa = StringVar()
+        ttk.Label(self, textvariable=self.pa).grid(column=2,row=row,sticky=(E),padx=10)
+
+        ttk.Label(self,text="ROT").grid(column=3,row=row,sticky=(W))
         self.rot = StringVar()
-        ttk.Label(self, textvariable=self.rot).grid(column=6,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.rot).grid(column=4,row=row,sticky=(E),padx=10)
+
+        ttk.Label(self,text="MJD").grid(column=5,row=row,sticky=(W))
+        self.mjd = StringVar()
+        ttk.Label(self, textvariable=self.mjd).grid(column=6,row=row,sticky=(E),padx=10)
 
         row+=1
         ttk.Label(self,text="FOCUS").grid(column=1,row=row,sticky=(W))
@@ -114,7 +115,9 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
 
-def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
+def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None) :
+    """ Start status window and updater
+    """
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
     default_font.configure(size=12,weight=tkinter.font.BOLD)
@@ -151,22 +154,6 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
         child.grid_configure(padx=5, pady=5)
     mainframe.focus()
 
-    # open Alpaca devices
-    print('Opening Alpaca devices...',svrs)
-    global D, T, F, Filt, C, Covers
-    try: T=Telescope(svrs[0],0)
-    except : print('no telescope connection')
-    try: Covers=CoverCalibrator(svrs[0],0)
-    except : print('no covers connection')
-    try: F=Focuser(svrs[0],0)
-    except : print('no focuser connection')
-    try: Filt=FilterWheel(svrs[0],0)
-    except : print('no filter wheel connection')
-    try :C=Camera(svrs[0],1)
-    except : print('no camera connection')
-    try : D=Dome(svrs[1],0)
-    except : print('no dome connection')
-
     shutter=['Open','Closed','Opening','Closing','Error']
     state=['Idle','Waiting','Exposing','Reading','Download','Error']
 
@@ -174,7 +161,7 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
     #aposite=site.Site('APO')
 
     def update() :
-        try :
+        if True :
             t=Time.now()
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
@@ -183,13 +170,13 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
-            if pwi is None :
-                try :
+            if T is None and pwi is None :
+                telframe.ra.set('N/A')
+                telframe.dec.set('N/A')
+            else :
+                if pwi is None :
                     ra = T.RightAscension
                     dec = T.Declination
-                except : 
-                    telframe.ra.set('N/A')
-                    telframe.dec.set('N/A')
                 # convert from topocentric to ICRS
                 #aposite.set_time(time.Time())
                 ##print('telescope: ', T.RightAscension, T.Declination)
@@ -200,51 +187,58 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
                 ##print('ICRS:',icrs)
                 #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
                 #telframe.dec.set('{:f}'.format(icrs[0][1]))
+                else :
+                    stat = pwi.status()
+                    ra = stat.mount.ra_j2000_hours
+                    dec = stat.mount.dec_j2000_degs
+                c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
+                radec=c.to_string('hmsdms',sep=':',precision=1) 
+                ras=radec.split()[0]
+                decs=radec.split()[1]
+                telframe.ra.set('{:s}'.format(ras))
+                telframe.dec.set('{:s}'.format(decs))
+
+            if T is not None :
+                telframe.az.set('{:.2f}'.format(T.Azimuth))
+                telframe.alt.set('{:.2f}'.format(T.Altitude))
             else :
-                stat = pwi.status()
-                ra = stat.mount.ra_j2000_hours
-                dec = stat.mount.dec_j2000_degs
-            c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
-            radec=c.to_string('hmsdms',sep=':',precision=1) 
-            ras=radec.split()[0]
-            decs=radec.split()[1]
-            telframe.ra.set('{:s}'.format(ras))
-            telframe.dec.set('{:s}'.format(decs))
+                telframe.az.set('N/A')
+                telframe.alt.set('N/A')
 
-            telframe.az.set('{:.2f}'.format(T.Azimuth))
-            telframe.alt.set('{:.2f}'.format(T.Altitude))
+            if pwi is not None :
+                telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
+                telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
+            else :
+                telframe.rot.set('missing')
+                telframe.pa.set('missing')
 
-            telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
-            telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
+            if F is not None :
+                telframe.focus.set('{:d}'.format(F.Position))
+            else :
+                telframe.focus.set('N/A')
 
-            telframe.focus.set('{:d}'.format(F.Position))
-        except: 
-            telframe.ra.set('N/A')
-            telframe.dec.set('N/A')
-            telframe.az.set('N/A')
-            telframe.alt.set('N/A')
-            telframe.rot.set('N/A')
-            telframe.pa.set('N/A')
-
-        try :
+        if D is not None :
             domeframe.az.set('{:.1f}'.format(D.Azimuth))
             domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
             if D.Slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
-        except: 
+        else :
             domeframe.az.set('N/A')
             domeframe.shutter.set('N/A')
             domeframe.slewing.set('N/A')
 
-        try :
-            try :camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
-            except : camframe.filter.set('None')
+        if Filt is not None :
+            camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
+        else :
+            camframe.filter.set('None')
+
+        if C is not None :
             camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
             camframe.state.set('{:s}'.format(state[C.CameraState]))
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                      C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
-        except: 
+        else :
             camframe.filter.set('N/A')
             camframe.binning.set('N/A')
             camframe.state.set('N/A')

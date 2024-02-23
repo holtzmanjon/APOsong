@@ -8,8 +8,22 @@ import numpy as np
 import os
 import pdb
 import glob
+import yaml
+import time
+from datetime import datetime
+import multiprocessing as mp
+import threading
 
-# alpaca imports
+from astropy.coordinates import SkyCoord, EarthLocation
+import astropy.units as u
+from astropy.io import fits
+from astropy.time import Time
+
+from astroquery.vo_conesearch import ConeSearch, conesearch
+import astroquery.utils
+astroquery.utils.suppress_vo_warnings()
+
+# alpaca imports, put in try/except for readthedocs
 try:
   from alpaca import discovery, management
   from alpaca.telescope import *
@@ -25,62 +39,61 @@ except:
 # pwi4 HTTP interface
 import pwi4_client
 
-import time
-from datetime import datetime
-
 from pyvista import tv
 import focus
-
-from astropy.coordinates import SkyCoord, EarthLocation
-import astropy.units as u
-from astropy.io import fits
-from astropy.time import Time
-
-from astroquery.vo_conesearch import ConeSearch, conesearch
-import astroquery.utils
-astroquery.utils.suppress_vo_warnings()
-
 import status
-import multiprocessing as mp
-import threading
 
 # some global variables
-dataroot='/data/1m/'
+import yaml
+with open('aposong.yml','r') as config_file :
+    config = yaml.safe_load(config_file) 
+
+pwi_srv = config['devices']['pwi_srv']
+dataroot=config['dataroot']
 sync_process = None
 disp = None
-global D, S, T, F, Filt, C
-global pwi 
-pwi = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
-#svrs=discovery.search_ipv4(timeout=30,numquery=3)
-def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0) :
+if config['devices']['ascom_search'] :
+    svrs=discovery.search_ipv4(timeout=30,numquery=3)
+else :
+    svrs=config['devices']['ascom_srvs']
+def ascom_init() :
+    global D, S, T, F, Filt, C, Covers
+    D, S, T, F, Filt, C, Covers = (None, None, None, None, None, None, None)
     print("Alpaca devices: ")
+    if svrs is None : return
     for svr in svrs:
         print(f"  At {svr}")
         print (f"    V{management.apiversions(svr)} server")
         print (f"    {management.description(svr)['ServerName']}")
         devs = management.configureddevices(svr)
+        def isconnected(dev,target) :
+            try: 
+                dev.Connected
+                target = dev
+            except :
+                pass
+            return target
+                
+        # open Alpaca devices
         for dev in devs:
             print(f"      {dev['DeviceType']}[{dev['DeviceNumber']}]: {dev['DeviceName']}")
+            if dev['DeviceType'] == 'Telescope' :
+                T =isconnected(Telescope(svr,dev['DeviceNumber']),T)
+            elif dev['DeviceType'] == 'Dome' :
+                D = isconnected(Dome(svr,dev['DeviceNumber']),D)
+            elif dev['DeviceType'] == 'CoverCalibrator' :
+                Covers = isconnected(CoverCalibrator(svr,dev['DeviceNumber']),Covers)
+            elif dev['DeviceType'] == 'Focuser' :
+                F = isconnected(Focuser(svr,dev['DeviceNumber']),F)
+            elif dev['DeviceType'] == 'FilterWheel' :
+                Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
+            elif dev['DeviceType'] == 'Camera' :
+                C = isconnected(Camera(svr,dev['DeviceNumber']),C)
+            elif dev['DeviceType'] == 'SafetyMonitor' :
+                S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
-    # open Alpaca devices
-    print('Opening Alpaca devices...')
-    global D, S, T, F, Filt, C, Covers
-    try: T=Telescope(svrs[0],0)
-    except : print('no telescope connection')
-    try: Covers=CoverCalibrator(svrs[0],0)
-    except : print('no covers connection')
-    try: F=Focuser(svrs[0],0)
-    except : print('no focuser connection')
-    try: Filt=FilterWheel(svrs[0],0)
-    except : print('no filter wheel connection')
-    try :C=Camera(svrs[0],camera)
-    except : print('no camera connection')
-    try : D=Dome(svrs[1],0)
-    except : print('no dome connection')
-    try : S=SafetyMonitor(svrs[1],0)
-    except : print('no safety monitor connection')
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -89,12 +102,6 @@ def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0) :
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
  
-
-def pwi_init() :
-    global pwi
-    print('Starting PWI4 client...')
-    pwi=pwi4_client.PWI4(host='pwi1m')
-    for axis in [0,1] : pwi.mount_enable(axis)
 
 # Camera commands
 def qck(exptime,filt='current') :
@@ -152,11 +159,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     t = Time.now()
     C.StartExposure(exptime,light)
     while not C.ImageReady :
-        time.sleep(0.5)
+        time.sleep(1.0)
     data = np.array(C.ImageArray).T
-    if display is not None :
-        display.tv(data,min=min,max=max)
-        display.fig.canvas.flush_events()
+    if disp is not None :
+        disp.tv(data,min=min,max=max)
+        disp.fig.canvas.flush_events()
 
     hdu=fits.PrimaryHDU(data)
     hdu.header['DATE-OBS'] = t.fits
@@ -210,7 +217,7 @@ def cooler(state=True) :
     """
     C.CoolerOn = state
 
-def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
+def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,disp=None,
            max=30000, thresh=25) :
     """ Obtain a focus run
 
@@ -230,8 +237,8 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            Binning factor in x and y
     box : pyvista BOX, default=None
            if specified, window to box parameters 
-    display : pyvista tv, default=None
-           If given, display each image as it is being taken
+    disp : pyvista tv, default=None
+           If given, display each image as it is being taken into specified device
 
     Returns
     -------
@@ -439,11 +446,18 @@ def domehome() :
 def mirror_covers(open=False) :
     """ Open/close mirror covers
     """
+    altaz(T.Azimuth,85.)
+    print('waiting for telescope to slew to high altitude...')
+    while T.Slewing :
+        time.sleep(1)
     current = Covers.CoverState.value
-    if open and current != 0 :
+    if open and current != 3 :
         Covers.OpenCover()
     elif not open and current != 1 :
         Covers.CloseCover()
+
+def coverstate() :
+    print(Covers.CoverState.value)
 
 def open(dome=True,covers=True) :
     """ Open dome and mirror covers
@@ -451,18 +465,23 @@ def open(dome=True,covers=True) :
     if dome : D.OpenShutter()
     if covers : 
         # Wait for shutter open before opening mirror covers
+        print('waiting for shutter to open...')
         while D.ShutterStatus.name != 'shutterOpen' :
             time.sleep(1)
-        altaz(T.Azimuth,80.)
         mirror_covers(True) 
+        print('waiting for mirror covers to open...')
+        while Covers.CoverState.value != 3 :
+            time.sleep(1)
 
 def close(dome=True,covers=True) :
     """ Close mirror covers and dome
     """
     if covers : mirror_covers(False)
     if dome : 
-        time.sleep(10)
+        print('waiting 20 seconds for mirror covers to close...')
+        time.sleep(20)
         # don't wait for mirror covers to report closed, in case they don't!
+        park()
         D.CloseShutter()
 
 def domesync(dosync=True) :
@@ -487,11 +506,12 @@ def domesync(dosync=True) :
         sync_process.join()
         sync_process = None
 
-def start_status(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
+def start_status() :
     """ Start status window thread
     """
     global proc
-    proc = mp.Process(target=status.status,kwargs={'pwi' : pwi, 'svrs' : svrs})
+    proc = mp.Process(target=status.status,
+                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : C})
     proc.start()
 
 def stop_status() :
@@ -530,8 +550,7 @@ def commands() :
     print()
     print("Use help(command) for more details")
 
-def init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0,root='/data/1m/',pwi=True) :
-    #  lab: ['172.24.37.106:11111']
+def init(lab=False) :
     """ Start ascom and pwi connections and pyvista display
 
     Parameters
@@ -539,24 +558,27 @@ def init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0,root='/data/1m/',
     svrs   : list, default=['10.75.0.22:11111','10.75.0.21:32227']
              List of server:port strings for ASCOM devices
     """
-    dataroot = root
-    disp=tv.TV(figsize=(8,6))
+    global svrs, disp
+    ascom_init() # svrs=svrs,camera=camera)
+    print('pwi_init...')
+    pwi_init()
     print('start_status...')
-    start_status(svrs=svrs)
-    if len(svrs) > 0 :
-        print('ascom_init...')
-        ascom_init(svrs=svrs,camera=camera)
-    if pwi :
-        print('pwi_init...')
-        pwi_init()
+    start_status()
+    disp=tv.TV(figsize=(8,6))
     commands()
 
+def pwi_init() :
+    global pwi
+    print('Starting PWI4 client...')
+    if pwi_srv is not None :
+        pwi=pwi4_client.PWI4(host=pwi_srv)
+        for axis in [0,1] : pwi.mount_enable(axis)
+    else :
+        pwi = None
+
+init()
 #try :
 #    init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) 
 #except: 
 #    print('failed init..')
-
-if __name__ == '__main__' :
-    start_status()
-    commands()
 
