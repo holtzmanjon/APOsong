@@ -54,7 +54,7 @@ pwi = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 #svrs=discovery.search_ipv4(timeout=30,numquery=3)
-def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
+def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0) :
     print("Alpaca devices: ")
     for svr in svrs:
         print(f"  At {svr}")
@@ -75,7 +75,7 @@ def ascom_init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
     except : print('no focuser connection')
     try: Filt=FilterWheel(svrs[0],0)
     except : print('no filter wheel connection')
-    try :C=Camera(svrs[1],1)
+    try :C=Camera(svrs[0],camera)
     except : print('no camera connection')
     try : D=Dome(svrs[1],0)
     except : print('no dome connection')
@@ -164,14 +164,18 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['MJD'] = t.mjd
     hdu.header['EXPTIME'] = exptime 
     hdu.header['FILTER'] = filt 
-    hdu.header['FOCUS'] = F.Position
-    stat = pwi.status()
-    hdu.header['RA'] = stat.mount.ra_j2000_hours
-    hdu.header['DEC'] = stat.mount.dec_j2000_degs
-    hdu.header['AZ'] = stat.mount.azimuth_degs
-    hdu.header['ALT'] = stat.mount.altitude_degs
-    hdu.header['ROT'] = stat.rotator.mech_position_degs
-    hdu.header['TELESCOP'] = 'APO SONG 1m'
+    try : 
+        hdu.header['FOCUS'] = F.Position
+    except : pass
+    try :
+        stat = pwi.status()
+        hdu.header['RA'] = stat.mount.ra_j2000_hours
+        hdu.header['DEC'] = stat.mount.dec_j2000_degs
+        hdu.header['AZ'] = stat.mount.azimuth_degs
+        hdu.header['ALT'] = stat.mount.altitude_degs
+        hdu.header['ROT'] = stat.rotator.mech_position_degs
+        hdu.header['TELESCOP'] = 'APO SONG 1m'
+    except : pass
     hdu.header['CCD-TEMP'] = C.CCDTemperature
     hdu.header['XBINNING'] = C.BinX
     hdu.header['YBINNING'] = C.BinY
@@ -481,7 +485,6 @@ def start_status(svrs=['10.75.0.21:32227','10.75.0.22:11111']) :
     """ Start status window thread
     """
     global proc
-    #proc = threading.Thread(target=status.status,kwargs={'pwi' : pwi})
     proc = mp.Process(target=status.status,kwargs={'pwi' : pwi, 'svrs' : svrs})
     proc.start()
 
@@ -521,7 +524,8 @@ def commands() :
     print()
     print("Use help(command) for more details")
 
-def start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
+def init(svrs=['10.75.0.22:11111','10.75.0.21:32227'],camera=0,root='/data/1m/',pwi=True) :
+    #  lab: ['172.24.37.106:11111']
     """ Start ascom and pwi connections and pyvista display
 
     Parameters
@@ -529,16 +533,22 @@ def start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) :
     svrs   : list, default=['10.75.0.22:11111','10.75.0.21:32227']
              List of server:port strings for ASCOM devices
     """
-    ascom_init(svrs=svrs)
-    pwi_init()
-    start_status(svrs=svrs)
+    dataroot = root
     disp=tv.TV(figsize=(8,6))
+    print('start_status...')
+    start_status(svrs=svrs)
+    if len(svrs) > 0 :
+        print('ascom_init...')
+        ascom_init(svrs=svrs,camera=camera)
+    if pwi :
+        print('pwi_init...')
+        pwi_init()
     commands()
 
-try :
-    start(svrs=['10.75.0.22:11111','10.75.0.21:32227']) 
-except: 
-    print('failed init..')
+#try :
+#    init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) 
+#except: 
+#    print('failed init..')
 
 if __name__ == '__main__' :
     start_status()

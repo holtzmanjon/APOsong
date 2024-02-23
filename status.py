@@ -184,8 +184,12 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
             if pwi is None :
-                ra = T.RightAscension
-                dec = T.Declination
+                try :
+                    ra = T.RightAscension
+                    dec = T.Declination
+                except : 
+                    telframe.ra.set('N/A')
+                    telframe.dec.set('N/A')
                 # convert from topocentric to ICRS
                 #aposite.set_time(time.Time())
                 ##print('telescope: ', T.RightAscension, T.Declination)
@@ -217,10 +221,8 @@ def status(pwi=None, svrs= ['10.75.0.21:32227', '10.75.0.22:11111']) :
         except: 
             telframe.ra.set('N/A')
             telframe.dec.set('N/A')
-
             telframe.az.set('N/A')
             telframe.alt.set('N/A')
-
             telframe.rot.set('N/A')
             telframe.pa.set('N/A')
 
