@@ -2,6 +2,7 @@ matplotlib
 numpy
 scipy
 astropy
+ipython
 pyyaml
 astro-pyvista
 alpyca
