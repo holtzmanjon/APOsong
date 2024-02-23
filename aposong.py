@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 import multiprocessing as mp
 import threading
+import yaml
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
@@ -44,21 +45,12 @@ import focus
 import status
 
 # some global variables
-import yaml
-with open('aposong.yml','r') as config_file :
-    config = yaml.safe_load(config_file) 
-
-pwi_srv = config['devices']['pwi_srv']
-dataroot=config['dataroot']
+dataroot = None
 sync_process = None
 disp = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
-if config['devices']['ascom_search'] :
-    svrs=discovery.search_ipv4(timeout=30,numquery=3)
-else :
-    svrs=config['devices']['ascom_srvs']
-def ascom_init() :
+def ascom_init(svrs) :
     global D, S, T, F, Filt, C, Covers
     D, S, T, F, Filt, C, Covers = (None, None, None, None, None, None, None)
     print("Alpaca devices: ")
@@ -550,24 +542,28 @@ def commands() :
     print()
     print("Use help(command) for more details")
 
-def init(lab=False) :
+def init() :
     """ Start ascom and pwi connections and pyvista display
-
-    Parameters
-    ----------
-    svrs   : list, default=['10.75.0.22:11111','10.75.0.21:32227']
-             List of server:port strings for ASCOM devices
     """
-    global svrs, disp
-    ascom_init() # svrs=svrs,camera=camera)
+    global disp, dataroot, pwi_srv
+    with open('aposong.yml','r') as config_file :
+        config = yaml.safe_load(config_file) 
+
+    if config['devices']['ascom_search'] :
+        svrs=discovery.search_ipv4(timeout=30,numquery=3)
+    else :
+        svrs=config['devices']['ascom_srvs']
+    dataroot=config['dataroot']
+    ascom_init(svrs)
     print('pwi_init...')
-    pwi_init()
+    pwi_srv = config['devices']['pwi_srv']
+    pwi_init(pwi_srv)
     print('start_status...')
     start_status()
     disp=tv.TV(figsize=(8,6))
     commands()
 
-def pwi_init() :
+def pwi_init(pwi_srv) :
     global pwi
     print('Starting PWI4 client...')
     if pwi_srv is not None :
@@ -577,8 +573,4 @@ def pwi_init() :
         pwi = None
 
 init()
-#try :
-#    init(svrs=['10.75.0.22:11111','10.75.0.21:32227']) 
-#except: 
-#    print('failed init..')
 
