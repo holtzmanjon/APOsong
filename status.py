@@ -74,21 +74,29 @@ class TelescopeWgt(ttk.Frame) :
         self.focus = StringVar()
         ttk.Label(self, textvariable=self.focus).grid(column=2,row=row,sticky=(E),padx=10) 
 
+
 class DomeWgt(ttk.Frame) :
 
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="SHUTTER ",width=10).grid(column=1,row=1,sticky=(W))
+        row=1
+        ttk.Label(self,text="SHUTTER ",width=10).grid(column=1,row=row,sticky=(W))
         self.shutter = StringVar()
-        ttk.Label(self, textvariable=self.shutter).grid(column=2,row=1,sticky=(W),padx=10)
+        ttk.Label(self, textvariable=self.shutter).grid(column=2,row=row,sticky=(W),padx=10)
 
-        ttk.Label(self,text="DOME AZ",width=10).grid(column=3,row=1,sticky=(W))
+        ttk.Label(self,text="DOME AZ",width=10).grid(column=3,row=row,sticky=(W))
         self.az = StringVar()
-        ttk.Label(self, textvariable=self.az).grid(column=4,row=1,sticky=(W),padx=10)
+        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(W),padx=10)
 
         self.slewing = StringVar()
         ttk.Label(self, textvariable=self.slewing).grid(column=5,row=1,sticky=(W),padx=10)
+
+        row+=1
+        ttk.Label(self,text="MIRROR COVERS").grid(column=1,row=row,sticky=(W))
+        self.coverstate = StringVar()
+        ttk.Label(self, textvariable=self.coverstate).grid(column=2,row=row,sticky=(E),padx=10) 
+
      
 class CameraWgt(ttk.Frame) :
 
@@ -115,7 +123,7 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
 
-def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None) :
+def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     """ Start status window and updater
     """
     root = Tk()
@@ -155,13 +163,14 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None) :
     mainframe.focus()
 
     shutter=['Open','Closed','Opening','Closing','Error']
-    state=['Idle','Waiting','Exposing','Reading','Download','Error']
+    camerastate=['Idle','Waiting','Exposing','Reading','Download','Error']
+    coverstate=['NotPresent','Closed','Moving','Open','Unknown','Error']
 
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
     def update() :
-        if True :
+        try :
             t=Time.now()
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
@@ -216,6 +225,10 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None) :
                 telframe.focus.set('{:d}'.format(F.Position))
             else :
                 telframe.focus.set('N/A')
+        except : pass
+
+        if Covers is not None :
+            domeframe.coverstate.set('{:s}'.format(coverstate[Covers.CoverState]))
 
         if D is not None :
             domeframe.az.set('{:.1f}'.format(D.Azimuth))
@@ -234,7 +247,7 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None) :
 
         if C is not None :
             camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-            camframe.state.set('{:s}'.format(state[C.CameraState]))
+            camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                      C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
