@@ -560,6 +560,8 @@ def init() :
             config = yaml.safe_load(config_file) 
     except:
         print('no configuration file found')
+        config={}
+        config['devices']={}
         config['devices']['ascom_search'] = False
         config['devices']['ascom_svrs'] = []
         config['devices']['pwi_srv'] = None
