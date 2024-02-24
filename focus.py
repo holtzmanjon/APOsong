@@ -124,8 +124,9 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
         if display is not None :
             plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale*2,
                         xt='Focus',yt='R(half total)',size=50)
-            x=np.linspace(foc[gd[bestind-2]],foc[gd[bestind+2]],100)
-            plots.plotl(display.plotax2,x,(poly[0]*x**2+poly[1]*x+poly[2])*pixscale*2)
+            if bestind>1 and bestind < len(gd)-3 :
+                x=np.linspace(foc[gd[bestind-2]],foc[gd[bestind+2]],100)
+                plots.plotl(display.plotax2,x,(poly[0]*x**2+poly[1]*x+poly[2])*pixscale*2)
 
     if plot :
         print('Hit RETURN key to close plot windows and continue: ')
