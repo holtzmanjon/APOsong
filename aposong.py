@@ -503,7 +503,8 @@ def start_status() :
     """
     global proc
     proc = mp.Process(target=status.status,
-                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : C})
+                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : C, 'Covers': Covers})
+    proc.daemon = True
     proc.start()
 
 def stop_status() :
