@@ -225,38 +225,40 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 telframe.focus.set('{:d}'.format(F.Position))
             else :
                 telframe.focus.set('N/A')
-        except : pass
 
-        if Covers is not None :
-            domeframe.coverstate.set('{:s}'.format(coverstate[Covers.CoverState]))
+            if Covers is not None :
+                domeframe.coverstate.set('{:s}'.format(coverstate[Covers.CoverState]))
 
-        if D is not None :
-            domeframe.az.set('{:.1f}'.format(D.Azimuth))
-            domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
-            if D.Slewing : domeframe.slewing.set('SLEWING')
-            else : domeframe.slewing.set(' ')
-        else :
-            domeframe.az.set('N/A')
-            domeframe.shutter.set('N/A')
-            domeframe.slewing.set('N/A')
+            if D is not None :
+                domeframe.az.set('{:.1f}'.format(D.Azimuth))
+                domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
+                if D.Slewing : domeframe.slewing.set('SLEWING')
+                else : domeframe.slewing.set(' ')
+            else :
+                domeframe.az.set('N/A')
+                domeframe.shutter.set('N/A')
+                domeframe.slewing.set('N/A')
 
-        if Filt is not None :
-            camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
-        else :
-            camframe.filter.set('None')
+            if Filt is not None :
+                camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
+            else :
+                camframe.filter.set('None')
 
-        if C is not None :
-            camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-            camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
-            camframe.temperature.set('{:.1f}/{:.1f}'.format(
-                     C.CCDTemperature,C.SetCCDTemperature))
-            camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
-        else :
-            camframe.filter.set('N/A')
-            camframe.binning.set('N/A')
-            camframe.state.set('N/A')
-            camframe.temperature.set('N/A')
-            camframe.cooler.set('N/A')
+            if C is not None :
+                camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
+                camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
+                camframe.temperature.set('{:.1f}/{:.1f}'.format(
+                         C.CCDTemperature,C.SetCCDTemperature))
+                camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
+            else :
+                camframe.filter.set('N/A')
+                camframe.binning.set('N/A')
+                camframe.state.set('N/A')
+                camframe.temperature.set('N/A')
+                camframe.cooler.set('N/A')
+        except : 
+            telframe.ut.set('ERROR')
+
         root.after(1000,update)
 
     update()
