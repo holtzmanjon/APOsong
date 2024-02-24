@@ -563,7 +563,7 @@ def init() :
         config={}
         config['devices']={}
         config['devices']['ascom_search'] = False
-        config['devices']['ascom_svrs'] = []
+        config['devices']['ascom_srvs'] = []
         config['devices']['pwi_srv'] = None
 
     if config['devices']['ascom_search'] :
