@@ -141,18 +141,23 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if box is not None :
         C.StartX = box.xmin
         C.StartY = box.ymin
-        C.NumX = box.ncol()
-        C.NumY = box.nrow()
+        nx = box.ncol()
+        ny = box.nrow()
     else :
         C.StartX = 0
         C.StartY = 0
-        C.NumX = C.CameraXSize//bin
-        C.NumY = C.CameraYSize//bin
+        nx = C.CameraXSize//bin
+        ny = C.CameraYSize//bin
+    C.NumX = nx
+    C.NumY = ny
     t = Time.now()
     C.StartExposure(exptime,light)
-    while not C.ImageReady :
+    while not C.ImageReady or C.CameraState != 0:
         time.sleep(1.0)
-    data = np.array(C.ImageArray).T
+    try : data = np.array(C.ImageArray).T
+    except :
+        print('error reading ImageArray')
+        pdb.set_trace()
     if disp is not None :
         disp.tv(data,min=min,max=max)
         disp.fig.canvas.flush_events()
@@ -209,7 +214,7 @@ def cooler(state=True) :
     """
     C.CoolerOn = state
 
-def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,disp=None,
+def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            max=30000, thresh=25) :
     """ Obtain a focus run
 
@@ -438,11 +443,13 @@ def domehome() :
 def mirror_covers(open=False) :
     """ Open/close mirror covers
     """
+    current = Covers.CoverState.value
+    if open and current == 3 : return
+    if not open and current == 1 : return
     altaz(T.Azimuth,85.)
     print('waiting for telescope to slew to high altitude...')
     while T.Slewing :
         time.sleep(1)
-    current = Covers.CoverState.value
     if open and current != 3 :
         Covers.OpenCover()
     elif not open and current != 1 :
@@ -473,7 +480,8 @@ def domeclose(dome=True,covers=True) :
         print('waiting 20 seconds for mirror covers to close...')
         time.sleep(20)
         # don't wait for mirror covers to report closed, in case they don't!
-        park()
+        try: park()
+        except : pass
         D.CloseShutter()
 
 def domesync(dosync=True) :
@@ -547,8 +555,14 @@ def init() :
     """ Start ascom and pwi connections and pyvista display
     """
     global disp, dataroot, pwi_srv
-    with open('aposong.yml','r') as config_file :
-        config = yaml.safe_load(config_file) 
+    try :
+        with open('aposong.yml','r') as config_file :
+            config = yaml.safe_load(config_file) 
+    except:
+        print('no configuration file found')
+        config['devices']['ascom_search'] = False
+        config['devices']['ascom_svrs'] = []
+        config['devices']['pwi_srv'] = None
 
     if config['devices']['ascom_search'] :
         svrs=discovery.search_ipv4(timeout=30,numquery=3)
