@@ -506,12 +506,17 @@ def domesync(dosync=True) :
         sync_process.join()
         sync_process = None
 
-def start_status() :
+def start_status(camera=True) :
     """ Start status window thread
     """
     global proc
+    # allow for no camera state to avoid command collisions
+    if camera :
+        Cam = C
+    else : 
+        Cam = None
     proc = mp.Process(target=status.status,
-                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : C, 'Covers': Covers})
+                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : Cam, 'Covers': Covers})
     proc.daemon = True
     proc.start()
 
@@ -572,12 +577,14 @@ def init() :
     else :
         svrs=config['devices']['ascom_srvs']
     dataroot=config['dataroot']
+    try : updatecamera=config['updatecamera']
+    except : updatecamera=True
     ascom_init(svrs)
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
     print('start_status...')
-    start_status()
+    start_status(updatecamera)
     disp=tv.TV(figsize=(8,6))
     commands()
 

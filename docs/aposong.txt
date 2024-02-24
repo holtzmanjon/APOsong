@@ -37,8 +37,8 @@ the docstrings, available below or using interactive help when running the
 Python interface, but a summary of commands is:
 
 Observatory commands:
-  - open(): open dome, mirror covers
-  - close(): close mirror covers, dome, and park
+  - domeopen(): open dome, mirror covers
+  - domeclose(): close mirror covers, dome, and park
 
 Dome commands:
   - domehome(): move dome to home position

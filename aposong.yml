@@ -10,5 +10,6 @@ devices :
 #  pwi_srv : 
 
 dataroot : /data/1m
+updatecamera : False
 
 
