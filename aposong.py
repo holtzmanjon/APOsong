@@ -136,28 +136,30 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     elif filt == 'current' :
         filt = Filt.Names[Filt.Position]
 
-    C.BinX=bin
-    C.BinY=bin
-    if box is not None :
-        C.StartX = box.xmin
-        C.StartY = box.ymin
-        nx = box.ncol()
-        ny = box.nrow()
-    else :
-        C.StartX = 0
-        C.StartY = 0
-        nx = C.CameraXSize//bin
-        ny = C.CameraYSize//bin
-    C.NumX = nx
-    C.NumY = ny
-    t = Time.now()
-    C.StartExposure(exptime,light)
-    while not C.ImageReady or C.CameraState != 0:
-        time.sleep(1.0)
-    try : data = np.array(C.ImageArray).T
+    try :
+        C.BinX=bin
+        C.BinY=bin
+        if box is not None :
+            C.StartX = box.xmin
+            C.StartY = box.ymin
+            nx = box.ncol()
+            ny = box.nrow()
+        else :
+            C.StartX = 0
+            C.StartY = 0
+            nx = C.CameraXSize//bin
+            ny = C.CameraYSize//bin
+        C.NumX = nx
+        C.NumY = ny
+        t = Time.now()
+        C.StartExposure(exptime,light)
+        while not C.ImageReady or C.CameraState != 0:
+            time.sleep(1.0)
+        data = np.array(C.ImageArray).T
     except :
-        print('error reading ImageArray')
-        pdb.set_trace()
+        print('ERROR : exposure failed')
+        return
+
     if disp is not None :
         disp.tv(data,min=min,max=max)
         disp.fig.canvas.flush_events()
