@@ -565,6 +565,7 @@ def init() :
         config['devices']['ascom_search'] = False
         config['devices']['ascom_srvs'] = []
         config['devices']['pwi_srv'] = None
+        config['dataroot'] = './'
 
     if config['devices']['ascom_search'] :
         svrs=discovery.search_ipv4(timeout=30,numquery=3)
