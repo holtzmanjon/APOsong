@@ -12,6 +12,7 @@ while True :
     # if watchdog is not reset, set it to cut power in xxx minutes
     try:
         temp = C.CCDTemperature
+        print('temp: ', temp)
         if temp < 30 :
             # reset watchdog
             print('resetting watchdog...')
@@ -21,4 +22,5 @@ while True :
     except:
         pass
 
+    print('sleeping...')
     time.sleep(10)
