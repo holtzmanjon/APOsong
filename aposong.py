@@ -269,12 +269,12 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale,
                                                 display=display,max=max,thresh=thresh)
     if bestfitfoc > 0 :
-        print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}',
-              bestfitfoc,bestfithf)
+        print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
+              bestfitfoc,bestfithf))
         foc(int(bestfitfoc))
     else :
-        print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}',
-              bestfitfoc,besthf)
+        print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
+              bestfitfoc,besthf))
         foc(int(bestfoc))
     return images,files
 
@@ -357,14 +357,14 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
-def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7) :
+def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7,vmax=10000) :
 
     global guide_process, run_guide
 
     def doguide(x,y,x0,y0,disp) :
         while run_guide :
             print('start: ',x,y,prop,bin)
-            hdu=expose(exptime,display=disp,bin=bin,filt=filt)
+            hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax)
             if data is not None : 
                 hdu=data
             x,y=stars.marginal_gfit(hdu.data,x,y,rad)
@@ -507,6 +507,21 @@ def domehome() :
     """
     D.FindHome()
 
+def fans_on(roles=None):
+    """
+    roles: if None, turn on all fans
+    Otherwise, can be a CSV string of one or more fan roles to turn on:
+        m1rear: Primary mirror fans (rear fans only)
+        m1side: Primary mirror fans (side fans only)
+        m2: Secondary mirror fans
+        m3: M3 mirror fans
+        m1heaters: Primary mirror heat distribution fans
+    """
+    pwi.fans_on(roles)
+
+def fans_off(self, roles=None):
+    pwi.fans_off(roles)
+
 def mirror_covers(open=False) :
     """ Open/close mirror covers
     """
@@ -525,7 +540,7 @@ def mirror_covers(open=False) :
 def coverstate() :
     print(Covers.CoverState.value)
 
-def domeopen(dome=True,covers=True) :
+def domeopen(dome=True,covers=True,fans=True) :
     """ Open dome and mirror covers
     """
     if dome : D.OpenShutter()
@@ -538,10 +553,13 @@ def domeopen(dome=True,covers=True) :
         print('waiting for mirror covers to open...')
         while Covers.CoverState.value != 3 :
             time.sleep(1)
+    if fans :
+        fans_on()
 
-def domeclose(dome=True,covers=True) :
+def domeclose(dome=True,covers=True,fans=True) :
     """ Close mirror covers and dome
     """
+    if fans : fans_off()
     if covers : mirror_covers(False)
     if dome : 
         print('waiting 20 seconds for mirror covers to close...')
@@ -559,7 +577,13 @@ def domesync(dosync=True) :
             while T.Slewing or D.Slewing : 
                  print(T.Slewing, D.Slewing)
                  time.sleep(1)
-            D.SlewToAzimuth(T.Azimuth)
+            # Get telescope az 3x and median to avoid glitches
+            az=[]
+            for i in range(3) :
+                az.append(T.Azimuth)
+                time.sleep(0.2)
+
+            D.SlewToAzimuth(np.median(az))
             time.sleep(update)
 
     if dosync and sync_process is None :
