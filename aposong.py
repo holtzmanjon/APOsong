@@ -40,13 +40,14 @@ except:
 # pwi4 HTTP interface
 import pwi4_client
 
-from pyvista import tv
+from pyvista import tv, skycalc, stars
 import focus
 import status
 
 # some global variables
 dataroot = None
 sync_process = None
+guide_process = None
 disp = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
@@ -160,9 +161,9 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         print('ERROR : exposure failed')
         return
 
-    if disp is not None :
-        disp.tv(data,min=min,max=max)
-        disp.fig.canvas.flush_events()
+    if display is not None :
+        display.tv(data,min=min,max=max)
+        display.fig.canvas.flush_events()
 
     hdu=fits.PrimaryHDU(data)
     hdu.header['DATE-OBS'] = t.fits
@@ -277,7 +278,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         foc(int(bestfoc))
     return images,files
 
-def slew(ra, dec) :
+def slew(ra, dec,dome=True) :
     """ Slew to RA/DEC
 
     Parameters
@@ -300,7 +301,7 @@ def slew(ra, dec) :
     while T.Slewing :
         time.sleep(1)
     T.Tracking = True
-    domesync()
+    domesync(dome)
 
 def altaz(az,alt) :
     """ Slew to specified az / alt
@@ -356,36 +357,85 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
+def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7) :
+
+    global guide_process, run_guide
+
+    def doguide(x,y,x0,y0,disp) :
+        while run_guide :
+            print('start: ',x,y,prop,bin)
+            hdu=expose(exptime,display=disp,bin=bin,filt=filt)
+            if data is not None : 
+                hdu=data
+            x,y=stars.marginal_gfit(hdu.data,x,y,rad)
+            print('offset: ',x-x0,y-y0)
+            offsetxy(prop*(x-x0),prop*(y-y0))
+            time.sleep(3)
+            x=x0
+            y=y0
+
+    if start and guide_process is None :
+        if data is None :
+            hdu=expose(exptime,display=disp,filt=filt,bin=bin)
+        else :
+            hdu = data
+        disp.tv(hdu)
+        print('mark star on display: ')
+        k,x,y=disp.tvmark()
+        print('starting guiding',x,y)
+        run_guide = True
+        if display is None :
+            guide_process=threading.Thread(target=doguide,args=(x,y,x0,y0,None))
+        else :
+            doguide(x,y,x0,y0,disp)
+        guide_process.start()
+    elif not start and guide_process is not None :
+        print('stopping guiding')
+        run_guide = False
+        guide_process.join()
+        guide_process = None
+
+
+def offsetxy(dx,dy,sign=-1,scale=0.16) :
+    """
+    Offset in detector coordinates
+    """
+    pa = sign*rotator()*np.pi/180.
+    dra =  -dx*np.cos(pa) - dy*np.sin(pa)
+    ddec = -dx*np.sin(pa) + dy*np.cos(pa) 
+    print(pa,dra,ddec)
+    offset(dra*scale,ddec*scale)
+
 def offset(dra, ddec) :
-        """
-        One or more of the following offsets can be specified as a keyword argument:
+    """
+    One or more of the following offsets can be specified as a keyword argument:
 
-        AXIS_reset: Clear all position and rate offsets for this axis. Set this to any value to issue the command.
-        AXIS_stop_rate: Set any active offset rate to zero. Set this to any value to issue the command.
-        AXIS_add_arcsec: Increase the current position offset by the specified amount
-        AXIS_set_rate_arcsec_per_sec: Continually increase the offset at the specified rate
+    AXIS_reset: Clear all position and rate offsets for this axis. Set this to any value to issue the command.
+    AXIS_stop_rate: Set any active offset rate to zero. Set this to any value to issue the command.
+    AXIS_add_arcsec: Increase the current position offset by the specified amount
+    AXIS_set_rate_arcsec_per_sec: Continually increase the offset at the specified rate
 
-        As of PWI 4.0.11 Beta 7, the following options are also supported:
-        AXIS_stop: Stop both the offset rate and any gradually-applied commands
-        AXIS_stop_gradual_offset: Stop only the gradually-applied offset, and maintain the current rate
-        AXIS_set_total_arcsec: Set the total accumulated offset at the time the command is received to the specified value. Any in-progress rates or gradual offsets will continue to be applied on top of this.
-        AXIS_add_gradual_offset_arcsec: Gradually add the specified value to the total accumulated offset. Must be paired with AXIS_gradual_offset_rate or AXIS_gradual_offset_seconds to determine the timeframe over which the gradual offset is applied.
-        AXIS_gradual_offset_rate: Paired with AXIS_add_gradual_offset_arcsec; Specifies the rate at which a gradual offset should be applied. For example, if an offset of 10 arcseconds is to be applied at a rate of 2 arcsec/sec, then it will take 5 seconds for the offset to be applied.
-        AXIS_gradual_offset_seconds: Paired with AXIS_add_gradual_offset_arcsec; Specifies the time it should take to apply the gradual offset. For example, if an offset of 10 arcseconds is to be applied over a period of 2 seconds, then the offset will be increasing at a rate of 5 arcsec/sec.
+    As of PWI 4.0.11 Beta 7, the following options are also supported:
+    AXIS_stop: Stop both the offset rate and any gradually-applied commands
+    AXIS_stop_gradual_offset: Stop only the gradually-applied offset, and maintain the current rate
+    AXIS_set_total_arcsec: Set the total accumulated offset at the time the command is received to the specified value. Any in-progress rates or gradual offsets will continue to be applied on top of this.
+    AXIS_add_gradual_offset_arcsec: Gradually add the specified value to the total accumulated offset. Must be paired with AXIS_gradual_offset_rate or AXIS_gradual_offset_seconds to determine the timeframe over which the gradual offset is applied.
+    AXIS_gradual_offset_rate: Paired with AXIS_add_gradual_offset_arcsec; Specifies the rate at which a gradual offset should be applied. For example, if an offset of 10 arcseconds is to be applied at a rate of 2 arcsec/sec, then it will take 5 seconds for the offset to be applied.
+    AXIS_gradual_offset_seconds: Paired with AXIS_add_gradual_offset_arcsec; Specifies the time it should take to apply the gradual offset. For example, if an offset of 10 arcseconds is to be applied over a period of 2 seconds, then the offset will be increasing at a rate of 5 arcsec/sec.
 
-        Where AXIS can be one of:
+    Where AXIS can be one of:
 
-        ra: Offset the target Right Ascension coordinate
-        dec: Offset the target Declination coordinate
-        axis0: Offset the mount's primary axis position 
-               (roughly Azimuth on an Alt-Az mount, or RA on In equatorial mount)
-        axis1: Offset the mount's secondary axis position 
-               (roughly Altitude on an Alt-Az mount, or Dec on an equatorial mount)
-        path: Offset along the direction of travel for a moving target
-        transverse: Offset perpendicular to the direction of travel for a moving target
-        """
-        pwi.mount_offset(ra_add_arcsec=dra)
-        pwi.mount_offset(dec_add_arcsec=ddec)
+    ra: Offset the target Right Ascension coordinate
+    dec: Offset the target Declination coordinate
+    axis0: Offset the mount's primary axis position 
+           (roughly Azimuth on an Alt-Az mount, or RA on In equatorial mount)
+    axis1: Offset the mount's secondary axis position 
+           (roughly Altitude on an Alt-Az mount, or Dec on an equatorial mount)
+    path: Offset along the direction of travel for a moving target
+    transverse: Offset perpendicular to the direction of travel for a moving target
+    """
+    pwi.mount_offset(ra_add_arcsec=dra)
+    pwi.mount_offset(dec_add_arcsec=ddec)
 
 def j2000totopocentric(ra,dec) :
     """ Routine to convert J2000 coordinates to topocentric RA/DEC
@@ -405,6 +455,21 @@ def j2000totopocentric(ra,dec) :
     #tt = tpm.utc3tdb(utc)
     #v6 = convert.cat2v6(ra*np.pi/180,dec*np.pi/180)
     #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
+
+def rotator() :
+    """ Get current rotator angle, both from parallactic and telescope status
+    """
+    t=Time.now()
+    t.location=EarthLocation.of_site('APO')
+    lst=t.sidereal_time('mean').value
+    ha = lst - T.RightAscension
+    pa = skycalc.pa(ha,T.Declination,'APO')
+    stat=pwi.status()
+    inst = stat.rotator.mech_position_degs
+    print('calculated: ',pa,T.Altitude,inst)
+    pa = stat.rotator.field_angle_degs
+    print('telescope: ',pa)
+    return pa 
 
 def tracking(tracking) :
     """ Set telescope tracking on (True) or off (False)
