@@ -261,5 +261,9 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
 
         root.after(1000,update)
 
+    import signal
+    def handler(signum,frame):
+        return
+    signal.signal(signal.SIGINT,handler)
     update()
     root.mainloop()
