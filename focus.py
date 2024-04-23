@@ -67,6 +67,7 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
 
         # identify half flux point
         hf=np.zeros(len(phot))
+        tot=np.zeros(len(phot))
         for istar in range(len(phot)) :
             if cum[istar].max() > 1.1 : continue
             if plot : ax[ifile].plot(pixapers[0:-1],cum[istar,:].T)
@@ -76,8 +77,11 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
                 if j0<0 : continue
                 j1=j[0]
                 hf[istar] = pixapers[j0] + (0.5-cum[istar,j0])/(cum[istar,j1]-cum[istar,j0])*(pixapers[j1]-pixapers[j0])
+                tot[istar] = cum[istar,-1]
                 #hfold=(pixapers[j[0]-1]+pixapers[j[0]])/2.
-        gd = np.where(hf>0)[0]
+
+        #only take stars within factor of 3 in flux of brightest star
+        gd = np.where((hf>0)&(tot>tot.max()/3.))[0]
         hfmed[ifile]=np.median(hf[gd])
         if plot :
             ax[ifile].scatter(hf[gd],[0.5]*len(gd),c='k')
