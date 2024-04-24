@@ -262,9 +262,9 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         mosaic[:,i*nc:(i+1)*nc] = hdu.data
         files.append(name)
         images.append(hdu)
-    plt.figure()
-    plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
-    plt.axis('off')
+    #plt.figure()
+    #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
+    #plt.axis('off')
     pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
     bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale,
                                                 display=display,max=max,thresh=thresh)
@@ -274,7 +274,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         foc(int(bestfitfoc))
     else :
         print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
-              bestfitfoc,besthf))
+              bestfoc,besthf))
         foc(int(bestfoc))
     return images,files
 
@@ -485,7 +485,8 @@ def park() :
     """ Park telescope and dome
     """
     domesync(False)
-    T.Park()
+    try: T.Park()
+    except: print('telescope.Park raised an exception')
     D.Park()
 
 def foc(val, relative=False) :
@@ -517,9 +518,11 @@ def fans_on(roles=None):
         m3: M3 mirror fans
         m1heaters: Primary mirror heat distribution fans
     """
+    print("Turning fans on ...")
     pwi.fans_on(roles)
 
-def fans_off(self, roles=None):
+def fans_off(roles=None):
+    print("Turning fans off ...")
     pwi.fans_off(roles)
 
 def mirror_covers(open=False) :
@@ -565,8 +568,7 @@ def domeclose(dome=True,covers=True,fans=True) :
         print('waiting 20 seconds for mirror covers to close...')
         time.sleep(20)
         # don't wait for mirror covers to report closed, in case they don't!
-        try: park()
-        except : pass
+        park()
         D.CloseShutter()
 
 def domesync(dosync=True) :
