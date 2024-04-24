@@ -8,8 +8,8 @@ from photutils.detection import find_peaks
 from photutils import DAOStarFinder
 from holtztools import plots
 
-def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12], 
-          pixscale=0.5, display=None, plot=False,max=max) :
+def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12], 
+          pixscale=0.5, display=None, plot=False,max=max,red=None) :
     """ Get best focus position from a set of focus run images
 
         For each image, find stars and do concentric aperture photometry to 
@@ -28,7 +28,10 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
         display.plotax2.cla()
     for ifile,file in enumerate(files) :
         # read file and get focus value
-        a=fits.open(file)[0]
+        if red is None :
+            a=fits.open(file)[0]
+        else :
+            a=red.rd(file)
         im=a.data.astype(float)
         foc[ifile]=a.header['FOCUS']
         print(file,foc[ifile])
@@ -45,20 +48,36 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
         # find stars
         mad=np.nanmedian(np.abs(im-np.nanmedian(im)))
         daofind=DAOStarFinder(fwhm=fwhm/pixscale,threshold=thresh*mad,exclude_border=True)
-        tab=daofind(im-np.nanmedian(im))
+        tab=daofind(im[50:-50,50:-50]-np.nanmedian(im))
         if tab is None :
             print('no sources found...')
             continue
+        tab['xcentroid']+=50
+        tab['ycentroid']+=50
         tab.rename_column('xcentroid','x')
         tab.rename_column('ycentroid','y')
+        
+        for i,star in enumerate(tab) :
+            x,y,p=stars.rasym_centroid(im,star['x'],star['y'],int(pixapers[-1]),skyrad=skyrad)
+            tab['x'][i]=x
+            tab['y'][i]=y
 
         # aperture photometry through range of apertures
         phot=stars.photom(im,tab,skyrad=np.array(skyrad)/pixscale,rad=pixapers,mag=False)
         gd = np.where(np.isfinite(phot['aper{:.1f}'.format(pixapers[-1])]))[0]
+        if len(gd) < 1 :
+            print('no sources with finite photometry')
+            continue
         phot=phot[gd]
         if display is not None :
             display.tvclear()
             stars.mark(display,phot,exit=True)
+
+        #only take stars within factor of 3 in flux of brightest star
+        tot = phot['aper{:.1f}'.format(pixapers[-1])]
+        gd = np.where(tot > tot.max()/3.)[0]
+        phot=phot[gd]
+        if display is not None : stars.mark(display,phot,exit=True,color='g')
 
         # get cumulative photometry curve
         cum=np.zeros([len(phot),len(pixapers)-1])
@@ -80,18 +99,16 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
                 tot[istar] = cum[istar,-1]
                 #hfold=(pixapers[j[0]-1]+pixapers[j[0]])/2.
 
-        #only take stars within factor of 3 in flux of brightest star
-        gd = np.where((hf>0)&(tot>tot.max()/3.))[0]
-        hfmed[ifile]=np.median(hf[gd])
+        hfmed[ifile]=np.median(hf)
         if plot :
-            ax[ifile].scatter(hf[gd],[0.5]*len(gd),c='k')
-            ax[ifile].scatter(np.median(hf[gd]),0.5,c='b',s=75)
+            ax[ifile].scatter(hf,[0.5]*len(hf),c='k')
+            ax[ifile].scatter(np.median(hf),0.5,c='b',s=75)
             ax[ifile].set_ylim(0,1.2)
             ax[ifile].text(0.05,0.8,str(a.header['FOCUS']),transform=ax[ifile].transAxes)
             plt.figure(fig.number)
             plt.draw()
-        if display is not None and len(gd) > 0 :
-            plots.plotp(display.plotax2,np.array([foc[ifile]]*len(gd)),hf[gd]*pixscale*2,
+        if display is not None and len(hf) > 0 :
+            plots.plotp(display.plotax2,np.array([foc[ifile]]*len(hf)),hf*pixscale*2,
                         xt='Focus',yt='R(half total)',size=5)
 
     if len(hfmed) > 0 :
@@ -119,7 +136,6 @@ def focus(files, apers=np.arange(0.3,8,0.2), thresh=25, fwhm=2, skyrad=[8,12],
             print('focus fit failed...')
             bestfitfoc=-1
             bestfithf=-1
-            pdb.set_trace()
 
         # plot and/or display
         if plot :
