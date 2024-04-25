@@ -14,6 +14,7 @@ from datetime import datetime
 import multiprocessing as mp
 import threading
 import yaml
+import socket
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
@@ -49,11 +50,12 @@ dataroot = None
 sync_process = None
 guide_process = None
 disp = None
+esock = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
     global D, S, T, F, Filt, C, Covers
-    D, S, T, F, Filt, C, Covers = (None, None, None, None, None, None, None)
+    D, S, T, F, Filt, C, Covers = (None, None, None, None, None, [], None)
     print("Alpaca devices: ")
     if svrs is None : return
     for svr in svrs:
@@ -61,10 +63,11 @@ def ascom_init(svrs) :
         print (f"    V{management.apiversions(svr)} server")
         print (f"    {management.description(svr)['ServerName']}")
         devs = management.configureddevices(svr)
-        def isconnected(dev,target) :
+        def isconnected(dev,target,append=False) :
             try: 
                 dev.Connected
-                target = dev
+                if append : target.append(dev)
+                else :target = dev
             except :
                 pass
             return target
@@ -83,7 +86,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'FilterWheel' :
                 Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
             elif dev['DeviceType'] == 'Camera' :
-                C = isconnected(Camera(svr,dev['DeviceNumber']),C)
+                C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
@@ -103,7 +106,7 @@ def qck(exptime,filt='current') :
     expose(exptime,filt)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None) :
+           min=None, max=None, cam=0) :
     """ Take an exposure with camera
 
     Parameters
@@ -138,25 +141,28 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         filt = Filt.Names[Filt.Position]
 
     try :
-        C.BinX=bin
-        C.BinY=bin
+        C[cam].BinX=bin
+        C[cam].BinY=bin
         if box is not None :
-            C.StartX = box.xmin
-            C.StartY = box.ymin
+            C[cam].StartX = box.xmin
+            C[cam].StartY = box.ymin
             nx = box.ncol()
             ny = box.nrow()
         else :
-            C.StartX = 0
-            C.StartY = 0
-            nx = C.CameraXSize//bin
-            ny = C.CameraYSize//bin
-        C.NumX = nx
-        C.NumY = ny
+            C[cam].StartX = 0
+            C[cam].StartY = 0
+            nx = C[cam].CameraXSize//bin
+            ny = C[cam].CameraYSize//bin
+        C[cam].NumX = nx
+        C[cam].NumY = ny
         t = Time.now()
-        C.StartExposure(exptime,light)
-        while not C.ImageReady or C.CameraState != 0:
+        C[cam].StartExposure(exptime,light)
+        for i in range(int(exptime),0,-1) :
+            print('{:<4d}'.format(i),end='\r')
+            time.sleep(0.99)
+        while not C[cam].ImageReady or C[cam].CameraState != 0:
             time.sleep(1.0)
-        data = np.array(C.ImageArray).T
+        data = np.array(C[cam].ImageArray).T
     except :
         print('ERROR : exposure failed')
         return
@@ -183,9 +189,9 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         hdu.header['ROT'] = stat.rotator.mech_position_degs
         hdu.header['TELESCOP'] = 'APO SONG 1m'
     except : pass
-    hdu.header['CCD-TEMP'] = C.CCDTemperature
-    hdu.header['XBINNING'] = C.BinX
-    hdu.header['YBINNING'] = C.BinY
+    hdu.header['CCD-TEMP'] = C[cam].CCDTemperature
+    hdu.header['XBINNING'] = C[cam].BinX
+    hdu.header['YBINNING'] = C[cam].BinY
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
 
@@ -206,19 +212,19 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     else :
         return hdu
 
-def settemp(temp) :
+def settemp(temp,cam=0) :
     """ Change detector temperature set point and turn cooler on
     """
-    C.SetCCDTemperature = temp
-    C.CoolerOn = True
+    C[cam].SetCCDTemperature = temp
+    C[cam].CoolerOn = True
 
-def cooler(state=True) :
+def cooler(state=True,cam=0) :
     """ Set detector cooler state on/off
     """
-    C.CoolerOn = state
+    C[cam].CoolerOn = state
 
 def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
-           max=30000, thresh=25) :
+           max=30000, thresh=25,cam=0) :
     """ Obtain a focus run
 
     Parameters
@@ -255,7 +261,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             time.sleep(1)
         print('position: ',F.Position,F.IsMoving)
         hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,
-                          max=max,name='focus_{:d}'.format(focval))
+                          max=max,name='focus_{:d}'.format(focval),cam=cam)
         if i == 0 :
             nr,nc=hdu.data.shape
             mosaic = np.zeros([nr,n*nc])
@@ -265,7 +271,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     #plt.figure()
     #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     #plt.axis('off')
-    pixscale=206265/6000*C.PixelSizeX*1.e-3*bin
+    pixscale=206265/6000*C[cam].PixelSizeX*1.e-3*bin
     bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale,
                                                 display=display,max=max,thresh=thresh)
     if bestfitfoc > 0 :
@@ -357,7 +363,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
-def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7,vmax=10000) :
+def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7,vmax=10000) :
 
     global guide_process, run_guide
 
@@ -367,7 +373,8 @@ def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,d
             hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax)
             if data is not None : 
                 hdu=data
-            x,y=stars.marginal_gfit(hdu.data,x,y,rad)
+            #x,y=stars.marginal_gfit(hdu.data,x,y,rad)
+            x,y=stars.rasym_centroid(hdu.data,x,y,rad)
             print('offset: ',x-x0,y-y0)
             offsetxy(prop*(x-x0),prop*(y-y0))
             time.sleep(3)
@@ -382,10 +389,12 @@ def guide(start=True,x0=653,y0=502,rad=100,exptime=5,bin=1,filt=None,data=None,d
         disp.tv(hdu)
         print('mark star on display: ')
         k,x,y=disp.tvmark()
+        offsetxy((x-x0),(y-y0))
+        time.sleep(3)
         print('starting guiding',x,y)
         run_guide = True
         if display is None :
-            guide_process=threading.Thread(target=doguide,args=(x,y,x0,y0,None))
+            guide_process=threading.Thread(target=doguide,args=(x0,y0,x0,y0,None))
         else :
             doguide(x,y,x0,y0,disp)
         guide_process.start()
@@ -572,7 +581,8 @@ def domeclose(dome=True,covers=True,fans=True) :
         D.CloseShutter()
 
 def domesync(dosync=True) :
-
+    """ Start/stop domesync thread
+    """
     global sync_process, run_sync
     def sync(update=5) :
         while run_sync :
@@ -617,6 +627,24 @@ def stop_status() :
     """ Stop status window thread
     """
     proc.terminate()
+
+def eshel(close=False,mirror=False,thar=False,quartz=False,led=False) :
+    """ Send commands to remote socket for eShel calibration control
+    """
+    global esock
+    if esock is None :
+        print('if this hangs, make sure remote program is running')
+        esock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        esock.connect(('10.75.0.22', 65432))
+
+    val =  mirror<<7 | led<<6 | thar<<5 | quartz<<4 
+   
+    try : esock.sendall(str(val).encode())
+    except :
+        print("communication error: is remote program running?")
+    if close :
+        esock.shutdown(socket.SHUT_RDWR)
+        esock.close()
 
 def commands() :
     print()
@@ -678,7 +706,7 @@ def init() :
     pwi_init(pwi_srv)
     print('start_status...')
     start_status(updatecamera)
-    disp=tv.TV(figsize=(8,6))
+    disp=tv.TV(figsize=(9.5,6))
     commands()
 
 def pwi_init(pwi_srv) :
