@@ -363,7 +363,35 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
-def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,display=None,prop=0.7,vmax=10000) :
+def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,
+          display=None,prop=0.7,vmax=10000,rasym=True) :
+    """ Start guiding
+
+        Parameters
+        ----------
+        start   bool default=True
+                Start or stop guiding
+        x0, y0  float, default=(646,494)
+                Location to guide to
+        rad     int, default=25
+                radius to use for centering algorithm
+        exptime float, default=5
+                guide exposure tie
+        bin     integer default=1
+                guider binning factor
+        filt    str, default=None
+                filter to use
+        display default=None
+                if pyvista TV, display guider images, and don't run in thread
+        vmax    float, default=10000
+                maximum value for display
+        prop    float, default=0.7
+                coefficient for proportional term 
+        rasym   bool, default=True
+                use radial asymmetry minimum centroider, otherwise marginal_gfit
+        data    array-like default=None
+                for testing, supplied image rather than acquire one
+    """
 
     global guide_process, run_guide
 
@@ -373,8 +401,10 @@ def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,di
             hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax)
             if data is not None : 
                 hdu=data
-            #x,y=stars.marginal_gfit(hdu.data,x,y,rad)
-            x,y=stars.rasym_centroid(hdu.data,x,y,rad)
+            if rasym :
+                x,y=stars.rasym_centroid(hdu.data,x,y,rad)
+            else :
+                x,y=stars.marginal_gfit(hdu.data,x,y,rad)
             print('offset: ',x-x0,y-y0)
             offsetxy(prop*(x-x0),prop*(y-y0))
             time.sleep(3)
