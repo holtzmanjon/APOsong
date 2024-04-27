@@ -41,7 +41,7 @@ except:
 # pwi4 HTTP interface
 import pwi4_client
 
-from pyvista import tv, skycalc, stars
+from pyvista import tv, skycalc, stars, image
 import focus
 import status
 
@@ -363,7 +363,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
-def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,
+def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=16,
           display=None,prop=0.7,vmax=10000,rasym=True) :
     """ Start guiding
 
@@ -395,19 +395,24 @@ def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     global guide_process, run_guide
 
-    def doguide(x,y,x0,y0,disp) :
+    def doguide(x,y,x0,y0,mask,disp) :
         while run_guide :
             print('start: ',x,y,prop,bin)
-            hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax)
+            hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box)
             if data is not None : 
                 hdu=data
             if rasym :
-                x,y=stars.rasym_centroid(hdu.data,x,y,rad)
+                x1,y1,prof=stars.rasym_centroid(hdu.data,x,y,rad,mask=mask)
+                if x1<0 :
+                    x,y=stars.marginal_gfit(hdu.data,x,y,rad)
+                else :
+                    x,y=x1,y1
             else :
                 x,y=stars.marginal_gfit(hdu.data,x,y,rad)
-            print('offset: ',x-x0,y-y0)
-            offsetxy(prop*(x-x0),prop*(y-y0))
-            time.sleep(3)
+            if x>0 and y>0 :
+                print('offset: ',x-x0,y-y0)
+                offsetxy(prop*(x-x0),prop*(y-y0))
+                time.sleep(3)
             x=x0
             y=y0
 
@@ -416,17 +421,27 @@ def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,
             hdu=expose(exptime,display=disp,filt=filt,bin=bin)
         else :
             hdu = data
-        disp.tv(hdu)
+        disp.tv(hdu,max=vmax)
         print('mark star on display: ')
         k,x,y=disp.tvmark()
         offsetxy((x-x0),(y-y0))
         time.sleep(3)
-        print('starting guiding',x,y)
+        print('starting guiding',x0,y0)
+        mask=np.zeros_like(hdu.data)
+        yg,xg=np.mgrid[0:hdu.data.shape[0],0:hdu.data.shape[1]]
+        r2=(xg-x0)**2+(yg-y0)**2
+        bd=np.where(r2<maskrad**2)
+        mask[bd]=1
+        box=image.BOX(cr=int(y0),cc=int(x0),n=int(5*rad))
+        box.show()
+        x0=int(2.5*rad)
+        y0=int(2.5*rad)
+        disp.tv(mask)
         run_guide = True
         if display is None :
-            guide_process=threading.Thread(target=doguide,args=(x0,y0,x0,y0,None))
+            guide_process=threading.Thread(target=doguide,args=(x0,y0,x0,y0,mask,None))
         else :
-            doguide(x,y,x0,y0,disp)
+            doguide(x0,y0,x0,y0,mask,disp)
         guide_process.start()
     elif not start and guide_process is not None :
         print('stopping guiding')
@@ -442,7 +457,6 @@ def offsetxy(dx,dy,sign=-1,scale=0.16) :
     pa = sign*rotator()*np.pi/180.
     dra =  -dx*np.cos(pa) - dy*np.sin(pa)
     ddec = -dx*np.sin(pa) + dy*np.cos(pa) 
-    print(pa,dra,ddec)
     offset(dra*scale,ddec*scale)
 
 def offset(dra, ddec) :
@@ -498,16 +512,14 @@ def j2000totopocentric(ra,dec) :
 def rotator() :
     """ Get current rotator angle, both from parallactic and telescope status
     """
-    t=Time.now()
-    t.location=EarthLocation.of_site('APO')
-    lst=t.sidereal_time('mean').value
-    ha = lst - T.RightAscension
-    pa = skycalc.pa(ha,T.Declination,'APO')
+    #t=Time.now()
+    #t.location=EarthLocation.of_site('APO')
+    #lst=t.sidereal_time('mean').value
+    #ha = lst - T.RightAscension
+    #pa = skycalc.pa(ha,T.Declination,'APO')
     stat=pwi.status()
     inst = stat.rotator.mech_position_degs
-    print('calculated: ',pa,T.Altitude,inst)
     pa = stat.rotator.field_angle_degs
-    print('telescope: ',pa)
     return pa 
 
 def tracking(tracking) :
