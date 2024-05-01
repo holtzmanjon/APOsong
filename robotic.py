@@ -2,12 +2,15 @@ from astropy.coordinates import SkyCoord,EarthLocation
 from astropy.time import Time
 from astropy.table import Table, hstack, vstack
 import astropy.units as u
+from astroplan import Observer, time_grid_from_range
 
 import pdb
 import numpy as np
+import time
 
 import aposong 
 import database
+import APOSafety
 
 class Target() :
     def __init__(self,name,ra,dec,epoch=2000.) :
@@ -25,6 +28,9 @@ class Target() :
 
     def acquire(self) :
         aposong.slew(self.ra,self.dec)
+        while aposong.D.Slewing :
+            time.sleep(2)
+        aposong.guide(True,exptime=0.5)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -46,23 +52,24 @@ class Schedule() :
         return tab
 
 class Sequence() :
-    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1]) :
+    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0]) :
         self.name=name
         self.n_exp=n_exp
         self.t_exp=t_exp
         self.filt=filt
+        self.camera=camera
 
-    def length(acquisition=60,filtmove=5,read=15) :
+    def length(self,acquisition=60,filtmove=5,read=15) :
         tot = acquisition
         for filt,nexp,texp in zip(self.filt,self.n_exp,self.t_exp) :
             tot+= filtmove+nexp*(texp+read)
-        return length
+        return tot
 
     def observe(self,name,display=None) :
         names = []
-        for filt,nexp,texp in zip(self.filt,self.n_exp,self.t_exp) :
+        for filt,nexp,texp,cam in zip(self.filt,self.n_exp,self.t_exp,self.camera) :
             for iexp in range(nexp) : 
-                hdu,outname=aposong.expose(texp,filt,name=name,display=display)
+                hdu,outname=aposong.expose(texp,filt,name=name,display=display,cam=cam)
                 names.append(outname)
         return names
 
@@ -72,6 +79,7 @@ class Sequence() :
         tab['filter'] = [self.filt]
         tab['n_exp'] = [self.n_exp]
         tab['t_exp'] = [self.t_exp]
+        tab['camera'] = [self.camera]
         return tab
 
 class Observation() :
@@ -117,8 +125,12 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     t.location=apo
     lst=t.sidereal_time('mean')
     print('lst: ', lst)
-    if criterion == 'setting' : tmin=12*u.hourangle
-    elif criterion == 'longest' : tmin=0.*u.hourangle
+    if criterion == 'setting' : 
+        tmin=12*u.hourangle
+    elif criterion == 'longest' : 
+        tmin=0.*u.hourangle
+    elif criterion == 'best' : 
+        tmin=12.*u.hourangle
     else : 
         print('unknown criterion: ', criterion)
         return
@@ -126,46 +138,60 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     am_best=-1
     dt_best=-1
     d=database.DBSession()
-    for iline,line in enumerate(requests) :
-        if line['targname'] is None : continue
-        c=SkyCoord("{:s} {:s}".format(line['ra'],line['dec']),unit=(u.hourangle,u.deg))
+    for request in requests :
+        if request['targname'] is None : continue
+        c=SkyCoord("{:s} {:s}".format(request['ra'],request['dec']),unit=(u.hourangle,u.deg))
         ha = t.sidereal_time('mean') - c.ra
         ha.wrap_at(12*u.hourangle,inplace=True)
         am = secz(ha,c.dec,apo.lat)
 
-        length = 5400.
+        seq = Sequence(request['targname'],filt=request['filter'],n_exp=request['n_exp'],
+                       t_exp=request['t_exp'],camera=request['camera'])
+        length=seq.length()
         haend=ha+(length/3600.)*u.hourangle
-        ham=hamax(c.dec,line['max_airmass'],apo.lat).to(u.hourangle)
+        ham=hamax(c.dec,request['max_airmass'],apo.lat).to(u.hourangle)
         dt=ham-haend
-        if am < line['min_airmass'] or am > line['max_airmass'] or dt<0 : continue
-        obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(line['request_pk']))
+        dtmeridian=ha+(length/3600./2.)*u.hourangle
+        if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : continue
+        obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
         if len(obs)>0:
             print(obs)
-            if line['nvisits'] > 0 and len(obs) > line['nvisits'] : 
-                print(line['targname'], 'observed enough visits',len(obs))
+            if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
+                print(request['targname'], 'observed enough visits',len(obs))
                 continue
             dt_visit = t.mjd - np.max(obs['mjd'])
-            if dt_visit < line['dt_visit'] :
-                print(line['targname'], 'observed too recently')
+            if dt_visit < request['dt_visit'] :
+                print(request['targname'], 'observed too recently')
                 continue
 
-        if (criterion == 'setting' and dt< tmin) or (criterion=='longest' and dt>tmin) :
-            best = line
-            bestline = iline
+        if (criterion == 'setting' and dt< tmin) :
+            best = request
             tmin=ham-haend
             am_best=am
             dt_best=ham-haend
+        elif (criterion=='longest' and dt>tmin)  :
+            best = request
+            tmin=ham-haend
+            am_best=am
+            dt_best=ham-haend
+        elif (criterion == 'best' and abs(dtmeridian)<tmin) :
+            best = request
+            tmin = abs(dtmeridian)
+            am_best=am
+            dt_best=abs(dtmeridian)
     d.close()
     print(best)
     return best
 
-def observe(request,display=None) :
+def observe_object(request,display=None) :
     """ Given request, do the observation and record
     """
+    pdb.set_trace()
     targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
     targ.acquire()
     t=Time.now()
-    seq = Sequence(request['targname'],filt=request['filter'],n_exp=request['n_exp'],t_exp=request['t_exp'])
+    seq = Sequence(request['targname'],filt=request['filter'],
+                   n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
     names=seq.observe(targ.name,display=display)
 
     obs=Table()
@@ -176,6 +202,68 @@ def observe(request,display=None) :
     d.ingest('robotic.observed',obs,onconflict='update')
     d.close()
     return obs
+
+def open(opentime,safety) :
+    """ Open observatory when safe 
+    """
+
+    while (Time.now()-opentime)<0 :
+        # wait until sunset + dt_sunset hours 
+        print('waiting for sunset: ',(Time.now()-opentime).to(u.hour))
+        time.sleep(60)
+
+    while not safety.issafe() :
+        # wait until safe to open based on Safety
+        time.sleep(30)
+
+    if aposong.D.ShutterStatus != 0 :
+        aposong.domeopen()
+    print('open at: ',Time.now())
+        
+
+def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain') :
+    """ Full observing night sequence 
+    """
+    site=Observer.at_site(obs,timezone=tz)
+    sunset =site.sun_set_time(Time.now(),which='nearest')
+    sunrise =site.sun_rise_time(Time.now(),which='next')
+    nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
+
+    # setup up Safety object and open dome when safe after desired time relative to sunset
+    safety = APOSafety.Safety()
+    open(sunset+dt_sunset*u.hour,safety)
+
+    # wait for nautical twilight
+    while (Time.now()-nautical)<0 :
+        print('waiting for nautical twilight: ',(Time.now()-nautical))
+        time.sleep(60)
+
+    # focus star on meridian 
+    focus(foc0=foc0,display=display)
+    foctime=Time.now()
+
+    while (Time.now()-sunrise)*u.hour < 0 : 
+        print('sunrise in : ',(Time.now()-sunrise)*u.hour)
+        time.sleep(60)
+
+
+def focus(foc0=28800,display=None,settle=30) :
+    """ Do focus run for object on meridian
+    """    
+    t=Time.now()
+    t.location=EarthLocation.of_site('APO')
+    lst=t.sidereal_time('mean').value
+    aposong.usno(ra=lst,dec=10.,rmin=10,rmax=11)
+    while aposong.D.Slewing :
+        time.sleep(2)
+
+    f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
+    while f<foc0-150 or f>foc0+150 :
+        print('focus: {:d}  foc0: {:d}'.format(f,foc0))
+        foc0=f
+        f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
+       
+
 
 def test() :
     t = Time.now()
@@ -215,8 +303,8 @@ def loadsched(name,min_airmass=1.0,max_airmass=2,nvisits=1,dt_visit=0) :
     d.ingest('robotic.schedule',schedule.table(),onconflict='update')
     d.close()
 
-def loadseq(name,t_exp=[1],n_exp=[1],filt=['V']) :
+def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
     d=database.DBSession()
-    sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp)
+    sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera)
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()

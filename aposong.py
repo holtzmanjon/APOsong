@@ -41,9 +41,13 @@ except:
 # pwi4 HTTP interface
 import pwi4_client
 
-from pyvista import tv, skycalc, stars, image
+from pyvista import tv, skycalc, centroid, stars, image
 import focus
 import status
+
+
+from collections import namedtuple
+Exposure = namedtuple('Exposure', ['hdu', 'name', 'exptime', 'filter'])
 
 # some global variables
 dataroot = None
@@ -130,12 +134,13 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     -------
            HDU of image [,output file name if name!=None]
     """
+    exposure = Exposure(None,None,None,None)
     if filt is not None and filt != 'current': 
         pos = np.where(np.array(Filt.Names) == filt)
         if len(pos) == 0 :
             print('no such filter')
             print('available filters: ', Filt.Names)
-            return
+            return exposure
         Filt.Position=pos[0]
     elif filt == 'current' :
         filt = Filt.Names[Filt.Position]
@@ -165,7 +170,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         data = np.array(C[cam].ImageArray).T
     except :
         print('ERROR : exposure failed')
-        return
+        return exposure
 
     if display is not None :
         display.tv(data,min=min,max=max)
@@ -208,9 +213,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         else : ext=1
         outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,name,ext)
         hdu.writeto(outname)
-        return hdu, outname
+        exposure = Exposure(hdu, outname, exptime, filt)
+        return exposure
     else :
-        return hdu
+        exposure = Exposure(hdu, None, exptime, filt)
+        return exposure
 
 def settemp(temp,cam=0) :
     """ Change detector temperature set point and turn cooler on
@@ -260,8 +267,10 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         while F.IsMoving :
             time.sleep(1)
         print('position: ',F.Position,F.IsMoving)
-        hdu,name = expose(exptime,filt,box=box,bin=bin,display=display,
+        exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
+        hdu=exp.hdu
+        name=exp.name
         if i == 0 :
             nr,nc=hdu.data.shape
             mosaic = np.zeros([nr,n*nc])
@@ -277,12 +286,12 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     if bestfitfoc > 0 :
         print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfitfoc,bestfithf))
-        foc(int(bestfitfoc))
+        f=foc(int(bestfitfoc))
     else :
         print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfoc,besthf))
-        foc(int(bestfoc))
-    return images,files
+        f=foc(int(bestfoc))
+    return f
 
 def slew(ra, dec,dome=True) :
     """ Slew to RA/DEC
@@ -363,8 +372,20 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     print(result[gd[best]])
     if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
 
-def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=16,
-          display=None,prop=0.7,vmax=10000,rasym=True) :
+def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
+    """ Center star
+    """
+    exp=expose(exptime,filt=filt,bin=bin)
+    disp.tv(exp.hdu)
+    print('mark star on display: ')
+    k,x,y=disp.tvmark()
+    if x0 is None : x0=C[0].NumX//2
+    if y0 is None : y0=C[0].NumY//2
+    offsetxy((x-x0),(y-y0))
+    time.sleep(settle)
+
+def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
+          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name=None) :
     """ Start guiding
 
         Parameters
@@ -387,6 +408,8 @@ def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,ma
                 maximum value for display
         prop    float, default=0.7
                 coefficient for proportional term 
+        settle  float, default=3
+                time (seconds) to wait after offset before starting next image
         rasym   bool, default=True
                 use radial asymmetry minimum centroider, otherwise marginal_gfit
         data    array-like default=None
@@ -397,52 +420,72 @@ def guide(start=True,x0=646,y0=494,rad=25,exptime=5,bin=1,filt=None,data=None,ma
 
     def doguide(x,y,x0,y0,mask,disp) :
         while run_guide :
-            print('start: ',x,y,prop,bin)
-            hdu=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box)
+            print('start: ',x,y,prop,bin,mask.sum())
+            if disp is not None : disp.tvclear()
+            exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name=name)
+            hdu=exp.hdu
             if data is not None : 
                 hdu=data
             if rasym :
-                x1,y1,prof=stars.rasym_centroid(hdu.data,x,y,rad,mask=mask)
-                if x1<0 :
-                    x,y=stars.marginal_gfit(hdu.data,x,y,rad)
+                center1=centroid.marginal_gfit(hdu.data,x,y,rad)
+                #try : 
+                #    center1=centroid.marginal_gfit(hdu.data,x,y,rad)
+                #except :
+                #    center1.x=-1
+                #    center1.y=-1
+                print('marginal: ',center1.x,center1.y,center1.tot)
+                center2=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
+                print('rasym: ',center2.x,center2.y,center2.tot)
+                if center2.x<0 :
+                    center=center1
                 else :
-                    x,y=x1,y1
+                    center=center2
             else :
-                x,y=stars.marginal_gfit(hdu.data,x,y,rad)
-            if x>0 and y>0 :
-                print('offset: ',x-x0,y-y0)
-                offsetxy(prop*(x-x0),prop*(y-y0))
-                time.sleep(3)
+                center==centroid.marginal_gfit(hdu.data,x,y,rad)
+                tot=-9
+            if center.x>0 and center.y>0 :
+                print('offset: ',center.x-x0,center.y-y0,center.tot)
+                offsetxy(prop*(center.x-x0),prop*(center.y-y0))
+                time.sleep(settle)
             x=x0
             y=y0
 
     if start and guide_process is None :
         if data is None :
-            hdu=expose(exptime,display=disp,filt=filt,bin=bin)
+            exp=expose(exptime,filt=filt,bin=bin)
+            hdu=exp.hdu
         else :
             hdu = data
         disp.tv(hdu,max=vmax)
         print('mark star on display: ')
         k,x,y=disp.tvmark()
         offsetxy((x-x0),(y-y0))
-        time.sleep(3)
-        print('starting guiding',x0,y0)
+        time.sleep(settle)
+
+        # create mask
         mask=np.zeros_like(hdu.data)
         yg,xg=np.mgrid[0:hdu.data.shape[0],0:hdu.data.shape[1]]
         r2=(xg-x0)**2+(yg-y0)**2
         bd=np.where(r2<maskrad**2)
         mask[bd]=1
+
+        # subwindow for guiding
         box=image.BOX(cr=int(y0),cc=int(x0),n=int(5*rad))
-        box.show()
-        x0=int(2.5*rad)
-        y0=int(2.5*rad)
+        x0-=box.xmin
+        y0-=box.ymin
+        mask=image.window(mask,box=box)
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
         disp.tv(mask)
+        disp.tvcirc(x0,y0,rad=rad)
+        pdb.set_trace()
+
         run_guide = True
+        print('starting guiding',x0,y0)
         if display is None :
             guide_process=threading.Thread(target=doguide,args=(x0,y0,x0,y0,mask,None))
+            guide_process.start()
         else :
             doguide(x0,y0,x0,y0,mask,disp)
-        guide_process.start()
     elif not start and guide_process is not None :
         print('stopping guiding')
         run_guide = False
@@ -553,6 +596,7 @@ def foc(val, relative=False) :
     if relative :
         val += F.Position
     F.Move(val)
+    return val
 
 def domehome() :
     """ Home dome
@@ -629,7 +673,6 @@ def domesync(dosync=True) :
     def sync(update=5) :
         while run_sync :
             while T.Slewing or D.Slewing : 
-                 print(T.Slewing, D.Slewing)
                  time.sleep(1)
             # Get telescope az 3x and median to avoid glitches
             az=[]

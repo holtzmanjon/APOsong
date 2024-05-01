@@ -21,6 +21,7 @@ except :
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
+import APOSafety
 
 
 #from coordio import sky, site, time, ICRS
@@ -32,11 +33,11 @@ class TelescopeWgt(ttk.Frame) :
         row=1
         ttk.Label(self,text="RA").grid(column=1,row=row,sticky=(W))
         self.ra = StringVar()
-        ttk.Label(self, textvariable=self.ra).grid(column=2,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.ra).grid(column=2,row=row,sticky=(E),padx=15)
 
         ttk.Label(self,text="AZ").grid(column=3,row=row,sticky=(W))
         self.az = StringVar()
-        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(E),padx=10) 
+        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(E),padx=15) 
 
         ttk.Label(self,text="UT").grid(column=5,row=row,sticky=(W))
         self.ut = StringVar()
@@ -46,11 +47,11 @@ class TelescopeWgt(ttk.Frame) :
         row+=1
         ttk.Label(self,text="DEC").grid(column=1,row=row,sticky=(W))
         self.dec = StringVar()
-        ttk.Label(self, textvariable=self.dec).grid(column=2,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.dec).grid(column=2,row=row,sticky=(E),padx=15)
 
         ttk.Label(self,text="ALT").grid(column=3,row=row,sticky=(W))
         self.alt = StringVar()
-        ttk.Label(self, textvariable=self.alt).grid(column=4,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.alt).grid(column=4,row=row,sticky=(E),padx=15)
 
         ttk.Label(self,text="LST").grid(column=5,row=row,sticky=(W))
         self.lst = StringVar()
@@ -59,20 +60,24 @@ class TelescopeWgt(ttk.Frame) :
         row+=1
         ttk.Label(self,text="PA").grid(column=1,row=row,sticky=(W))
         self.pa = StringVar()
-        ttk.Label(self, textvariable=self.pa).grid(column=2,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.pa).grid(column=2,row=row,sticky=(E),padx=15)
 
         ttk.Label(self,text="ROT").grid(column=3,row=row,sticky=(W))
         self.rot = StringVar()
-        ttk.Label(self, textvariable=self.rot).grid(column=4,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.rot).grid(column=4,row=row,sticky=(E),padx=15)
 
         ttk.Label(self,text="MJD").grid(column=5,row=row,sticky=(W))
         self.mjd = StringVar()
         ttk.Label(self, textvariable=self.mjd).grid(column=6,row=row,sticky=(E),padx=10)
 
         row+=1
-        ttk.Label(self,text="FOCUS").grid(column=1,row=row,sticky=(W))
+        ttk.Label(self,text="HA").grid(column=1,row=row,sticky=(W))
+        self.ha = StringVar()
+        ttk.Label(self, textvariable=self.ha).grid(column=2,row=row,sticky=(E),padx=15) 
+
+        ttk.Label(self,text="FOCUS").grid(column=3,row=row,sticky=(W))
         self.focus = StringVar()
-        ttk.Label(self, textvariable=self.focus).grid(column=2,row=row,sticky=(E),padx=10) 
+        ttk.Label(self, textvariable=self.focus).grid(column=4,row=row,sticky=(E),padx=15) 
 
 
 class DomeWgt(ttk.Frame) :
@@ -81,13 +86,13 @@ class DomeWgt(ttk.Frame) :
         super().__init__(container) 
 
         row=1
-        ttk.Label(self,text="SHUTTER ",width=10).grid(column=1,row=row,sticky=(W))
+        ttk.Label(self,text="SHUTTER").grid(column=1,row=row,sticky=(W))
         self.shutter = StringVar()
-        ttk.Label(self, textvariable=self.shutter).grid(column=2,row=row,sticky=(W),padx=10)
+        ttk.Label(self, textvariable=self.shutter).grid(column=2,row=row,sticky=(E),padx=10)
 
-        ttk.Label(self,text="DOME AZ",width=10).grid(column=3,row=row,sticky=(W))
+        ttk.Label(self,text="DOME AZ").grid(column=3,row=row,sticky=(W))
         self.az = StringVar()
-        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(W),padx=10)
+        ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(E),padx=10)
 
         self.slewing = StringVar()
         ttk.Label(self, textvariable=self.slewing).grid(column=5,row=1,sticky=(W),padx=10)
@@ -96,6 +101,11 @@ class DomeWgt(ttk.Frame) :
         ttk.Label(self,text="MIRROR COVERS").grid(column=1,row=row,sticky=(W))
         self.coverstate = StringVar()
         ttk.Label(self, textvariable=self.coverstate).grid(column=2,row=row,sticky=(E),padx=10) 
+
+        ttk.Label(self,text="35M").grid(column=3,row=row,sticky=(W))
+        self.stat35m = StringVar()
+        self.statcolor = StringVar()
+        ttk.Label(self, textvariable=self.stat35m, foreground=self.statcolor.get()).grid(column=4,row=row,sticky=(E),padx=10) 
 
      
 class CameraWgt(ttk.Frame) :
@@ -169,6 +179,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
+    safety=APOSafety.Safety()
+
     def update() :
         try :
             t=Time.now()
@@ -178,6 +190,7 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             h,m,s=t.sidereal_time('mean').hms
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
+
 
             if T is None and pwi is None :
                 telframe.ra.set('N/A')
@@ -206,6 +219,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 decs=radec.split()[1]
                 telframe.ra.set('{:s}'.format(ras))
                 telframe.dec.set('{:s}'.format(decs))
+                h,m,s=(t.sidereal_time('mean')-ra*u.hourangle).hms
+                telframe.ha.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
 
             if T is not None :
                 telframe.az.set('{:.2f}'.format(T.Azimuth))
@@ -238,6 +253,10 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 domeframe.az.set('N/A')
                 domeframe.shutter.set('N/A')
                 domeframe.slewing.set('N/A')
+
+            domeframe.stat35m.set(safety.stat()[0])
+            if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
+            else : domeframe.statcolor.set('green')
 
             if Filt is not None :
                 camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))

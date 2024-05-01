@@ -1,7 +1,7 @@
 import glob
 import numpy as np
 from astropy.io import fits
-from pyvista import stars, tv
+from pyvista import centroid, stars, tv
 import matplotlib.pyplot as plt
 import pdb
 from photutils.detection import find_peaks
@@ -58,9 +58,9 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         tab.rename_column('ycentroid','y')
         
         for i,star in enumerate(tab) :
-            x,y,p=stars.rasym_centroid(im,star['x'],star['y'],int(pixapers[-1]),skyrad=skyrad)
-            tab['x'][i]=x
-            tab['y'][i]=y
+            center=centroid.rasym_centroid(im,star['x'],star['y'],int(pixapers[-1]),skyrad=skyrad)
+            tab['x'][i]=center.x
+            tab['y'][i]=center.y
 
         # aperture photometry through range of apertures
         phot=stars.photom(im,tab,skyrad=np.array(skyrad)/pixscale,rad=pixapers,mag=False)
