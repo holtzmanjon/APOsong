@@ -202,7 +202,10 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
-        dirname = '{:s}/UT{:d}{:02d}{:02d}'.format(dataroot,y-2000,m,d)
+        if name == 'guide' :
+            dirname = '{:s}/UT{:d}{:02d}{:02d}/guide'.format(dataroot,y-2000,m,d)
+        else :
+            dirname = '{:s}/UT{:d}{:02d}{:02d}'.format(dataroot,y-2000,m,d)
         try: os.mkdir(dirname)
         except : pass
         files = glob.glob(dirname+'/*.fits')
@@ -280,8 +283,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     #plt.figure()
     #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     #plt.axis('off')
-    pixscale=206265/6000*C[cam].PixelSizeX*1.e-3*bin
-    bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale,
+    bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam),
                                                 display=display,max=max,thresh=thresh)
     if bestfitfoc > 0 :
         print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
@@ -292,6 +294,14 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
               bestfoc,besthf))
         f=foc(int(bestfoc))
     return f
+
+def pixscale(cam=0,bin=1) :
+    """ Return pixscale for desired camera
+    """
+    scale=206265/6000*C[cam].PixelSizeX*1.e-3*bin
+    try: scale /= C[cam].Magnification
+    except: pass
+    return scale
 
 def slew(ra, dec,dome=True) :
     """ Slew to RA/DEC
@@ -385,7 +395,8 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     time.sleep(settle)
 
 def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
-          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name=None) :
+          thresh=100,fwhm=1.5,
+          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name=None,inter=False) :
     """ Start guiding
 
         Parameters
@@ -397,7 +408,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         rad     int, default=25
                 radius to use for centering algorithm
         exptime float, default=5
-                guide exposure tie
+                guide exposure time
         bin     integer default=1
                 guider binning factor
         filt    str, default=None
@@ -427,19 +438,11 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             if data is not None : 
                 hdu=data
             if rasym :
-                center1=centroid.marginal_gfit(hdu.data,x,y,rad)
-                #try : 
-                #    center1=centroid.marginal_gfit(hdu.data,x,y,rad)
-                #except :
-                #    center1.x=-1
-                #    center1.y=-1
-                print('marginal: ',center1.x,center1.y,center1.tot)
-                center2=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
-                print('rasym: ',center2.x,center2.y,center2.tot)
-                if center2.x<0 :
-                    center=center1
-                else :
-                    center=center2
+                center=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
+                print('rasym: ',center.x,center.y,center.tot)
+                if center.x<0 :
+                    center=centroid.marginal_gfit(hdu.data,x,y,rad)
+                    print('marginal: ',center.x,center.y,center.tot)
             else :
                 center==centroid.marginal_gfit(hdu.data,x,y,rad)
                 tot=-9
@@ -456,9 +459,24 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             hdu=exp.hdu
         else :
             hdu = data
-        disp.tv(hdu,max=vmax)
-        print('mark star on display: ')
-        k,x,y=disp.tvmark()
+        if inter :
+            disp.tv(hdu,max=vmax)
+            print('mark star on display: ')
+            k,x,y=disp.tvmark()
+        else :
+            # find brightest star automatically
+            # adjust exposure time to get good counts
+            niter=0
+            while True :
+                mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
+                stars=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
+                if (stars[0]['peak'] < 50000 and stars[0]['peak']>5000 ) or niter>5 or exptime>9.99: break
+                exptime = np.max([exptime*40000/peak,10])
+                niter+=1
+
+            x=stars[0]['x']
+            y=stars[0]['y']
+
         offsetxy((x-x0),(y-y0))
         time.sleep(settle)
 
@@ -474,10 +492,12 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         x0-=box.xmin
         y0-=box.ymin
         mask=image.window(mask,box=box)
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
-        disp.tv(mask)
-        disp.tvcirc(x0,y0,rad=rad)
-        pdb.set_trace()
+
+        if inter :
+            exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
+            disp.tv(mask)
+            disp.tvcirc(x0,y0,rad=rad)
+            pdb.set_trace()
 
         run_guide = True
         print('starting guiding',x0,y0)
