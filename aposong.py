@@ -94,6 +94,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
+    C[0].Magnification=1.5
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -267,9 +268,16 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
              np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))) :
         F.Move(int(focval))
         if i==0 : time.sleep(5)
-        while F.IsMoving :
-            time.sleep(1)
-        print('position: ',F.Position,F.IsMoving)
+        while True :
+            try :
+                moving=F.IsMoving
+                if not moving : break
+            except : 
+                print('error with F.IsMoving')
+                pass
+            time.sleep(2)
+        
+        print('position: ',F.Position,moving)
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
@@ -391,7 +399,7 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     k,x,y=disp.tvmark()
     if x0 is None : x0=C[0].NumX//2
     if y0 is None : y0=C[0].NumY//2
-    offsetxy((x-x0),(y-y0))
+    offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
 def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
@@ -429,9 +437,12 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     global guide_process, run_guide
 
-    def doguide(x,y,x0,y0,mask,disp) :
+    def doguide(exptime,navg,x,y,x0,y0,mask,disp) :
+        n=1
+        xtot=0
+        ytot=0
         while run_guide :
-            print('start: ',x,y,prop,bin,mask.sum())
+            print('start: ',x,y,prop,bin,mask.sum(),exptime,navg)
             if disp is not None : disp.tvclear()
             exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name=name)
             hdu=exp.hdu
@@ -441,21 +452,36 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 center=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
                 print('rasym: ',center.x,center.y,center.tot)
                 if center.x<0 :
-                    center=centroid.marginal_gfit(hdu.data,x,y,rad)
-                    print('marginal: ',center.x,center.y,center.tot)
+                    try : 
+                        center=centroid.marginal_gfit(hdu.data,x,y,rad)
+                        print('marginal: ',center.x,center.y,center.tot)
+                    except:
+                        yp,xp = np.unravel_index(np.argmax(hdu.data),hdu.data.shape)
+                        center.x = xp
+                        center.y = yp
             else :
                 center==centroid.marginal_gfit(hdu.data,x,y,rad)
                 tot=-9
             if center.x>0 and center.y>0 :
-                print('offset: ',center.x-x0,center.y-y0,center.tot)
-                offsetxy(prop*(center.x-x0),prop*(center.y-y0))
-                time.sleep(settle)
-            x=x0
-            y=y0
+                xtot+=center.x
+                ytot+=center.y
+                if n < navg :
+                    print('accumulating offset: ',n,center.x-x0,center.y-y0,center.tot)
+                    print(xtot/n-x0,ytot/n-y0)
+                    n+=1
+                else :
+                    print('offset: ',xtot/n-x0,ytot/n-y0,center.tot)
+                    offsetxy(prop*(xtot/n-x0),prop*(ytot/n-y0),scale=pixscale())
+                    time.sleep(settle)
+                    n=1
+                    xtot=0
+                    ytot=0
+                x=center.x
+                y=center.y
 
     if start and guide_process is None :
         if data is None :
-            exp=expose(exptime,filt=filt,bin=bin)
+            exp=expose(exptime,filt=filt,bin=bin,display=display)
             hdu=exp.hdu
         else :
             hdu = data
@@ -469,15 +495,21 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             niter=0
             while True :
                 mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
-                stars=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
-                if (stars[0]['peak'] < 50000 and stars[0]['peak']>5000 ) or niter>5 or exptime>9.99: break
-                exptime = np.max([exptime*40000/peak,10])
+                objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
+                print(objs)
+                peak=objs[0]['peak']
+                if (peak < 60000 and peak>5000 ) or niter>10 or exptime>9.99: break
+                if peak>60000 : exptime*=0.8
+                else: exptime = np.max([0.01,np.min([exptime*60000/peak,10])])
+                print('new exptime: ', exptime)
+                exp=expose(exptime,filt=filt,bin=bin,display=display)
+                hdu=exp.hdu
                 niter+=1
 
-            x=stars[0]['x']
-            y=stars[0]['y']
+            x=objs[0]['x']
+            y=objs[0]['y']
 
-        offsetxy((x-x0),(y-y0))
+        offsetxy((x-x0),(y-y0),scale=pixscale())
         time.sleep(settle)
 
         # create mask
@@ -488,24 +520,29 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         mask[bd]=1
 
         # subwindow for guiding
-        box=image.BOX(cr=int(y0),cc=int(x0),n=int(5*rad))
+        box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
         x0-=box.xmin
         y0-=box.ymin
         mask=image.window(mask,box=box)
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
+        yp,xp = np.unravel_index(np.argmax(exp.hdu.data),exp.hdu.data.shape)
+        print('peak: ', xp,yp)
+        offsetxy((xp-x0),(yp-y0),scale=pixscale())
+        time.sleep(settle)
 
         if inter :
-            exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
             disp.tv(mask)
             disp.tvcirc(x0,y0,rad=rad)
             pdb.set_trace()
 
         run_guide = True
         print('starting guiding',x0,y0)
+        navg=np.min([10,np.max([1,int(5/exptime)])])
         if display is None :
-            guide_process=threading.Thread(target=doguide,args=(x0,y0,x0,y0,mask,None))
+            guide_process=threading.Thread(target=doguide,args=(exptime,navg,x0,y0,x0,y0,mask,None))
             guide_process.start()
         else :
-            doguide(x0,y0,x0,y0,mask,disp)
+            doguide(exptime,navg,x0,y0,x0,y0,mask,disp)
     elif not start and guide_process is not None :
         print('stopping guiding')
         run_guide = False
