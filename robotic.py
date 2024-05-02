@@ -30,7 +30,7 @@ class Target() :
         aposong.slew(self.ra,self.dec)
         while aposong.D.Slewing :
             time.sleep(2)
-        aposong.guide(True,exptime=0.5)
+        aposong.guide(True,exptime=0.5,name='guide')
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -151,7 +151,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
         haend=ha+(length/3600.)*u.hourangle
         ham=hamax(c.dec,request['max_airmass'],apo.lat).to(u.hourangle)
         dt=ham-haend
-        dtmeridian=ha+(length/3600./2.)*u.hourangle
+        hamid=ha+(length/3600./2.)*u.hourangle
         if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : continue
         obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
         if len(obs)>0:
@@ -174,11 +174,11 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
             tmin=ham-haend
             am_best=am
             dt_best=ham-haend
-        elif (criterion == 'best' and abs(dtmeridian)<tmin) :
+        elif (criterion == 'best' and abs(hamid)<tmin) :
             best = request
-            tmin = abs(dtmeridian)
+            tmin = abs(hamid)
             am_best=am
-            dt_best=abs(dtmeridian)
+            dt_best=abs(hamid)
     d.close()
     print(best)
     return best
@@ -187,13 +187,15 @@ def observe_object(request,display=None) :
     """ Given request, do the observation and record
     """
     pdb.set_trace()
+
+    # acquire target and observe requested sequence
     targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
     targ.acquire()
-    t=Time.now()
     seq = Sequence(request['targname'],filt=request['filter'],
                    n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
     names=seq.observe(targ.name,display=display)
 
+    # load observation into observed table
     obs=Table()
     obs['request_pk'] = [request['request_pk']]
     obs['mjd'] = [t.mjd]
@@ -204,30 +206,30 @@ def observe_object(request,display=None) :
     return obs
 
 def open(opentime,safety) :
-    """ Open observatory when safe 
+    """ Open observatory at/after requested time and when safe 
     """
-
     while (Time.now()-opentime)<0 :
         # wait until sunset + dt_sunset hours 
-        print('waiting for sunset: ',(Time.now()-opentime).to(u.hour))
+        print('waiting for sunset: ',(opentime-Time.now()).to(u.hour),' hours')
         time.sleep(60)
 
     while not safety.issafe() :
         # wait until safe to open based on Safety
         time.sleep(30)
 
+    # open if not already open (e.g., from previous observe invocation same night)
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
     print('open at: ',Time.now())
-        
 
-def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain') :
+def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',criterion='best') :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
     sunrise =site.sun_rise_time(Time.now(),which='next')
     nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
+    nautical_morn = site.twilight_evening_nautical(Time.now(),which='next')
 
     # setup up Safety object and open dome when safe after desired time relative to sunset
     safety = APOSafety.Safety()
@@ -235,15 +237,27 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain') :
 
     # wait for nautical twilight
     while (Time.now()-nautical)<0 :
-        print('waiting for nautical twilight: ',(Time.now()-nautical))
+        print('waiting for nautical twilight: ',(nautical-Time.now()).to(u.hour),' hours')
         time.sleep(60)
+
+    # in case 3.5m has closed while we were waiting....
+        open(sunset+dt_sunset*u.hour,safety)
 
     # focus star on meridian 
     focus(foc0=foc0,display=display)
     foctime=Time.now()
 
-    while (Time.now()-sunrise)*u.hour < 0 : 
-        print('sunrise in : ',(Time.now()-sunrise)*u.hour)
+    while (Time.now()-nautical_morn)*u.hour < 0 : 
+        print('nautical twilight in : ',(Time.now()-sunrise)*u.hour)
+        best=getbest(criterion=criterion)
+        if not safety.issafe() : 
+            aposong.domeclose()
+            time.sleep(60)
+            continue
+        elif aposong.D.ShutterStatus != 0 :
+            aposong.domeopen()
+
+        observe_object(best)
         time.sleep(60)
 
 
