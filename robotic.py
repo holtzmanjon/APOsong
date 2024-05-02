@@ -28,7 +28,6 @@ class Target() :
 
     def acquire(self) :
         aposong.slew(self.ra,self.dec)
-        waitfordome()
         aposong.guide(True,exptime=0.5,name='guide',display=aposong.disp,vmax=30000)
 
 class Schedule() :
@@ -263,25 +262,13 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
 
     domeclose()
 
-def waitfordome() :
-    """ Wait for telescope and dome slewing to stop
-    """
-    while True :
-        time.sleep(10)
-        if not aposong.T.Slewing :
-            time.sleep(10)
-            if not aposong.D.Slewing : break
-        print(aposong.D.Slewing,aposong.T.Slewing)
-
-
 def focus(foc0=28800,display=None) :
     """ Do focus run for object on meridian
     """    
     t=Time.now()
     t.location=EarthLocation.of_site('APO')
     lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=10.,rmin=9,rmax=10)
-    waitfordome()
+    aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=3*u.degree)
 
     f=aposong.focrun(foc0,75,9,5,None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-150 or f>foc0+150 :
@@ -289,8 +276,6 @@ def focus(foc0=28800,display=None) :
         foc0=f
         f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
        
-
-
 def test() :
     t = Time.now()
     while True :
