@@ -28,9 +28,8 @@ class Target() :
 
     def acquire(self) :
         aposong.slew(self.ra,self.dec)
-        while aposong.D.Slewing :
-            time.sleep(2)
-        aposong.guide(True,exptime=0.5,name='guide')
+        waitfordome()
+        aposong.guide(True,exptime=0.5,name='guide',display=aposong.disp,vmax=30000)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -186,7 +185,6 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
 def observe_object(request,display=None) :
     """ Given request, do the observation and record
     """
-    pdb.set_trace()
 
     # acquire target and observe requested sequence
     targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
@@ -244,10 +242,11 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
         open(sunset+dt_sunset*u.hour,safety)
 
     # focus star on meridian 
-    focus(foc0=foc0,display=display)
+    focus(foc0=foc0,display=aposong.disp)
     foctime=Time.now()
 
-    while (Time.now()-nautical_morn)*u.hour < 0 : 
+    try :
+      while (Time.now()-nautical_morn)*u.hour < 0 : 
         print('nautical twilight in : ',(Time.now()-sunrise)*u.hour)
         best=getbest(criterion=criterion)
         if not safety.issafe() : 
@@ -259,19 +258,32 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
 
         observe_object(best)
         time.sleep(60)
+    except:
+        print('unknown error!')
+
+    domeclose()
+
+def waitfordome() :
+    """ Wait for telescope and dome slewing to stop
+    """
+    while True :
+        time.sleep(10)
+        if not aposong.T.Slewing :
+            time.sleep(10)
+            if not aposong.D.Slewing : break
+        print(aposong.D.Slewing,aposong.T.Slewing)
 
 
-def focus(foc0=28800,display=None,settle=30) :
+def focus(foc0=28800,display=None) :
     """ Do focus run for object on meridian
     """    
     t=Time.now()
     t.location=EarthLocation.of_site('APO')
     lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=10.,rmin=10,rmax=11)
-    while aposong.D.Slewing :
-        time.sleep(2)
+    aposong.usno(ra=lst,dec=10.,rmin=9,rmax=10)
+    waitfordome()
 
-    f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
+    f=aposong.focrun(foc0,75,9,5,None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-150 or f>foc0+150 :
         print('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=f
