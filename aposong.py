@@ -22,6 +22,7 @@ from astropy.io import fits
 from astropy.time import Time
 
 from astroquery.vo_conesearch import ConeSearch, conesearch
+from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
@@ -312,7 +313,7 @@ def pixscale(cam=0,bin=1) :
     return scale
 
 def slew(ra, dec,dome=True) :
-    """ Slew to RA/DEC
+    """ Slew to RA/DEC and wait for telescope/dome
 
     Parameters
     ----------
@@ -331,10 +332,18 @@ def slew(ra, dec,dome=True) :
 
     #tra, tdec = j2000totopocentric(ra,dec) 
     #T.SlewToCoordinatesAsync(tra,tdec)
+    time.sleep(5)
     while T.Slewing :
         time.sleep(1)
     T.Tracking = True
+
+    # Wait for dome slewing to stop
     domesync(dome)
+    while True :
+        if not T.Slewing :
+            time.sleep(10)
+            if not D.Slewing : break
+        print(aposong.D.Slewing,aposong.T.Slewing)
 
 def altaz(az,alt) :
     """ Slew to specified az / alt
@@ -347,8 +356,8 @@ def altaz(az,alt) :
     """
     pwi.mount_goto_alt_az(alt, az)
 
-def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True,
-         cat= 'The USNO-A2.0 Catalogue 1') :
+def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True,
+         cat= 'I/252') :
     """ Find/goto nearest USNO stars from specified position (default current telescope) and mag range
 
     Parameters
@@ -366,7 +375,8 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
     goto : bool, default=True
          If True, slew to closest returned object
     cat : str, default= 'The USNO-A2.0 Catalogue 1'
-         astroquery conesearch catgalog to search from
+         astroquery conesearch catalog to search from
+         hr=V/50,  sao=I/131A/sao (but doesn't have J2000)
     """
     if ra is None :
         stat = pwi.status()
@@ -379,16 +389,25 @@ def usno(ra=None,dec=None,rad=1*u.degree,rmin=0,rmax=15,bmin=0,bmax=15,goto=True
         coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
     else :
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
-    result = conesearch.conesearch(coords,rad,catalog_db=cat,verbose=True)
-    print(result)
-    gd=np.where((result['Bmag']<bmax) & (result['Bmag']>bmin) &
-                (result['Rmag']<rmax) & (result['Rmag']>rmin))[0]
-    if len(gd) <= 0 :
-        print('no USNO A2.0 stars found within specified rad and mag range')
+
+    try :
+      viz=Vizier(columns=['*','+_r'],catalog=cat)
+      if mag is not None :
+        result=viz.query_region(coords,radius=rad,
+                column_filters={mag:'<{:f}'.format(magmax)})[0]
+        gd=np.where(result[mag]>magmin)[0]
+        result=result[gd]
+      else :
+        result=viz.query_region(coords,radius=rad)[0]
+    except :
+        print('no stars found within specified rad and mag range')
         return
-    best = result['_r'][gd].argmin()
-    print(result[gd[best]])
-    if goto: slew(result['RAJ2000'][gd[best]]/15., result['DEJ2000'][gd[best]])
+
+    best = result['_r'].argmin()
+    print(result[best])
+    if goto: 
+        try: slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
+        except:slew(result['RA.icrs'][best]/15., result['DE.icrs'][best])
 
 def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     """ Center star
