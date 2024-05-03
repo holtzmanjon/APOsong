@@ -20,6 +20,7 @@ from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
 from astropy.io import fits
 from astropy.time import Time
+from astropy.table import Table
 
 from astroquery.vo_conesearch import ConeSearch, conesearch
 from astroquery.vizier import Vizier
@@ -202,6 +203,10 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
 
+    #tab=Table()
+    #for card in ['EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] :
+    #    tab[card] = [hdu.header[card]]
+
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
         if name == 'guide' :
@@ -343,7 +348,7 @@ def slew(ra, dec,dome=True) :
         if not T.Slewing :
             time.sleep(10)
             if not D.Slewing : break
-        print(aposong.D.Slewing,aposong.T.Slewing)
+        print(D.Slewing,T.Slewing)
 
 def altaz(az,alt) :
     """ Slew to specified az / alt
@@ -406,8 +411,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
     best = result['_r'].argmin()
     print(result[best])
     if goto: 
-        try: slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
-        except:slew(result['RA.icrs'][best]/15., result['DE.icrs'][best])
+        slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
 
 def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     """ Center star
@@ -423,7 +427,7 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
 
 def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
-          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name=None,inter=False) :
+          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
 
         Parameters
@@ -461,7 +465,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         xtot=0
         ytot=0
         while run_guide :
-            print('start: ',x,y,prop,bin,mask.sum(),exptime,navg)
+            print('start: {:.1f} {:.1f} {:.1f} {:d} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,mask.sum(),exptime,navg))
             if disp is not None : disp.tvclear()
             exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name=name)
             hdu=exp.hdu
@@ -469,7 +473,6 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 hdu=data
             if rasym :
                 center=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
-                print('rasym: ',center.x,center.y,center.tot)
                 if center.x<0 :
                     try : 
                         center=centroid.marginal_gfit(hdu.data,x,y,rad)
@@ -485,11 +488,11 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 xtot+=center.x
                 ytot+=center.y
                 if n < navg :
-                    print('accumulating offset: ',n,center.x-x0,center.y-y0,center.tot)
-                    print(xtot/n-x0,ytot/n-y0)
+                    print('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(n,center.x-x0,center.y-y0,center.tot))
+                    print('  accumulated offset:   {:.1f} {:.1f}'.format(xtot/n-x0,ytot/n-y0))
                     n+=1
                 else :
-                    print('offset: ',xtot/n-x0,ytot/n-y0,center.tot)
+                    print('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/n-x0,ytot/n-y0,center.tot))
                     offsetxy(prop*(xtot/n-x0),prop*(ytot/n-y0),scale=pixscale())
                     time.sleep(settle)
                     n=1
@@ -500,7 +503,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     if start and guide_process is None :
         if data is None :
-            exp=expose(exptime,filt=filt,bin=bin,display=display)
+            exp=expose(exptime,filt=filt,bin=bin,display=display,name=name)
             hdu=exp.hdu
         else :
             hdu = data
@@ -528,6 +531,11 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             x=objs[0]['x']
             y=objs[0]['y']
 
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,name=name)
+        mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
+        objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
+        x=objs[0]['x']
+        y=objs[0]['y']
         offsetxy((x-x0),(y-y0),scale=pixscale())
         time.sleep(settle)
 
@@ -543,7 +551,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         x0-=box.xmin
         y0-=box.ymin
         mask=image.window(mask,box=box)
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box)
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name=name)
         yp,xp = np.unravel_index(np.argmax(exp.hdu.data),exp.hdu.data.shape)
         print('peak: ', xp,yp)
         offsetxy((xp-x0),(yp-y0),scale=pixscale())
