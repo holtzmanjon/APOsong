@@ -27,8 +27,9 @@ class Target() :
         tab['epoch'] = [self.epoch]
 
     def acquire(self) :
+        aposong.guide(False)
         aposong.slew(self.ra,self.dec)
-        aposong.guide(True,exptime=0.5,name='guide',display=aposong.disp,vmax=30000)
+        aposong.guide(True,exptime=0.5,name='guide',display=None,vmax=30000)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -66,9 +67,10 @@ class Sequence() :
     def observe(self,name,display=None) :
         names = []
         for filt,nexp,texp,cam in zip(self.filt,self.n_exp,self.t_exp,self.camera) :
-            for iexp in range(nexp) : 
-                hdu,outname=aposong.expose(texp,filt,name=name,display=display,cam=cam)
-                names.append(outname)
+            for iexp in range(nexp) :
+                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam)
+                names.append(exp.name)
+        aposong.guide(False)
         return names
 
     def table(self) :
@@ -132,7 +134,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     else : 
         print('unknown criterion: ', criterion)
         return
-    best=-1
+    best=None
     am_best=-1
     dt_best=-1
     d=database.DBSession()
@@ -190,6 +192,7 @@ def observe_object(request,display=None) :
     targ.acquire()
     seq = Sequence(request['targname'],filt=request['filter'],
                    n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
+    t=Time.now()
     names=seq.observe(targ.name,display=display)
 
     # load observation into observed table
@@ -241,13 +244,13 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
         open(sunset+dt_sunset*u.hour,safety)
 
     # focus star on meridian 
-    focus(foc0=foc0,display=aposong.disp)
+    foc=focus(foc0=foc0,display=aposong.disp)
     foctime=Time.now()
 
     try :
-      while (Time.now()-nautical_morn)*u.hour < 0 : 
-        print('nautical twilight in : ',(Time.now()-sunrise)*u.hour)
-        best=getbest(criterion=criterion)
+      tnow=Time.now()
+      while (tnow-nautical_morn)*u.hour < 0 : 
+        print('nautical twilight in : ',(tnow-sunrise)*u.hour)
         if not safety.issafe() : 
             aposong.domeclose()
             time.sleep(60)
@@ -255,12 +258,21 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
         elif aposong.D.ShutterStatus != 0 :
             aposong.domeopen()
 
-        observe_object(best)
-        time.sleep(60)
+        if ((tnow-foctime)*u.hour).value > 1.5 :
+            foc=focus(foc0=foc0,display=display)
+            foctime=tnow
+        else :
+            best=getbest(criterion=criterion)
+            if best is None :
+                time.sleep(60)
+            else :
+                observe_object(best,display=display)
+        
     except:
         print('unknown error!')
 
-    domeclose()
+    print('closing: ',Time.now())
+    aposong.domeclose()
 
 def focus(foc0=28800,display=None) :
     """ Do focus run for object on meridian
@@ -275,6 +287,7 @@ def focus(foc0=28800,display=None) :
         print('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=f
         f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
+    return f
        
 def test() :
     t = Time.now()
