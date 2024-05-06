@@ -16,6 +16,14 @@ import threading
 import yaml
 import socket
 
+import guiding
+import logging
+import yaml
+import logging.config
+with open('logging.yml', 'rt') as f:
+    config = yaml.safe_load(f.read())
+logging.config.dictConfig(config)
+
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
 from astropy.io import fits
@@ -38,7 +46,7 @@ try:
   from alpaca.filterwheel import *
   from alpaca.camera import *
 except:
-  print('no alpaca')
+  logger.warning('no alpaca')
 
 # pwi4 HTTP interface
 import pwi4_client
@@ -141,8 +149,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if filt is not None and filt != 'current': 
         pos = np.where(np.array(Filt.Names) == filt)
         if len(pos) == 0 :
-            print('no such filter')
-            print('available filters: ', Filt.Names)
+            logger.warning('no such filter')
+            logger.warning('available filters: ', Filt.Names)
             return exposure
         Filt.Position=pos[0]
     elif filt == 'current' :
@@ -172,7 +180,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             time.sleep(1.0)
         data = np.array(C[cam].ImageArray).T
     except :
-        print('ERROR : exposure failed')
+        logger.error('ERROR : exposure failed')
         return exposure
 
     if display is not None :
@@ -209,10 +217,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
-        if name == 'guide' :
-            dirname = '{:s}/UT{:d}{:02d}{:02d}/guide'.format(dataroot,y-2000,m,d)
-        else :
-            dirname = '{:s}/UT{:d}{:02d}{:02d}'.format(dataroot,y-2000,m,d)
+        dirname = os.path.dirname('{:s}/UT{:d}{:02d}{:02d}/{:s}'.format(dataroot,y-2000,m,d,name))
         try: os.mkdir(dirname)
         except : pass
         files = glob.glob(dirname+'/*.fits')
@@ -221,7 +226,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             exts.append(int(f.split('.')[-2]))
         if len(exts) > 0 : ext = np.array(exts).max() + 1
         else : ext=1
-        outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,name,ext)
+        outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name),ext)
         hdu.writeto(outname)
         exposure = Exposure(hdu, outname, exptime, filt)
         return exposure
@@ -279,11 +284,11 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
                 moving=F.IsMoving
                 if not moving : break
             except : 
-                print('error with F.IsMoving')
+                logger.error('error with F.IsMoving')
                 pass
             time.sleep(2)
         
-        print('position: ',F.Position,moving)
+        logger.info('position: {:d} {}'.format(F.Position,moving))
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
@@ -300,11 +305,11 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam),
                                                 display=display,max=max,thresh=thresh)
     if bestfitfoc > 0 :
-        print('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
+        logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfitfoc,bestfithf))
         f=foc(int(bestfitfoc))
     else :
-        print('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
+        logger.info('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfoc,besthf))
         f=foc(int(bestfoc))
     return f
@@ -348,7 +353,6 @@ def slew(ra, dec,dome=True) :
         if not T.Slewing :
             time.sleep(10)
             if not D.Slewing : break
-        print(D.Slewing,T.Slewing)
 
 def altaz(az,alt) :
     """ Slew to specified az / alt
@@ -387,7 +391,6 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
         stat = pwi.status()
         ra = stat.mount.ra_j2000_hours
         dec = stat.mount.dec_j2000_degs
-        print(ra,dec)
         coords=SkyCoord("{:f} {:f}".format(ra,dec),unit=(u.hourangle,u.deg))
     elif (isinstance(ra,float) or isinstance(ra,int) ) and  \
          (isinstance(dec,float) or isinstance(dec,int) ) :
@@ -405,11 +408,11 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
       else :
         result=viz.query_region(coords,radius=rad)[0]
     except :
-        print('no stars found within specified rad and mag range')
+        logger.warning('usno: no stars found within specified rad and mag range')
         return
 
     best = result['_r'].argmin()
-    print(result[best])
+    logger.info(result[best])
     if goto: 
         slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
 
@@ -427,7 +430,7 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
 
 def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
-          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
+          display=None,prop=0.0,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
 
         Parameters
@@ -462,12 +465,13 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     def doguide(exptime,navg,x,y,x0,y0,mask,disp) :
         n=1
+        nseq=1
         xtot=0
         ytot=0
         while run_guide :
-            print('start: {:.1f} {:.1f} {:.1f} {:d} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,mask.sum(),exptime,navg))
+            logger.info('guide start: {:.1f} {:.1f} {:.1f} {:d} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,mask.sum(),exptime,navg))
             if disp is not None : disp.tvclear()
-            exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name=name)
+            exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name='guide/guide'.format(n))
             hdu=exp.hdu
             if data is not None : 
                 hdu=data
@@ -476,7 +480,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 if center.x<0 :
                     try : 
                         center=centroid.marginal_gfit(hdu.data,x,y,rad)
-                        print('marginal: ',center.x,center.y,center.tot)
+                        logger.info('marginal: ',center.x,center.y,center.tot)
                     except:
                         yp,xp = np.unravel_index(np.argmax(hdu.data),hdu.data.shape)
                         center.x = xp
@@ -487,15 +491,15 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             if center.x>0 and center.y>0 :
                 xtot+=center.x
                 ytot+=center.y
-                if n < navg :
-                    print('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(n,center.x-x0,center.y-y0,center.tot))
-                    print('  accumulated offset:   {:.1f} {:.1f}'.format(xtot/n-x0,ytot/n-y0))
-                    n+=1
+                if nseq < navg :
+                    logger.info('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(nseq,center.x-x0,center.y-y0,center.tot))
+                    logger.info('  accumulated offset:   {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0))
+                    nseq+=1
                 else :
-                    print('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/n-x0,ytot/n-y0,center.tot))
-                    offsetxy(prop*(xtot/n-x0),prop*(ytot/n-y0),scale=pixscale())
+                    logger.info('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0,center.tot))
+                    offsetxy(prop*(xtot/nseq-x0),prop*(ytot/nseq-y0),scale=pixscale())
                     time.sleep(settle)
-                    n=1
+                    nseq=1
                     xtot=0
                     ytot=0
                 x=center.x
@@ -503,7 +507,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     if start and guide_process is None :
         if data is None :
-            exp=expose(exptime,filt=filt,bin=bin,display=display,name=name)
+            exp=expose(exptime,filt=filt,bin=bin,display=display,name='guide/guide')
             hdu=exp.hdu
         else :
             hdu = data
@@ -518,12 +522,11 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             while True :
                 mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
                 objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
-                print(objs)
                 peak=objs[0]['peak']
                 if (peak < 60000 and peak>5000 ) or niter>10 or exptime>9.99: break
                 if peak>60000 : exptime*=0.8
                 else: exptime = np.max([0.01,np.min([exptime*60000/peak,10])])
-                print('new exptime: ', exptime)
+                logger.info('new exptime: {:.2f}'.format(exptime))
                 exp=expose(exptime,filt=filt,bin=bin,display=display)
                 hdu=exp.hdu
                 niter+=1
@@ -531,7 +534,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             x=objs[0]['x']
             y=objs[0]['y']
 
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,name=name)
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,name='guide/guide')
         mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
         objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
         x=objs[0]['x']
@@ -551,10 +554,16 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         x0-=box.xmin
         y0-=box.ymin
         mask=image.window(mask,box=box)
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name=name)
-        yp,xp = np.unravel_index(np.argmax(exp.hdu.data),exp.hdu.data.shape)
-        print('peak: ', xp,yp)
-        offsetxy((xp-x0),(yp-y0),scale=pixscale())
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name='guide')
+        center=centroid.rasym_centroid(exp.hdu.data,x0,y0,rad,mask=mask,skyrad=[35,40],plot=disp)
+        if center.x>0 :
+            x = center.x
+            y = center.y
+        else :
+            objs=stars.find(exp.hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
+            x=objs[0]['x']
+            y=objs[0]['y']
+        offsetxy((x-x0),(y-y0),scale=pixscale())
         time.sleep(settle)
 
         if inter :
@@ -562,17 +571,19 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             disp.tvcirc(x0,y0,rad=rad)
             pdb.set_trace()
 
-        run_guide = True
-        print('starting guiding',x0,y0)
+        guiding.run_guide = True
+        logger.info('starting guiding: {:.2f} {:.2f}'.format(x0,y0))
         navg=np.min([10,np.max([1,int(5/exptime)])])
         if display is None :
-            guide_process=threading.Thread(target=doguide,args=(exptime,navg,x0,y0,x0,y0,mask,None))
+            guide_process=threading.Thread(target=guiding.doguide,args=(x0,y0),
+                kwargs={'exptime' :exptime,'navg' :navg,'mask': mask ,'disp' :None,
+                        'filt' : filt, 'vmax': vmax, 'box': box})
             guide_process.start()
         else :
-            doguide(exptime,navg,x0,y0,x0,y0,mask,disp)
+            guiding.doguide(exptime=exptime,navg=navg,x0=x0,y0=y0,mask=mask,disp=disp,filt=filt,vmax=vmax,box=box)
     elif not start and guide_process is not None :
-        print('stopping guiding')
-        run_guide = False
+        logger.info('stopping guiding')
+        guiding.run_guide = False
         guide_process.join()
         guide_process = None
 
@@ -664,7 +675,7 @@ def park() :
     """
     domesync(False)
     try: T.Park()
-    except: print('telescope.Park raised an exception')
+    except: logger.error('telescope.Park raised an exception')
     D.Park()
 
 def foc(val, relative=False) :
@@ -697,11 +708,11 @@ def fans_on(roles=None):
         m3: M3 mirror fans
         m1heaters: Primary mirror heat distribution fans
     """
-    print("Turning fans on ...")
+    logger.info("Turning fans on ...")
     pwi.fans_on(roles)
 
 def fans_off(roles=None):
-    print("Turning fans off ...")
+    logger.info("Turning fans off ...")
     pwi.fans_off(roles)
 
 def mirror_covers(open=False) :
@@ -711,7 +722,7 @@ def mirror_covers(open=False) :
     if open and current == 3 : return
     if not open and current == 1 : return
     altaz(T.Azimuth,85.)
-    print('waiting for telescope to slew to high altitude...')
+    logger.info('waiting for telescope to slew to high altitude...')
     while T.Slewing :
         time.sleep(1)
     if open and current != 3 :
@@ -728,11 +739,11 @@ def domeopen(dome=True,covers=True,fans=True) :
     if dome : D.OpenShutter()
     if covers : 
         # Wait for shutter open before opening mirror covers
-        print('waiting for shutter to open...')
+        logger.info('waiting for shutter to open...')
         while D.ShutterStatus.name != 'shutterOpen' :
             time.sleep(1)
         mirror_covers(True) 
-        print('waiting for mirror covers to open...')
+        logger.info('waiting for mirror covers to open...')
         while Covers.CoverState.value != 3 :
             time.sleep(1)
     if fans :
@@ -741,10 +752,11 @@ def domeopen(dome=True,covers=True,fans=True) :
 def domeclose(dome=True,covers=True,fans=True) :
     """ Close mirror covers and dome
     """
+    guide(False)
     if fans : fans_off()
     if covers : mirror_covers(False)
     if dome : 
-        print('waiting 20 seconds for mirror covers to close...')
+        logger.info('waiting 20 seconds for mirror covers to close...')
         time.sleep(20)
         # don't wait for mirror covers to report closed, in case they don't!
         park()
@@ -768,12 +780,12 @@ def domesync(dosync=True) :
             time.sleep(update)
 
     if dosync and sync_process is None :
-        print('starting dome sync')
+        logger.info('starting dome sync')
         sync_process=threading.Thread(target=sync)
         run_sync = True
         sync_process.start()
     elif dosync == False and sync_process is not None :
-        print('stopping dome sync')
+        logger.info('stopping dome sync')
         run_sync = False
         sync_process.join()
         sync_process = None
@@ -810,7 +822,7 @@ def eshel(close=False,mirror=False,thar=False,quartz=False,led=False) :
    
     try : esock.sendall(str(val).encode())
     except :
-        print("communication error: is remote program running?")
+        logger.error("communication error: is remote program running?")
     if close :
         esock.shutdown(socket.SHUT_RDWR)
         esock.close()
@@ -874,7 +886,7 @@ def init() :
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
     print('start_status...')
-    start_status(updatecamera)
+    #start_status(updatecamera)
     disp=tv.TV(figsize=(9.5,6))
     commands()
 
@@ -887,5 +899,6 @@ def pwi_init(pwi_srv) :
     else :
         pwi = None
 
+logger=logging.getLogger(__name__)
 init()
 

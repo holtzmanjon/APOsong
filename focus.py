@@ -7,6 +7,16 @@ import pdb
 from photutils.detection import find_peaks
 from photutils import DAOStarFinder
 from holtztools import plots
+import time
+
+import logging
+import yaml
+import logging.config
+with open('logging.yml', 'rt') as f:
+    config = yaml.safe_load(f.read())
+logging.config.dictConfig(config)
+logger=logging.getLogger(__name__)
+
 
 def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12], 
           pixscale=0.5, display=None, plot=False,max=max,red=None) :
@@ -34,7 +44,7 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
             a=red.rd(file)
         im=a.data.astype(float)
         foc[ifile]=a.header['FOCUS']
-        print(file,foc[ifile])
+        logger.info('focus: {:s} {:f}'.format(file,foc[ifile]))
 
         # set saturated pixels to NaN
         bd=np.where(im>60000)
@@ -50,7 +60,7 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         daofind=DAOStarFinder(fwhm=fwhm/pixscale,threshold=thresh*mad,exclude_border=True)
         tab=daofind(im[50:-50,50:-50]-np.nanmedian(im))
         if tab is None :
-            print('no sources found...')
+            logger.error('no sources found...')
             continue
         tab['xcentroid']+=50
         tab['ycentroid']+=50
@@ -66,7 +76,7 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         phot=stars.photom(im,tab,skyrad=np.array(skyrad)/pixscale,rad=pixapers,mag=False)
         gd = np.where(np.isfinite(phot['aper{:.1f}'.format(pixapers[-1])]))[0]
         if len(gd) < 1 :
-            print('no sources with finite photometry')
+            logger.error('no sources with finite photometry')
             continue
         phot=phot[gd]
         if display is not None :
@@ -119,21 +129,21 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         besthf *= 2*pixscale
         bestind=np.argmin(hfmed[gd])
         bestfoc=foc[gd[bestind]]
-        print('bestfoc: ', bestfoc)
+        logger.info('bestfoc: {:f}'.format( bestfoc))
         try: 
             # attempt a quadratic fit around the minimum
             poly=np.polyfit(foc[gd[bestind-2:bestind+3]],hfmed[gd[bestind-2:bestind+3]],2)
             bestfitfoc = -poly[1]/2/poly[0]
             if bestfitfoc < foc[gd[bestind-2]] or bestfitfoc > foc[gd[bestind+2]] :
-                print('best focus out of fit range!')
+                logger.warning('best focus out of fit range!')
                 bestfitfoc=-1
                 bestfithf=-1
             else :
                 bestfithf = poly[0]*bestfitfoc**2+poly[1]*bestfitfoc+poly[2]
                 bestfithf *= 2*pixscale
-            print('bestfoc, bestfitfoc: ', bestfitfoc,bestfithf)
+            logger.info('bestfoc, bestfitfoc: {:f} {:d} '.format( bestfitfoc,bestfithf))
         except: 
-            print('focus fit failed...')
+            logger.warning('focus fit failed...')
             bestfitfoc=-1
             bestfithf=-1
 

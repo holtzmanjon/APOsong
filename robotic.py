@@ -8,6 +8,14 @@ import pdb
 import numpy as np
 import time
 
+import logging
+import yaml
+import logging.config
+with open('logging.yml', 'rt') as f:
+    config = yaml.safe_load(f.read())
+logging.config.dictConfig(config)
+logger=logging.getLogger(__name__)
+
 import aposong 
 import database
 import APOSafety
@@ -29,7 +37,7 @@ class Target() :
     def acquire(self) :
         aposong.guide(False)
         aposong.slew(self.ra,self.dec)
-        aposong.guide(True,exptime=0.5,name='guide',display=None,vmax=30000)
+        aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=0.)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -68,9 +76,9 @@ class Sequence() :
         names = []
         for filt,nexp,texp,cam in zip(self.filt,self.n_exp,self.t_exp,self.camera) :
             for iexp in range(nexp) :
+                logger.info('Expose camera: {:d} exptime: {:.2f}, '.format(cam,texp))
                 exp=aposong.expose(texp,filt,name=name,display=display,cam=cam)
                 names.append(exp.name)
-        aposong.guide(False)
         return names
 
     def table(self) :
@@ -124,7 +132,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     apo=EarthLocation.of_site(site)
     t.location=apo
     lst=t.sidereal_time('mean')
-    print('lst: ', lst)
+    logger.info('Looking for request, lst: {:s}'.format(lst))
     if criterion == 'setting' : 
         tmin=12*u.hourangle
     elif criterion == 'longest' : 
@@ -132,7 +140,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     elif criterion == 'best' : 
         tmin=12.*u.hourangle
     else : 
-        print('unknown criterion: ', criterion)
+        logger.error('unknown criterion: ', criterion)
         return
     best=None
     am_best=-1
@@ -155,13 +163,12 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
         if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : continue
         obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
         if len(obs)>0:
-            print(obs)
             if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
-                print(request['targname'], 'observed enough visits',len(obs))
+                logger.info('{:s} observed enough visits {:d}'.format(request['targname'],len(obs)))
                 continue
             dt_visit = t.mjd - np.max(obs['mjd'])
             if dt_visit < request['dt_visit'] :
-                print(request['targname'], 'observed too recently')
+                logger.info('{:s} observed too recently'.format(request['targname']))
                 continue
 
         if (criterion == 'setting' and dt< tmin) :
@@ -180,22 +187,25 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
             am_best=am
             dt_best=abs(hamid)
     d.close()
-    print(best)
+    logger.info('getbest selected: {:s}'.format(best['targname']))
     return best
 
-def observe_object(request,display=None) :
+def observe_object(request,display=None,acquire=True) :
     """ Given request, do the observation and record
     """
 
     # acquire target and observe requested sequence
+    logger.info('Observing {:s}, acquire: {}'.format(request['targname']),acquire)
     targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
-    targ.acquire()
+    if acquire : 
+        targ.acquire()
     seq = Sequence(request['targname'],filt=request['filter'],
                    n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
     t=Time.now()
     names=seq.observe(targ.name,display=display)
 
     # load observation into observed table
+    logger.info('Loading observation {:s}'.format(request['targname']))
     obs=Table()
     obs['request_pk'] = [request['request_pk']]
     obs['mjd'] = [t.mjd]
@@ -210,7 +220,7 @@ def open(opentime,safety) :
     """
     while (Time.now()-opentime)<0 :
         # wait until sunset + dt_sunset hours 
-        print('waiting for sunset: ',(opentime-Time.now()).to(u.hour),' hours')
+        logger.info('waiting for sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
     while not safety.issafe() :
@@ -220,7 +230,7 @@ def open(opentime,safety) :
     # open if not already open (e.g., from previous observe invocation same night)
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
-    print('open at: ',Time.now())
+    logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',criterion='best') :
     """ Full observing night sequence 
@@ -229,28 +239,30 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
     sunset =site.sun_set_time(Time.now(),which='nearest')
     sunrise =site.sun_rise_time(Time.now(),which='next')
     nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
-    nautical_morn = site.twilight_evening_nautical(Time.now(),which='next')
+    nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
     # setup up Safety object and open dome when safe after desired time relative to sunset
     safety = APOSafety.Safety()
     open(sunset+dt_sunset*u.hour,safety)
 
     # wait for nautical twilight
-    while (Time.now()-nautical)<0 :
-        print('waiting for nautical twilight: ',(nautical-Time.now()).to(u.hour),' hours')
+    while (Time.now()-nautical).to(u.hour) < 0*u.hour :
+        logger.info('waiting for nautical twilight: {:.3f}'.format((nautical-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
     # in case 3.5m has closed while we were waiting....
-        open(sunset+dt_sunset*u.hour,safety)
+    if aposong.D.ShutterStatus != 0 :
+        aposong.domeopen()
 
     # focus star on meridian 
     foc=focus(foc0=foc0,display=aposong.disp)
     foctime=Time.now()
 
+    oldtarg=''
     try :
       tnow=Time.now()
-      while (tnow-nautical_morn)*u.hour < 0 : 
-        print('nautical twilight in : ',(tnow-sunrise)*u.hour)
+      while (tnow-nautical_morn).to(u.hour) < 0*u.hour : 
+        logger.info('nautical twilight in : {:.3f}'.format((tnow-nautical_morn).to(u.hour).value))
         if not safety.issafe() : 
             aposong.domeclose()
             time.sleep(60)
@@ -258,7 +270,8 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
         elif aposong.D.ShutterStatus != 0 :
             aposong.domeopen()
 
-        if ((tnow-foctime)*u.hour).value > 1.5 :
+        logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
+        if (tnow-foctime).to(u.hour) > 1.5*u.hour :
             foc=focus(foc0=foc0,display=display)
             foctime=tnow
         else :
@@ -266,12 +279,12 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
             if best is None :
                 time.sleep(60)
             else :
-                observe_object(best,display=display)
-        
+                observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
+                oldtarg=best['targname'] 
     except:
-        print('unknown error!')
+        logger.error('unknown error!')
 
-    print('closing: ',Time.now())
+    logger.info('closing: ',Time.now())
     aposong.domeclose()
 
 def focus(foc0=28800,display=None) :
@@ -282,9 +295,9 @@ def focus(foc0=28800,display=None) :
     lst=t.sidereal_time('mean').value
     aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=3*u.degree)
 
-    f=aposong.focrun(foc0,75,9,5,None,bin=1,thresh=100,display=display,max=5000)
+    f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-150 or f>foc0+150 :
-        print('focus: {:d}  foc0: {:d}'.format(f,foc0))
+        logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=f
         f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
     return f

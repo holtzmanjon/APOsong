@@ -6,8 +6,10 @@ from tkinter import *
 from tkinter import ttk
 import tkinter.font
 import numpy as np
+import yaml
 from numpy.random import randint
 try :
+    from alpaca import discovery, management
     from alpaca.camera import *
     from alpaca.telescope import *
     from alpaca.covercalibrator import *
@@ -22,6 +24,54 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
 import APOSafety
+import pwi4_client
+
+# discovery seems to fail on 10.75.0.0, so hardcode servers
+def ascom_init(svrs) :
+    global D, T, F, Filt, C, Covers
+    D, T, F, Filt, C, Covers = (None, None, None, None, [], None)
+    print("Alpaca devices: ")
+    if svrs is None : return
+    for svr in svrs:
+        print(f"  At {svr}")
+        print (f"    V{management.apiversions(svr)} server")
+        print (f"    {management.description(svr)['ServerName']}")
+        devs = management.configureddevices(svr)
+        def isconnected(dev,target,append=False) :
+            try:
+                dev.Connected
+                if append : target.append(dev)
+                else :target = dev
+            except :
+                pass
+            return target
+
+        # open Alpaca devices
+        for dev in devs:
+            print(f"      {dev['DeviceType']}[{dev['DeviceNumber']}]: {dev['DeviceName']}")
+            if dev['DeviceType'] == 'Telescope' :
+                T =isconnected(Telescope(svr,dev['DeviceNumber']),T)
+            elif dev['DeviceType'] == 'Dome' :
+                D = isconnected(Dome(svr,dev['DeviceNumber']),D)
+            elif dev['DeviceType'] == 'CoverCalibrator' :
+                Covers = isconnected(CoverCalibrator(svr,dev['DeviceNumber']),Covers)
+            elif dev['DeviceType'] == 'Focuser' :
+                F = isconnected(Focuser(svr,dev['DeviceNumber']),F)
+            elif dev['DeviceType'] == 'FilterWheel' :
+                Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
+            elif dev['DeviceType'] == 'Camera' :
+                C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
+            elif dev['DeviceType'] == 'SafetyMonitor' :
+                S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
+
+    #C[0].Magnification=1.5
+    print()
+    print("All ASCOM commands available through devices: ")
+    print('    T : telescope commands')
+    print('    C : camera commands')
+    print('    F : focusser command')
+    print('    Filt : filter wheel commands')
+    print('    D : dome commands')
 
 
 #from coordio import sky, site, time, ICRS
@@ -286,3 +336,46 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     signal.signal(signal.SIGINT,handler)
     update()
     root.mainloop()
+
+
+def init() :
+    """ Start ascom and pwi connections 
+    """
+    global pwi_srv
+    try :
+        with open('aposong.yml','r') as config_file :
+            config = yaml.safe_load(config_file)
+    except:
+        print('no configuration file found')
+        config={}
+        config['devices']={}
+        config['devices']['ascom_search'] = False
+        config['devices']['ascom_srvs'] = []
+        config['devices']['pwi_srv'] = None
+        config['dataroot'] = './'
+
+    if config['devices']['ascom_search'] :
+        svrs=discovery.search_ipv4(timeout=30,numquery=3)
+    else :
+        svrs=config['devices']['ascom_srvs']
+    try : updatecamera=config['updatecamera']
+    except : updatecamera=True
+    ascom_init(svrs)
+    print('pwi_init...')
+    pwi_srv = config['devices']['pwi_srv']
+    pwi_init(pwi_srv)
+    print('start_status...')
+    if updatecamera :
+        status(T=T,F=F,D=D,pwi=pwi,C=C[0])
+    else :
+
+def pwi_init(pwi_srv) :
+    global pwi
+    print('Starting PWI4 client...')
+    if pwi_srv is not None :
+        pwi=pwi4_client.PWI4(host=pwi_srv)
+        for axis in [0,1] : pwi.mount_enable(axis)
+    else :
+        pwi = None
+
+
