@@ -70,7 +70,7 @@ class Stage() :
 
     def move(self,position) :
         # Move the device to a new position
-        new_pos = Decimal(150.0)  # Must be a .NET decimal
+        new_pos = Decimal(position)  # Must be a .NET decimal
         print(f'Moving to {new_pos}')
         self.device.MoveTo(new_pos, 60000)  # 60 second timeout
         print("Done")
