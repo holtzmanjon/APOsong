@@ -1,0 +1,45 @@
+version: 1
+disable_existing_loggers: no
+
+formatters :
+  simple:
+    format: '%(asctime)s [%(levelname)s] %(message)s'
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stdout
+  hourly :
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: simple
+    when: H
+    interval: 1
+    utc: True
+    atTime: midnight
+    filename: /home/song/APOsong/hourly.log
+
+  daily :
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: simple
+    when: D
+    interval: 1
+    utc: True
+    atTime: midnight
+    filename: /home/song/APOsong/daily.log
+
+root:
+    level: INFO
+    handlers: [console,hourly,daily]
+
+loggers:
+  <module>:
+    level: INFO
+    handlers: [console,hourly,daily]
+    propagate: no
+
+    
