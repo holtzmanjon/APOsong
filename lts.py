@@ -60,7 +60,7 @@ class Stage() :
         print("Done")
 
     def get_velocity(self) :
-        return Decimal.ToFloat(self.device.get_Velocity())
+        return Decimal.ToDouble(self.device.get_Velocity())
 
     def set_velocity(self,velocity) :
         # Get Velocity Params
@@ -76,7 +76,7 @@ class Stage() :
         print("Done")
 
     def get_position(self) :
-        return Decimal.ToFloat(self.device.get_Position())
+        return Decimal.ToDouble(self.device.get_Position())
 
     def close(self) :
         # Stop Polling and Disconnect
