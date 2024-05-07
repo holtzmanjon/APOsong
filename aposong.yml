@@ -2,14 +2,14 @@
 devices :
   ascom_search : False
   ascom_srvs : 
-    - 10.75.0.21:32227
-    - 10.75.0.22:11111
-#    - 172.24.37.106:11111
+#    - 10.75.0.21:32227
+#    - 10.75.0.22:11111
+    - 172.24.4.202:11111
 
-  pwi_srv : 10.75.0.22
-#  pwi_srv : 
+#  pwi_srv : 10.75.0.22
+  pwi_srv : 
 
 dataroot : /data/1m
-updatecamera : False
+updatecamera : True
 
 
