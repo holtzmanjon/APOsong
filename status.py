@@ -368,6 +368,7 @@ def init() :
     if updatecamera :
         status(T=T,F=F,D=D,pwi=pwi,C=C[0])
     else :
+        status(T=T,F=F,D=D,pwi=pwi)
 
 def pwi_init(pwi_srv) :
     global pwi
