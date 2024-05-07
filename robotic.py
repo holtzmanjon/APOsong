@@ -232,7 +232,7 @@ def open(opentime,safety) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',criterion='best') :
+def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',criterion='best') :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
@@ -271,7 +271,7 @@ def observe(foc0=28800,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',crite
             aposong.domeopen()
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
-        if (tnow-foctime).to(u.hour) > 1.5*u.hour :
+        if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
             foc=focus(foc0=foc0,display=display)
             foctime=tnow
         else :
