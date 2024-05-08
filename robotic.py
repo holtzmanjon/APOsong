@@ -194,28 +194,43 @@ def observe_object(request,display=None,acquire=True) :
     """ Given request, do the observation and record
     """
 
-    # acquire target and observe requested sequence
-    logger.info('Observing {:s}, acquire: {}'.format(request['targname']),acquire)
-    targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
-    if acquire : 
-        targ.acquire()
-    seq = Sequence(request['targname'],filt=request['filter'],
-                   n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
-    t=Time.now()
-    names=seq.observe(targ.name,display=display)
+    logger.info('Observing {:s}, acquire: {}'.format(request['targname'],acquire))
+    try :
+        # acquire target
+        targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
+        if acquire : 
+            targ.acquire()
+    except:
+        logger.info('  failed acquire')
+        return
+
+    try :
+        # observe requested sequence
+        seq = Sequence(request['targname'],filt=request['filter'],
+                       n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
+        t=Time.now()
+        names=seq.observe(targ.name,display=display)
+    except:
+        logger.info('  failed observe')
+        return
 
     # load observation into observed table
     logger.info('Loading observation {:s}'.format(request['targname']))
-    obs=Table()
-    obs['request_pk'] = [request['request_pk']]
-    obs['mjd'] = [t.mjd]
-    obs['files'] = [names]
-    d=database.DBSession()
-    d.ingest('robotic.observed',obs,onconflict='update')
-    d.close()
+    try :
+        obs=Table()
+        obs['request_pk'] = [request['request_pk']]
+        obs['mjd'] = [t.mjd]
+        obs['files'] = [names]
+        d=database.DBSession()
+        d.ingest('robotic.observed',obs,onconflict='update')
+        d.close()
+    except:
+        logger.info('  failed loading')
+        return
+
     return obs
 
-def open(opentime,safety) :
+def obsopen(opentime,safety) :
     """ Open observatory at/after requested time and when safe 
     """
     while (Time.now()-opentime)<0 :
@@ -243,7 +258,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mo
 
     # setup up Safety object and open dome when safe after desired time relative to sunset
     safety = APOSafety.Safety()
-    open(sunset+dt_sunset*u.hour,safety)
+    obsopen(sunset+dt_sunset*u.hour,safety)
 
     # wait for nautical twilight
     while (Time.now()-nautical).to(u.hour) < 0*u.hour :
@@ -284,7 +299,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mo
     except:
         logger.error('unknown error!')
 
-    logger.info('closing: ',Time.now())
+    logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
 
 def focus(foc0=28800,display=None) :

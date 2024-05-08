@@ -415,8 +415,6 @@ class DBSession(object):
         else:
             raise ValueError(onconflict+' not supported')
         # Perform the insert
-        print(insert_query)
-        print(data)
         execute_values(cur,insert_query,data,template=None)
 
         self.connection.commit()

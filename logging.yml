@@ -20,7 +20,7 @@ handlers:
     interval: 1
     utc: True
     atTime: midnight
-    filename: /home/song/APOsong/hourly.log
+    filename: /home/song/logs/hourly.log
 
   daily :
     class: logging.handlers.TimedRotatingFileHandler
@@ -30,7 +30,7 @@ handlers:
     interval: 1
     utc: True
     atTime: midnight
-    filename: /home/song/APOsong/daily.log
+    filename: /home/song/logs/daily.log
 
 root:
     level: INFO

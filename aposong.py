@@ -54,7 +54,7 @@ import pwi4_client
 from pyvista import tv, skycalc, centroid, stars, image
 import focus
 import status
-
+import database
 
 from collections import namedtuple
 Exposure = namedtuple('Exposure', ['hdu', 'name', 'exptime', 'filter'])
@@ -211,9 +211,12 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
 
-    #tab=Table()
-    #for card in ['EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] :
-    #    tab[card] = [hdu.header[card]]
+    tab=Table()
+    cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] 
+    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp','xbin','ybin','ra','dec','az','alt','rot'] 
+    for card,col in zip(cards,cols) :
+        tab[col] = [hdu.header[card]]
+    tab['camera'] = [cam]
 
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
@@ -229,10 +232,18 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name),ext)
         hdu.writeto(outname)
         exposure = Exposure(hdu, outname, exptime, filt)
-        return exposure
+        tmp=outname.split('/')
+        tab['file'] = [tmp[-2]+'/'+tmp[-1]]
     else :
+        outname=''
         exposure = Exposure(hdu, None, exptime, filt)
-        return exposure
+        tab['file'] = ''
+
+    d=database.DBSession()
+    d.ingest('obs.exposure',tab,onconflict='update')
+    d.close()
+
+    return exposure
 
 def settemp(temp,cam=0) :
     """ Change detector temperature set point and turn cooler on
@@ -273,10 +284,12 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            List of file names taken for focus run
     """
 
+    foc0=F.Position
     files=[]
+    names=[]
     images=[]
-    for i,focval in enumerate(
-             np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))) :
+    focvals= np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))
+    for i,focval in enumerate(focvals) :
         F.Move(int(focval))
         if i==0 : time.sleep(5)
         while True :
@@ -292,26 +305,50 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
-        name=exp.name
-        if i == 0 :
-            nr,nc=hdu.data.shape
-            mosaic = np.zeros([nr,n*nc])
-        mosaic[:,i*nc:(i+1)*nc] = hdu.data
-        files.append(name)
+        tmp=exp.name.split('/')
+        name=tmp[-2]+'/'+tmp[-1]
+        names.append(name)
+        files.append(exp.name)
         images.append(hdu)
+        #if i == 0 :
+        #    nr,nc=hdu.data.shape
+        #    mosaic = np.zeros([nr,n*nc])
+        #mosaic[:,i*nc:(i+1)*nc] = hdu.data
     #plt.figure()
     #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     #plt.axis('off')
-    bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam),
+    try :
+        bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam),
                                                 display=display,max=max,thresh=thresh)
-    if bestfitfoc > 0 :
-        logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
-              bestfitfoc,bestfithf))
-        f=foc(int(bestfitfoc))
-    else :
-        logger.info('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
+        if bestfitfoc > 0 :
+            logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
+                  bestfitfoc,bestfithf))
+            f=foc(int(bestfitfoc))
+        else :
+            logger.info('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfoc,besthf))
-        f=foc(int(bestfoc))
+            f=foc(int(bestfoc))
+    except :
+        bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
+        logger.error('focus failed')
+        f=foc0
+
+    tab=Table()
+    tab['mjd'] = [Time.now().mjd]
+    tab['exptime'] = [exptime]
+    tab['filter'] = [filt]
+    tab['bin'] = [bin]
+    tab['camera'] = [cam]
+    tab['focvals'] = [focvals]
+    tab['bestfoc'] = [bestfoc]
+    tab['besthf'] = [besthf]
+    tab['bestfitfoc'] = [bestfitfoc]
+    tab['bestfithf'] = [bestfithf]
+    tab['files'] = [names]
+    d=database.DBSession()
+    d.ingest('obs.focus',tab,onconflict='update')
+    d.close()
+
     return f
 
 def pixscale(cam=0,bin=1) :
@@ -461,49 +498,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 for testing, supplied image rather than acquire one
     """
 
-    global guide_process, run_guide
-
-    def doguide(exptime,navg,x,y,x0,y0,mask,disp) :
-        n=1
-        nseq=1
-        xtot=0
-        ytot=0
-        while run_guide :
-            logger.info('guide start: {:.1f} {:.1f} {:.1f} {:d} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,mask.sum(),exptime,navg))
-            if disp is not None : disp.tvclear()
-            exp=expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name='guide/guide'.format(n))
-            hdu=exp.hdu
-            if data is not None : 
-                hdu=data
-            if rasym :
-                center=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp)
-                if center.x<0 :
-                    try : 
-                        center=centroid.marginal_gfit(hdu.data,x,y,rad)
-                        logger.info('marginal: ',center.x,center.y,center.tot)
-                    except:
-                        yp,xp = np.unravel_index(np.argmax(hdu.data),hdu.data.shape)
-                        center.x = xp
-                        center.y = yp
-            else :
-                center==centroid.marginal_gfit(hdu.data,x,y,rad)
-                tot=-9
-            if center.x>0 and center.y>0 :
-                xtot+=center.x
-                ytot+=center.y
-                if nseq < navg :
-                    logger.info('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(nseq,center.x-x0,center.y-y0,center.tot))
-                    logger.info('  accumulated offset:   {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0))
-                    nseq+=1
-                else :
-                    logger.info('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0,center.tot))
-                    offsetxy(prop*(xtot/nseq-x0),prop*(ytot/nseq-y0),scale=pixscale())
-                    time.sleep(settle)
-                    nseq=1
-                    xtot=0
-                    ytot=0
-                x=center.x
-                y=center.y
+    global guide_process
 
     if start and guide_process is None :
         if data is None :
