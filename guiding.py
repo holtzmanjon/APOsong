@@ -61,7 +61,10 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             hdu=exp.hdu
         else :
             print(n)
-            hdu=red.rd(n)
+            try: hdu=red.rd(n)
+            except:
+                time.sleep(0.5)
+                continue
             if disp is not None : disp.tv(hdu,max=vmax)
 
         if rasym :
