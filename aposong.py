@@ -46,7 +46,7 @@ try:
   from alpaca.filterwheel import *
   from alpaca.camera import *
 except:
-  logger.warning('no alpaca')
+  logger.exception('no alpaca')
 
 # pwi4 HTTP interface
 import pwi4_client
@@ -180,7 +180,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             time.sleep(1.0)
         data = np.array(C[cam].ImageArray).T
     except :
-        logger.error('ERROR : exposure failed')
+        logger.exception('ERROR : exposure failed')
         return exposure
 
     if display is not None :
@@ -297,8 +297,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
                 moving=F.IsMoving
                 if not moving : break
             except : 
-                logger.error('error with F.IsMoving')
-                pass
+                logger.exception('error with F.IsMoving')
             time.sleep(2)
         
         logger.info('position: {:d} {}'.format(F.Position,moving))
@@ -330,7 +329,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             f=foc(int(bestfoc))
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
-        logger.error('focus failed')
+        logger.exception('focus failed')
         f=foc0
 
     tab=Table()
@@ -502,7 +501,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
 
     if start and guide_process is None :
         if data is None :
-            exp=expose(exptime,filt=filt,bin=bin,display=display,name='guide/guide')
+            exp=expose(exptime,filt=filt,bin=bin,display=disp,name='guide/guide')
             hdu=exp.hdu
         else :
             hdu = data
@@ -522,7 +521,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
                 if peak>60000 : exptime*=0.8
                 else: exptime = np.max([0.01,np.min([exptime*60000/peak,10])])
                 logger.info('new exptime: {:.2f}'.format(exptime))
-                exp=expose(exptime,filt=filt,bin=bin,display=display)
+                exp=expose(exptime,filt=filt,bin=bin,display=disp)
                 hdu=exp.hdu
                 niter+=1
 
@@ -567,15 +566,15 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             pdb.set_trace()
 
         guiding.run_guide = True
-        logger.info('starting guiding: {:.2f} {:.2f}'.format(x0,y0))
         navg=np.min([10,np.max([1,int(5/exptime)])])
+        logger.info('starting guiding: {:.2f} {:.2f} exptime: {:.2f} navg: {:d}'.format(x0,y0,exptime, navg))
         if display is None :
             guide_process=threading.Thread(target=guiding.doguide,args=(x0,y0),
                 kwargs={'exptime' :exptime,'navg' :navg,'mask': mask ,'disp' :None,
-                        'filt' : filt, 'vmax': vmax, 'box': box})
+                        'filt' : filt, 'vmax': vmax, 'box': box, 'prop' : prop})
             guide_process.start()
         else :
-            guiding.doguide(exptime=exptime,navg=navg,x0=x0,y0=y0,mask=mask,disp=disp,filt=filt,vmax=vmax,box=box)
+            guiding.doguide(exptime=exptime,navg=navg,x0=x0,y0=y0,mask=mask,disp=disp,filt=filt,vmax=vmax,box=box,prop=prop)
     elif not start and guide_process is not None :
         logger.info('stopping guiding')
         guiding.run_guide = False
@@ -811,10 +810,10 @@ def eshel(close=False,mirror=False,thar=False,quartz=False,led=False) :
     if esock is None :
         print('if this hangs, make sure remote program is running')
         esock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-        esock.connect(('10.75.0.22', 65432))
+        esock.connect(('10.75.0.220', 65432))
 
     val =  mirror<<7 | led<<6 | thar<<5 | quartz<<4 
-   
+  
     try : esock.sendall(str(val).encode())
     except :
         logger.error("communication error: is remote program running?")
