@@ -4,6 +4,7 @@ from astropy.table import Table, hstack, vstack
 import astropy.units as u
 from astroplan import Observer, time_grid_from_range
 
+import copy
 import pdb
 import numpy as np
 import time
@@ -34,10 +35,10 @@ class Target() :
         tab['dec'] = [self.dec]
         tab['epoch'] = [self.epoch]
 
-    def acquire(self) :
+    def acquire(self,display=None,prop=0.8) :
         aposong.guide(False)
         aposong.slew(self.ra,self.dec)
-        aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=0.)
+        aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=prop)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -199,10 +200,10 @@ def observe_object(request,display=None,acquire=True) :
         # acquire target
         targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
         if acquire : 
-            targ.acquire()
+            targ.acquire(display=display)
     except:
-        logger.info('  failed acquire')
-        return
+        logger.exception('  failed acquire')
+        return False
 
     try :
         # observe requested sequence
@@ -211,8 +212,8 @@ def observe_object(request,display=None,acquire=True) :
         t=Time.now()
         names=seq.observe(targ.name,display=display)
     except:
-        logger.info('  failed observe')
-        return
+        logger.exception('  failed observe')
+        return False
 
     # load observation into observed table
     logger.info('Loading observation {:s}'.format(request['targname']))
@@ -225,10 +226,10 @@ def observe_object(request,display=None,acquire=True) :
         d.ingest('robotic.observed',obs,onconflict='update')
         d.close()
     except:
-        logger.info('  failed loading')
-        return
+        logger.exception('  failed loading')
+        return False
 
-    return obs
+    return True
 
 def obsopen(opentime,safety) :
     """ Open observatory at/after requested time and when safe 
@@ -274,10 +275,10 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mo
     foctime=Time.now()
 
     oldtarg=''
-    try :
-      tnow=Time.now()
-      while (tnow-nautical_morn).to(u.hour) < 0*u.hour : 
-        logger.info('nautical twilight in : {:.3f}'.format((tnow-nautical_morn).to(u.hour).value))
+    while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
+      try :
+        tnow=Time.now()
+        logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
         if not safety.issafe() : 
             aposong.domeclose()
             time.sleep(60)
@@ -294,10 +295,10 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mo
             if best is None :
                 time.sleep(60)
             else :
-                observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
-                oldtarg=best['targname'] 
-    except:
-        logger.error('unknown error!')
+                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
+                if success : oldtarg=best['targname'] 
+      except:
+        logger.exception('observe error!')
 
     logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
@@ -313,7 +314,7 @@ def focus(foc0=28800,display=None) :
     f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-150 or f>foc0+150 :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
-        foc0=f
+        foc0=copy.copy(f)
         f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
     return f
        
