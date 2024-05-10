@@ -64,7 +64,6 @@ dataroot = None
 sync_process = None
 guide_process = None
 disp = None
-esock = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
@@ -802,24 +801,6 @@ def stop_status() :
     """ Stop status window thread
     """
     proc.terminate()
-
-def eshel(close=False,mirror=False,thar=False,quartz=False,led=False) :
-    """ Send commands to remote socket for eShel calibration control
-    """
-    global esock
-    if esock is None :
-        print('if this hangs, make sure remote program is running')
-        esock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-        esock.connect(('10.75.0.220', 65432))
-
-    val =  mirror<<7 | led<<6 | thar<<5 | quartz<<4 
-  
-    try : esock.sendall(str(val).encode())
-    except :
-        logger.error("communication error: is remote program running?")
-    if close :
-        esock.shutdown(socket.SHUT_RDWR)
-        esock.close()
 
 def commands() :
     print()
