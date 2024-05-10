@@ -5,6 +5,8 @@ import sys, getopt
 from serial import Serial
 from time import sleep
 
+import aposong
+
 HOST = "10.75.0.22"  # Standard loopback interface address (localhost)
 PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
 
@@ -27,6 +29,17 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
     if close :
         esock.shutdown(socket.SHUT_RDWR)
         esock.close()
+
+def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=10) :
+    """ Take series of eShel cals
+    """
+    lamps(mirror=True,quartz=True,led=True)
+    for i in range(flats) :
+        aposong.expose(flat_exptime,filt=None,bin=1,display=display,cam=1,name='eShel_flat')
+    lamps(mirror=True,thar=True)
+    for i in range(thar) :
+        aposong.expose(thar_exptime,filt=None,bin=1,display=display,cam=1,name='eShel_ThAr')
+    lamps()
 
 def remote() :
   """ Run simple remote socket server to send commands to cal lamp controller

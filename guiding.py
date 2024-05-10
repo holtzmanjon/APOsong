@@ -35,9 +35,13 @@ import logging
 import time
 import yaml
 import logging.config
-with open('logging.yml', 'rt') as f:
-    config = yaml.safe_load(f.read())
-logging.config.dictConfig(config)
+try:
+    with open('logging.yml', 'rt') as f:
+        config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
+except:
+    print("can't open logging.yml")
+
 logger=logging.getLogger(__name__)
 
 import aposong
@@ -57,7 +61,8 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
         logger.debug('guide start: {:.1f} {:.1f} {:.1f} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,exptime,navg))
         if disp is not None : disp.tvclear()
         if exptime > 0 :
-            exp=aposong.expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,name='guide/guide'.format(n))
+            exp=aposong.expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,
+                               name='guide/guide'.format(n),insert=False)
             hdu=exp.hdu
         else :
             print(n)

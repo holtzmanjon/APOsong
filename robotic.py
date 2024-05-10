@@ -12,9 +12,14 @@ import time
 import logging
 import yaml
 import logging.config
-with open('logging.yml', 'rt') as f:
-    config = yaml.safe_load(f.read())
-logging.config.dictConfig(config)
+
+try:
+    with open('logging.yml', 'rt') as f:
+        config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
+except:
+    print("can't open logging.yml")
+
 logger=logging.getLogger(__name__)
 
 import aposong 
@@ -248,7 +253,7 @@ def obsopen(opentime,safety) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mountain',criterion='best') :
+def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical,obs='apo',tz='US/Mountain',criterion='best') :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
@@ -263,7 +268,8 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,obs='apo',tz='US/Mo
 
     # wait for nautical twilight
     while (Time.now()-nautical).to(u.hour) < 0*u.hour :
-        logger.info('waiting for nautical twilight: {:.3f}'.format((nautical-Time.now()).to(u.hour).value,' hours'))
+        logger.info('waiting for nautical twilight: {:.3f}'.format(
+                    (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
     # in case 3.5m has closed while we were waiting....

@@ -15,14 +15,18 @@ import multiprocessing as mp
 import threading
 import yaml
 import socket
+import subprocess
 
 import guiding
 import logging
 import yaml
 import logging.config
-with open('logging.yml', 'rt') as f:
-    config = yaml.safe_load(f.read())
-logging.config.dictConfig(config)
+try:
+    with open('logging.yml', 'rt') as f:
+        config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
+except:
+    print("can't open logging.yml")
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
@@ -120,7 +124,7 @@ def qck(exptime,filt='current') :
     expose(exptime,filt)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0) :
+           min=None, max=None, cam=0, insert=True) :
     """ Take an exposure with camera
 
     Parameters
@@ -220,7 +224,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
         dirname = os.path.dirname('{:s}/UT{:d}{:02d}{:02d}/{:s}'.format(dataroot,y-2000,m,d,name))
-        try: os.mkdir(dirname)
+        try: os.makedirs(dirname)
         except : pass
         files = glob.glob(dirname+'/*.fits')
         exts = []
@@ -238,9 +242,10 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         exposure = Exposure(hdu, None, exptime, filt)
         tab['file'] = ''
 
-    d=database.DBSession()
-    d.ingest('obs.exposure',tab,onconflict='update')
-    d.close()
+    if insert :
+        d=database.DBSession()
+        d.ingest('obs.exposure',tab,onconflict='update')
+        d.close()
 
     return exposure
 
@@ -668,7 +673,7 @@ def park() :
     """
     domesync(False)
     try: T.Park()
-    except: logger.error('telescope.Park raised an exception')
+    except: logger.exception('telescope.Park raised an exception')
     D.Park()
 
 def foc(val, relative=False) :
@@ -723,10 +728,19 @@ def mirror_covers(open=False) :
     elif not open and current != 1 :
         Covers.CloseCover()
 
+def louvers(open=False) :
+    """ Open louvers
+    """
+    if open :
+        subprocess.run("ms on 9",shell=True)
+    else :
+        subprocess.run("ms off 9",shell=True)
+    subprocess.run("ms list 9",shell=True)
+
 def coverstate() :
     print(Covers.CoverState.value)
 
-def domeopen(dome=True,covers=True,fans=True) :
+def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     """ Open dome and mirror covers
     """
     if dome : D.OpenShutter()
@@ -742,15 +756,17 @@ def domeopen(dome=True,covers=True,fans=True) :
     if fans :
         fans_on()
 
-def domeclose(dome=True,covers=True,fans=True) :
+def domeclose(dome=True,covers=True,fans=True, louvers=True) :
     """ Close mirror covers and dome
     """
     guide(False)
+    if louvers : louvers(False)
     if fans : fans_off()
-    if covers : mirror_covers(False)
-    if dome : 
+    if covers : 
+        mirror_covers(False)
         logger.info('waiting 20 seconds for mirror covers to close...')
         time.sleep(20)
+    if dome : 
         # don't wait for mirror covers to report closed, in case they don't!
         park()
         D.CloseShutter()
