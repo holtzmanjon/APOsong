@@ -334,7 +334,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
         logger.exception('focus failed')
-        f=foc0
+        f=foc(foc0)
 
     tab=Table()
     tab['mjd'] = [Time.now().mjd]
@@ -468,7 +468,7 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
-def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
+def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
           display=None,prop=0.0,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
@@ -537,6 +537,7 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
         x=objs[0]['x']
         y=objs[0]['y']
+        logging.info('offsetting {:.1f} {:.1f}'.format(x-x0,y-y0))
         offsetxy((x-x0),(y-y0),scale=pixscale())
         time.sleep(settle)
 
@@ -554,13 +555,14 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
         mask=image.window(mask,box=box)
         exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name='guide')
         center=centroid.rasym_centroid(exp.hdu.data,x0,y0,rad,mask=mask,skyrad=[35,40],plot=disp)
-        if center.x>0 :
+        if center.x>0 and center.tot>10000:
             x = center.x
             y = center.y
         else :
             objs=stars.find(exp.hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
             x=objs[0]['x']
             y=objs[0]['y']
+        logging.info('offsetting {:.1f} {:.1f}'.format(x-x0,y-y0))
         offsetxy((x-x0),(y-y0),scale=pixscale())
         time.sleep(settle)
 
@@ -570,8 +572,9 @@ def guide(start=True,x0=646,y0=494.5,rad=25,exptime=5,bin=1,filt=None,data=None,
             pdb.set_trace()
 
         guiding.run_guide = True
-        navg=np.min([10,np.max([1,int(5/exptime)])])
-        logger.info('starting guiding: {:.2f} {:.2f} exptime: {:.2f} navg: {:d}'.format(x0,y0,exptime, navg))
+        navg=np.min([5,np.max([1,int(5/exptime)])])
+        logger.info('starting guiding: {:.2f} {:.2f} exptime: {:.2f} navg: {:d} prop: {:.2f}'.format(
+                     x0,y0,exptime, navg, prop))
         if display is None :
             guide_process=threading.Thread(target=guiding.doguide,args=(x0,y0),
                 kwargs={'exptime' :exptime,'navg' :navg,'mask': mask ,'disp' :None,
@@ -756,11 +759,11 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if fans :
         fans_on()
 
-def domeclose(dome=True,covers=True,fans=True, louvers=True) :
+def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
     """
     guide(False)
-    if louvers : louvers(False)
+    if closelouvers : louvers(False)
     if fans : fans_off()
     if covers : 
         mirror_covers(False)
@@ -771,7 +774,7 @@ def domeclose(dome=True,covers=True,fans=True, louvers=True) :
         park()
         D.CloseShutter()
 
-def domesync(dosync=True) :
+def domesync(dosync=True,manual=False) :
     """ Start/stop domesync thread
     """
     global sync_process, run_sync
@@ -788,6 +791,10 @@ def domesync(dosync=True) :
             D.SlewToAzimuth(np.median(az))
             time.sleep(update)
 
+    if manual :
+        print('Rotate dome manually....then continue')
+        pdb.set_trace()
+        return
     if dosync and sync_process is None :
         logger.info('starting dome sync')
         sync_process=threading.Thread(target=sync)
