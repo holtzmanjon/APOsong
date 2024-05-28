@@ -119,14 +119,14 @@ def secz(ha,dec,lat) :
 
 def getrequests() :
     d=database.DBSession()
-    tab=d.query(sql='SELECT request_pk,targ.*,sched.*,seq.* FROM robotic.request as req  \
+    tab=d.query(sql='SELECT request_pk,priority, targ.*,sched.*,seq.* FROM robotic.request as req  \
          JOIN robotic.target as targ on req.targname = targ.targname \
          JOIN robotic.schedule as sched on req.schedulename = sched.schedulename \
          JOIN robotic.sequence as seq on req.sequencename = seq.sequencename' ,fmt='table')
     d.close()
     return tab
 
-def getbest(t=None, requests=None, site='APO', criterion='setting') :
+def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90) :
     """ 
     Get best request given table of requests and time
     """
@@ -152,7 +152,10 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
     am_best=-1
     dt_best=-1
     d=database.DBSession()
-    for request in requests :
+    priorities = sorted(set(requests['priority']),reverse=True)
+    for priority in priorities :
+      gd=np.where(requests['priority'] == priority) 
+      for request in requests[gd] :
         if request['targname'] is None : continue
         c=SkyCoord("{:s} {:s}".format(request['ra'],request['dec']),unit=(u.hourangle,u.deg))
         ha = t.sidereal_time('mean') - c.ra
@@ -166,7 +169,12 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
         ham=hamax(c.dec,request['max_airmass'],apo.lat).to(u.hourangle)
         dt=ham-haend
         hamid=ha+(length/3600./2.)*u.hourangle
-        if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : continue
+        if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : 
+            logger.info('{:s} out of airmass range {:.2f}'.format(request['targname'],am))
+            continue
+        #if c.dec<mindec*u.deg or c.dec>maxdec*u.deg : 
+        #    logger.info('{:s} out of declination range'.format(request['targname']))
+        #    continue
         obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
         if len(obs)>0:
             if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
@@ -192,8 +200,14 @@ def getbest(t=None, requests=None, site='APO', criterion='setting') :
             tmin = abs(hamid)
             am_best=am
             dt_best=abs(hamid)
+      # if we found one at this priority, break and continue
+      if best is not None : break
+
     d.close()
-    logger.info('getbest selected: {:s}'.format(best['targname']))
+    if best is None:
+        logger.info('No good request available')
+    else :
+        logger.info('request selected: {:s}'.format(best['targname']))
     return best
 
 def observe_object(request,display=None,acquire=True) :
@@ -206,6 +220,8 @@ def observe_object(request,display=None,acquire=True) :
         targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
         if acquire : 
             targ.acquire(display=display)
+    except KeyboardInterrupt :
+        raise KeyboardInterrupt('CTRL-C')
     except:
         logger.exception('  failed acquire')
         return False
@@ -216,6 +232,8 @@ def observe_object(request,display=None,acquire=True) :
                        n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
         t=Time.now()
         names=seq.observe(targ.name,display=display)
+    except KeyboardInterrupt :
+        raise KeyboardInterrupt('CTRL-C')
     except:
         logger.exception('  failed observe')
         return False
@@ -253,7 +271,7 @@ def obsopen(opentime,safety) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical,obs='apo',tz='US/Mountain',criterion='best') :
+def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,obs='apo',tz='US/Mountain',criterion='best',maxdec=None) :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
@@ -267,10 +285,13 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical,obs='ap
     obsopen(sunset+dt_sunset*u.hour,safety)
 
     # wait for nautical twilight
-    while (Time.now()-nautical).to(u.hour) < 0*u.hour :
-        logger.info('waiting for nautical twilight: {:.3f}'.format(
-                    (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
-        time.sleep(60)
+    while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
+        try :
+            logger.info('waiting for nautical twilight: {:.3f}'.format(
+                        (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
+            time.sleep(60)
+        except KeyboardInterrupt :
+            return
 
     # in case 3.5m has closed while we were waiting....
     if aposong.D.ShutterStatus != 0 :
@@ -287,24 +308,28 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical,obs='ap
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
         if not safety.issafe() : 
             aposong.domeclose()
-            time.sleep(60)
+            time.sleep(90)
             continue
         elif aposong.D.ShutterStatus != 0 :
             aposong.domeopen()
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
+            aposong.guide(False)
             foc=focus(foc0=foc0,display=display)
             foctime=tnow
         else :
-            best=getbest(criterion=criterion)
+            best=getbest(criterion=criterion,maxdec=maxdec)
             if best is None :
                 time.sleep(60)
             else :
                 success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
                 if success : oldtarg=best['targname'] 
+      except KeyboardInterrupt :
+          return
+ 
       except:
-        logger.exception('observe error!')
+          logger.exception('observe error!')
 
     logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
