@@ -74,16 +74,19 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
 
         if rasym :
             center=centroid.rasym_centroid(hdu.data,x,y,rad,mask=mask,skyrad=[35,40],plot=disp,weight=weight)
-            if center.x<0 :
+            logger.debug('asym: {:.2f} {:.2f} {:.2f}'.format( center.x,center.y,center.tot))
+            if center.x<0 or center.tot < 10000:
                 try :
                     # if rasync_centroid fails, try marginal_gfit
                     center=centroid.marginal_gfit(hdu.data,x,y,rad)
                     logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(center.x,center.y,center.tot))
+                    if center.tot < 10000 : continue
                 except:
                     # if marginal_gfit fails, use peak
-                    yp,xp = np.unravel_index(np.argmax(hdu.data),hdu.data.shape)
-                    center.x = xp
-                    center.y = yp
+                    center=centroid.peak(hdu.data,x,y)
+                    if center.tot < 1000 :
+                        logger.info('peak<1000, no offset')
+                        continue
         else :
             center==centroid.marginal_gfit(hdu.data,x,y,rad)
             tot=-9
@@ -100,7 +103,15 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             else :
                 logger.debug('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0,center.tot))
                 if exptime>0 : 
-                    aposong.offsetxy(prop*(xtot/nseq-x0),prop*(ytot/nseq-y0),scale=aposong.pixscale())
+                    dx=xtot/nseq-x0
+                    xrem=(1-prop)*dx
+                    if abs(xrem) > 2 : xoff=dx
+                    else : xoff=prop*dx
+                    dy=ytot/nseq-y0
+                    yrem=(1-prop)*dy
+                    if abs(yrem) > 2 : yoff=dy
+                    else : yoff=prop*dy
+                    aposong.offsetxy(xoff,yoff,scale=aposong.pixscale())
                     time.sleep(settle)
                 else :
                     time.sleep(0.5)
