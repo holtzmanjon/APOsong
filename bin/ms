@@ -1,0 +1,28 @@
+#!/bin/csh
+if ($2 < 17) then
+  /usr/local/bin/ms1 $1 $2
+else if ($2 < 25) then
+  @ l = $2 - 16
+  /usr/local/bin/ms2 $1 $l
+#else if ($2 < 21) then
+#  @ l = $2 - 17
+#  @ l1 = $2 - 16
+#  if ( $1 == "list" ) then
+#    set add = http://admin:foenix@spare-ps/Set.cmd\?CMD=GetPower
+#    curl -s "$add" | sed 's/=/ /g' | sed 's/,/ /g' | awk '{printf("%d\n%d\n%d\n%d\n", $2, $4, $6, $8)}' | awk "NR==$l1" | sed 's/0/Off/' | sed 's/1/On/'
+#  else if ( $1 == "on" ) then
+#    set add = http://admin:foenix@spare-ps/Set.cmd\?CMD=SetPower+P6$l=1
+#    curl -s "$add" >& /dev/null
+#  else if ( $1 == "off" ) then
+#    set add = http://admin:foenix@spare-ps/Set.cmd\?CMD=SetPower+P6$l=0
+#    curl -s "$add" >& /dev/null
+#  endif
+#else if ($2 < 25) then
+#  if ( $1 == "list" ) then
+#    echo "N/A"
+#  endif
+
+else
+  @ l = $2 - 24
+  /usr/local/bin/ms3 $1 $l
+endif

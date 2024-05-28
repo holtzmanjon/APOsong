@@ -1,0 +1,292 @@
+#!/usr/bin/perl
+
+=head1 lamps
+
+  Control the 3.5m calibration lamps.
+
+  The lamps are powered through an APC MasterSwitch networked
+powerstrip. This can be run via the Web or directly with SNMP
+commands. This program wraps the SNMP control.
+
+  The CMU SNMP package deals with the actual SNMP communication.
+
+=cut
+    1;
+
+# The hostname of the APC server. 192.41.211.20
+$SNMP_HOSTNAME = 'power1m.apo.nmsu.edu';
+
+# The SNMP Community name serves as the access control. It really 
+# should not be here in plain text... - CPL
+$SNMP_COMMUNITY = `hostname`;
+
+# Path to the snmp{get,set} apps.
+$SNMP_PATH = '/usr/bin';
+
+# Path to the port-id to lamp-name cache
+
+sub usage() {
+    printf STDERR "usage: lamps command\n";
+    printf STDERR "         where command is one of the following:\n";    
+    printf STDERR "\n";
+    printf STDERR "         help     - this message\n";
+    printf STDERR "         list     - shows the lamps, their state, and their positions\n";
+    printf STDERR "                    This also rewrites the name cache file.\n";
+    printf STDERR "         on port-number\n";
+    printf STDERR "                  - turn on a given lamp\n";
+    printf STDERR "         off port-number\n";
+    printf STDERR "                  - turn off a given lamp\n";
+    printf STDERR "         rename port new-lampname\n";
+    printf STDERR "                  - change the name for a given port.\n";
+    printf STDERR "\n";
+    exit 1;
+}
+
+# Magic MIB entries. See the APC MIB (318 is APC, BTW)
+#
+$PORT_NAMES_BASE = '.1.3.6.1.4.1.318.1.1.4.5.2.1.3';
+$PORT_STATES_BASE = '.1.3.6.1.4.1.318.1.1.4.4.2.1.3';
+$SWITCH_ALL_PORTS = '.1.3.6.1.4.1.318.1.1.4.2.1.0';
+
+# There are actually 8 ports, but we're only using 5. Save 
+# a bit of time by not querying the rest.
+#
+$PORT_COUNT = 8;
+
+# Friendly lamp state names
+#
+@STATE_NAMES = (
+	   'Unknown',
+	   'On',
+	   'Off',
+	   'Rebooting',
+	   'Unknown'
+	   );
+
+@NAMES = ();
+%PORTS = ();
+@STATES = ();
+
+# Get a list of all the port states and names.
+#
+sub fetch_names($) {
+    my ($lamp) = @_;
+    my ($i, $name, $state, $community);
+    my ($get_string, @full_response);
+
+    # Build up a request string for all the names and all the states.
+    #
+    if  ($lamp eq 'all') {
+      for ($i=1; $i <= $PORT_COUNT; $i++) {
+	$get_string .= "${PORT_NAMES_BASE}.$i ";
+	$get_string .= "${PORT_STATES_BASE}.$i ";
+      }
+    } else {
+	$get_string .= "${PORT_NAMES_BASE}.$lamp ";
+	$get_string .= "${PORT_STATES_BASE}.$lamp ";
+    }
+
+   $community = $SNMP_COMMUNITY ;
+   $community =~ s/\..*//;
+   chomp($community);
+#   printf STDERR "$SNMP_PATH/snmpget $SNMP_HOSTNAME $community $get_string\n";
+
+    @full_response = `$SNMP_PATH/snmpget -v 1 -c $community $SNMP_HOSTNAME $get_string`;
+
+    # Each socket returns two lines of text: the lamp name and an integer representing the state.
+    # Save these in the global arrays.
+    #
+    if ($lamp eq 'all') {
+      $i = 1;
+    } else {
+      $i = $lamp;
+    }
+    while ($name = shift(@full_response)) {
+	$state = shift(@full_response);
+
+	chomp($name);
+	chomp($state);
+        $state =~ s/.*://;
+        $name =~ s/.*://;
+        $state =~ s/.*=//;
+        $name =~ s/.*=//;
+
+	# Remove the trailing 'lamp(s)', just to be nice.
+	#
+	$name =~ s/\s*lamp(s)?$//i;
+	    
+	$NAMES[$i] = $name;
+	$STATES[$i] = $STATE_NAMES[$state];
+	$PORTS{$name} = $i;
+	if ($state != '1' and $state != '2') {
+	    print STDERR "Odd state for port $i: $state\n";
+	}
+
+	$i++;
+    }
+}
+
+# Display the port states and names.
+#
+sub do_list($) {
+    my ($lamp) = @_;
+    fetch_names($lamp);
+
+    if ($lamp eq 'all') {
+      for (my $i=1; $i<=$PORT_COUNT; $i++) {
+	print "$i $STATES[$i] $NAMES[$i]\n";
+      }
+    } else {
+      print "$lamp $STATES[$lamp] $NAMES[$lamp]\n";
+    }
+
+}
+
+# Set a port's state
+# Set the state of a given port.
+#
+sub set_port($$) {
+    my ($port, $state) = @_;
+    my (@return);
+
+    # Grabs the return string.
+    # I really don't know what the error modes are, so if anything looks slightly off,
+    # it just gets spit out.
+    #
+    $community = $SNMP_COMMUNITY ;
+    $community =~ s/\..*//;
+    chomp($community);
+    @return = `$SNMP_PATH/snmpset -v 1 -c $community $SNMP_HOSTNAME $PORT_STATES_BASE.$port i $state`;
+
+#    if ($return[1] !~ /errstat 0x0 errindex 0x0$/ and $return[2] !~ /INTEGER -> $state$/) {
+#print STDERR "return: @return\n";
+    $return = shift(@return);
+    $return =~ s/.*=//;
+#print STDERR "return: $return\n";
+#    if ($return[0] !~ /INTEGER: $state$/) {
+    if ($return !~ $state) {
+	print STDERR "snmpset failed, and returned:\n", @return;
+    }
+}
+
+# Set the state of all ports.
+#
+sub set_all_ports($) {
+    my ($state) = @_;
+    my (@return);
+
+    # The sPDUMasterControlSwitch OID takes a different
+    # value for 'off' than a simple set.
+    #
+    if ($state == 2) {
+	$state = 3;
+    }
+
+    # Grabs the return string.
+    # I really don't know what the error modes are, so if
+    # anything looks slightly off, it just gets spit out.
+    #
+    $community = $SNMP_COMMUNITY ;
+    $community =~ s/\..*//;
+    chomp($community);
+    @return = `$SNMP_PATH/snmpset -v 1 -c $community $SNMP_HOSTNAME $SWITCH_ALL_PORTS i $state`;
+#    if ($return[1] !~ /errstat 0x0 errindex 0x0$/ and $return[2] !~ /INTEGER -> $state$/) {
+    if ($return[0] !~ /INTEGER: $state$/) {
+	print STDERR "snmpset failed, and returned:\n", @return;
+    }
+}
+
+# Wrapper for the set-port-state command.
+# Parses port numbers, state names, etc.
+#
+sub do_set($$) {
+    my ($port, $state) = @_;
+
+    $state =~ tr/[A-Z]/[a-z]/;
+    if ($state eq 'on') {
+	$state = 1;
+    }
+    elsif ($state eq 'off') {
+	$state = 2;
+    }
+    else {
+	usage();
+	exit(3);
+    }
+
+    if ($port ne 'all' and $port !~ /[1-8]/) {
+	fetch_names('all');
+
+	if (not defined $PORTS{$port}) {
+	    print STDERR "That lamp ($port) is not defined. (Try 'lamps list'...)\n";
+	    exit(3);
+	}
+	
+	$port = $PORTS{$port};
+    }
+
+    if ($port eq 'all') {
+	set_all_ports($state);
+    }
+    elsif ($port < 1 or $port > $PORT_COUNT) {
+	die("port $port is not valid (1 .. $PORT_COUNT)");
+    }
+    else {
+	set_port($port, $state);
+    }
+}
+
+# Read 
+sub main() {
+    my ($command);
+
+    # fetch_lamp_names();
+
+    $command = shift(@ARGS);
+    $command =~ tr/[A-Z]/[a-z]/;
+    if (not defined ($command) or $command eq 'help') {
+	usage();
+	exit(2);
+    }
+
+    if ($command eq 'list') {
+	my ($lamp) = @ARGS;
+
+	if (not defined($lamp)) {
+	    $lamp = 'all';
+	}
+	do_list($lamp);
+    }
+    elsif ($command eq 'on' or $command eq 'off') {
+	my ($lamp) = @ARGS;
+
+	if (not defined($lamp)) {
+	    $lamp = 'all';
+	}
+	do_set($lamp, $command);
+    }
+    elsif ($command eq 'turn') {
+	my ($newstate, $lamp) = @ARGS;
+
+	do_set($lamp, $newstate);
+    }
+    elsif ($command eq 'rename') {
+	my ($port, $newname) = @ARGS;
+
+	do_rename($port, $newname);
+    }
+
+    else {
+	usage();
+	exit(2);
+    }
+}
+
+BEGIN {
+    @ARGS = @ARGV;
+    @ARGV = ();
+}
+
+main();
+
+
