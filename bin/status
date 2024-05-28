@@ -2,4 +2,4 @@
 from status import *
 
 init()
-status()
+#status()
