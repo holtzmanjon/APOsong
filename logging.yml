@@ -19,17 +19,15 @@ handlers:
     when: H
     interval: 1
     utc: True
-    atTime: midnight
     filename: /home/song/logs/hourly.log
 
   daily :
     class: logging.handlers.TimedRotatingFileHandler
     level: INFO
     formatter: simple
-    when: D
+    when: midnight
     interval: 1
     utc: True
-    atTime: midnight
     filename: /home/song/logs/daily.log
 
 root:
