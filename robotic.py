@@ -126,7 +126,7 @@ def getrequests() :
     d.close()
     return tab
 
-def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90) :
+def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90,skip=None) :
     """ 
     Get best request given table of requests and time
     """
@@ -157,6 +157,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
       gd=np.where(requests['priority'] == priority) 
       for request in requests[gd] :
         if request['targname'] is None : continue
+        if skip is not None and request['targname'] == skip : continue
         c=SkyCoord("{:s} {:s}".format(request['ra'],request['dec']),unit=(u.hourangle,u.deg))
         ha = t.sidereal_time('mean') - c.ra
         ha.wrap_at(12*u.hourangle,inplace=True)
@@ -224,6 +225,7 @@ def observe_object(request,display=None,acquire=True) :
         raise KeyboardInterrupt('CTRL-C')
     except:
         logger.exception('  failed acquire')
+        t=Time.now()
         return False
 
     try :
@@ -232,18 +234,22 @@ def observe_object(request,display=None,acquire=True) :
                        n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
         t=Time.now()
         names=seq.observe(targ.name,display=display)
+        return load_object(request,t.mjd,names)
     except KeyboardInterrupt :
         raise KeyboardInterrupt('CTRL-C')
     except:
         logger.exception('  failed observe')
         return False
 
+def load_object(request,mjd,names) :
+    """ Load observation into database
+    """
     # load observation into observed table
     logger.info('Loading observation {:s}'.format(request['targname']))
     try :
         obs=Table()
         obs['request_pk'] = [request['request_pk']]
-        obs['mjd'] = [t.mjd]
+        obs['mjd'] = [mjd]
         obs['files'] = [names]
         d=database.DBSession()
         d.ingest('robotic.observed',obs,onconflict='update')
@@ -302,6 +308,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     foctime=Time.now()
 
     oldtarg=''
+    skiptarg=None
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
       try :
         tnow=Time.now()
@@ -323,8 +330,13 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
             if best is None :
                 time.sleep(60)
             else :
-                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
-                if success : oldtarg=best['targname'] 
+                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),skip=skiptarg)
+                # if object failed, skip it for the next selection, but can try again after that
+                if success : 
+                    oldtarg=best['targname'] 
+                    skiptarg=None
+                else : 
+                    skiptarg=best['targname']
       except KeyboardInterrupt :
           return
  
