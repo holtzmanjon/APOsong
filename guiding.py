@@ -46,7 +46,7 @@ logger=logging.getLogger(__name__)
 
 import aposong
 
-def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=None,name='guide',
+def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=None,name='guide/guide',
             prop=0.7, rasym=True,settle=3,vmax=10000,box=None,date='UT240503',weight=False) :
     """ Actual guide loop
     """
@@ -62,7 +62,7 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
         if disp is not None : disp.tvclear()
         if exptime > 0 :
             exp=aposong.expose(exptime,display=disp,bin=bin,filt=filt,max=vmax,box=box,
-                               name='guide/guide'.format(n),insert=False)
+                               name=name,insert=False)
             hdu=exp.hdu
         else :
             print(n)

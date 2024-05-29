@@ -505,7 +505,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
 
     if start and guide_process is None :
         if data is None :
-            exp=expose(exptime,filt=filt,bin=bin,display=disp,name='guide/guide')
+            exp=expose(exptime,filt=filt,bin=bin,display=disp,name='guide/acquire')
             hdu=exp.hdu
         else :
             hdu = data
@@ -520,6 +520,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
             while True :
                 mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
                 objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
+                if objs is None : raise RuntimeError('no objects found')
                 peak=objs[0]['peak']
                 if (peak < 60000 and peak>5000 ) or niter>10 or exptime>9.99: break
                 if peak>60000 : exptime*=0.8
@@ -532,7 +533,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
             x=objs[0]['x']
             y=objs[0]['y']
 
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,name='guide/guide')
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,name='guide/acquire')
         mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
         objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
         x=objs[0]['x']
@@ -553,7 +554,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
         x0-=box.xmin
         y0-=box.ymin
         mask=image.window(mask,box=box)
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name='guide')
+        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name='guide/acquire')
         center=centroid.rasym_centroid(exp.hdu.data,x0,y0,rad,mask=mask,skyrad=[35,40],plot=disp)
         if center.x>0 and center.tot>10000:
             x = center.x
