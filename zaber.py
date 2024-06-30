@@ -5,14 +5,14 @@ class ZaberStage() :
 
     def __init__(self,port='COM4') :
         self.connection = Connection.open_serial_port(port)
-        connection.enable_alerts()
+        self.connection.enable_alerts()
 
-        device_list = connection.detect_devices()
+        device_list = self.connection.detect_devices()
         print("Found {} devices".format(len(device_list)))
 
         self.device = device_list[0]
-        self.axis = device.get_axis(1)
-        self.if not axis.is_homed():
+        self.axis = self.device.get_axis(1)
+        if not self.axis.is_homed():
             print('homing axis...')
             self.axis.home()
 
