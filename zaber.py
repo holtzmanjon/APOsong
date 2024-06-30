@@ -1,23 +1,32 @@
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
 
-with Connection.open_serial_port("COM4") as connection:
-    connection.enable_alerts()
+class ZaberStage() :
 
-    device_list = connection.detect_devices()
-    print("Found {} devices".format(len(device_list)))
+    def __init__(self,port='COM4') :
+        self.connection = Connection.open_serial_port(port)
+        connection.enable_alerts()
 
-    device = device_list[0]
+        device_list = connection.detect_devices()
+        print("Found {} devices".format(len(device_list)))
 
-    axis = device.get_axis(1)
-    if not axis.is_homed():
-      axis.home()
+        self.device = device_list[0]
+        self.axis = device.get_axis(1)
+        self.if not axis.is_homed():
+            print('homing axis...')
+            self.axis.home()
 
-    # Move to 10mm
-    axis.move_absolute(10, Units.LENGTH_MILLIMETRES)
-    axis.get_position(Units.LENGTH_MILLIMETRES)
+    def home(self) :
+        self.axis.home()
 
-    # Move by an additional 5mm
-    axis.move_relative(5, Units.LENGTH_MILLIMETRES)
-    axis.get_position(Units.LENGTH_MILLIMETRES)
+    def move(self,pos,units=Units.LENGTH_MILLIMETRES,absolute=True) :
+        if absolute : 
+            self.axis.move_absolute(pos, Units.LENGTH_MILLIMETRES)
+        else :
+            axis.move_relative(5, Units.LENGTH_MILLIMETRES)
 
+    def get_position(self) :
+        return self.axis.get_position(Units.LENGTH_MILLIMETRES)
+
+    def close(self) :
+        close(self.connection)
