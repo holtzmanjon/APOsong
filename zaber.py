@@ -1,7 +1,7 @@
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
 
-with Connection.open_serial_port("COM3") as connection:
+with Connection.open_serial_port("COM4") as connection:
     connection.enable_alerts()
 
     device_list = connection.detect_devices()
