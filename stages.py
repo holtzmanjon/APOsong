@@ -1,6 +1,6 @@
 import lts
 import zaber
-imnport socket
+import socket
 
 HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
 HOST = "172.24.4.202"  # Standard loopback interface address (localhost)
@@ -31,7 +31,4 @@ def remote() :
                 s1.move(0)
             elif cmd.split()[0] == 'focus' :
                 s2.move(int(cmd.split()[1]))
-
-
-
 
