@@ -1,7 +1,7 @@
 import lts
 import zaber
 import socket
-import serial
+from serial import Serial
 
 HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
 HOST = "172.24.4.202"  # Standard loopback interface address (localhost)
