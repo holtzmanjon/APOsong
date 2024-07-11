@@ -26,7 +26,6 @@ def remote() :
                 print('done')
                 break
             print('received: ', data)
-            #conn.sendall(data)
             input = data.decode()
             cmd = input.split()[0]
             try: val = input.split()[1]
@@ -34,11 +33,11 @@ def remote() :
             if cmd == 'iodine_pos' :
                 if len(val) > 0 :
                     s1.move(int(val))
-                conn.sendall(s1.get_position())
+                conn.sendall(str(s1.get_position()).encode())
             elif cmd == 'focus' :
                 if len(val) > 0 :
                     s2.move(int(val))
-                conn.sendall(s2.get_position())
+                conn.sendall(str(s2.get_position()).encode())
             elif cmd == 'iodine_temp' :
                 if len(val) > 0 :
                     tc.write(b'TSET1=140\r')
@@ -46,5 +45,5 @@ def remote() :
                     tc.write(b'TSET2=140\r')
                     tc.readline()
                 tc.write(b'TACT1?\r')
-                conn.sendall(tc.readline())
+                conn.sendall(str(tc.readline()).encode())
 
