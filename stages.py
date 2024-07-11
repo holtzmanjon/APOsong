@@ -45,5 +45,5 @@ def remote() :
                     tc.write(b'TSET2=140\r')
                     tc.readline()
                 tc.write(b'TACT1?\r')
-                conn.sendall(str(tc.readline()).encode())
+                conn.sendall(tc.readline())
 
