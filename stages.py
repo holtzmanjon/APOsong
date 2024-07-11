@@ -34,11 +34,11 @@ def remote() :
             if cmd == 'iodine_pos' :
                 if len(val) > 0 :
                     s1.move(int(val))
-                return s1.get_position()
+                conn.sendall(s1.get_position())
             elif cmd == 'focus' :
                 if len(val) > 0 :
                     s2.move(int(val))
-                return s2.get_position()
+                conn.sendall(s2.get_position())
             elif cmd == 'iodine_temp' :
                 if len(val) > 0 :
                     tc.write(b'TSET1=140\r')
@@ -46,5 +46,5 @@ def remote() :
                     tc.write(b'TSET2=140\r')
                     tc.readline()
                 tc.write(b'TACT1?\r')
-                return tc.readline()
+                conn.sendall(tc.readline())
 
