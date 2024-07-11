@@ -5,7 +5,7 @@ import serial
 
 HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
 HOST = "172.24.4.202"  # Standard loopback interface address (localhost)
-PORT = 76543  # Port to listen on (non-privileged ports are > 1023)
+PORT = 65431  # Port to listen on (non-privileged ports are > 1023)
 
 def remote() :
   """ Run simple remote socket server 
