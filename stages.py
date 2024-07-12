@@ -46,4 +46,7 @@ def remote() :
                     tc.readline()
                 tc.write(b'TACT1?\r')
                 conn.sendall(tc.readline())
+    s1.close()
+    s2.close()
+    tc.close()
 
