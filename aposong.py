@@ -17,11 +17,11 @@ import yaml
 import socket
 import subprocess
 
-import guiding
 import logging
+import guiding
 import yaml
 import logging.config
-try:
+try :
     with open('logging.yml', 'rt') as f:
         config = yaml.safe_load(f.read())
     logging.config.dictConfig(config)
@@ -106,7 +106,7 @@ def ascom_init(svrs) :
                 C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
-
+    pdb.set_trace()
     C[0].Magnification=1.33
     print()
     print("All ASCOM commands available through devices: ")
@@ -695,6 +695,33 @@ def foc(val, relative=False) :
     F.Move(val)
     return val
 
+def iodine_tset(val=None) :
+    """ Get/set iodine cell set temperature
+    """
+    if val is not None :
+        remote.send(b'iodine_tset {:d}'.format(val))
+    else :
+        remote.send(b'iodine_tset')
+    tset=remote.recv(64).decode().replace('\r\n','').replace('>','')
+    return tset
+
+def iodine_tact() :
+    """ Get/set iodine cell actual temperature
+    """
+    remote.send(b'iodine_tset {:d}'.format(val))
+    tact=remote.recv(64).decode().replace('\r\n','').replace('>','')
+    return tact
+
+def iodine_position(val=None) :
+    """ Get/set iodine stage position
+    """
+    if val is not None :
+        remote.send(b'iodine_pos {:d}'.format(val))
+    else :
+        remote.send(b'iodine_pos')
+    pos=remote.recv(64).decode().replace('\r\n','').replace('>','')
+    return pos
+
 def domehome() :
     """ Home dome
     """
@@ -860,7 +887,7 @@ def commands() :
 def init() :
     """ Start ascom and pwi connections and pyvista display
     """
-    global disp, dataroot, pwi_srv
+    global disp, dataroot, pwi_srv, remote_srv
     try :
         with open('aposong.yml','r') as config_file :
             config = yaml.safe_load(config_file) 
@@ -884,7 +911,9 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-    print('start_status...')
+    remote_srv = config['devices']['remote_srv']
+    remote_init(remote_srv)
+    #print('start_status...')
     #start_status(updatecamera)
     disp=tv.TV(figsize=(9.5,6))
     commands()
@@ -897,6 +926,12 @@ def pwi_init(pwi_srv) :
         for axis in [0,1] : pwi.mount_enable(axis)
     else :
         pwi = None
+
+remote = None
+def remote_init(svr) :
+    global remote
+    remote=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    remote.connect((svr,65431))     
 
 logger=logging.getLogger(__name__)
 init()
