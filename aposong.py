@@ -908,7 +908,8 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-    remote_srv = config['devices']['remote_srv']
+    try : remote_srv = config['devices']['remote_srv']
+    except : remote_srv = None
     #print('start_status...')
     #start_status(updatecamera)
     disp=tv.TV(figsize=(9.5,6))

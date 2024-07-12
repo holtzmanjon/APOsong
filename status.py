@@ -346,12 +346,11 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 camframe.temperature.set('N/A')
                 camframe.cooler.set('N/A')
 
-            if remote_srv is not None :
-                pos = remote.client(remote_srv,'iodine_pos')
-                iodineframe.position.set(pos)
-                temp = remote.client(remote_srv,'iodine_tact')
-                tset = remote.client(remote_srv,'iodine_tset')
-                iodineframe.temp.set(temp+' / '+tset)
+            pos = remote.client(remote_srv,'iodine_pos')
+            iodineframe.position.set(pos)
+            temp = remote.client(remote_srv,'iodine_tact')
+            tset = remote.client(remote_srv,'iodine_tset')
+            iodineframe.temp.set(temp+' / '+tset)
 
         except : 
             telframe.ut.set('ERROR')
@@ -393,7 +392,8 @@ def init() :
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
     print('start_status...')
-    remote_srv = config['devices']['remote_srv']
+    try: remote_srv = config['devices']['remote_srv']
+    except: remote_srv = None
     if updatecamera :
         status(T=T,F=F,D=D,pwi=pwi,C=C[0])
     else :

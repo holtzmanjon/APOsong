@@ -61,6 +61,7 @@ def server() :
     tc.close()
 
 def client(svr,cmd) :
+    if svr is None : return 'ERROR'
     remote_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     remote_socket.connect((svr,65431))
     remote_socket.send(cmd.encode())
