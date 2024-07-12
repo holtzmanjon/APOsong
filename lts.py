@@ -17,7 +17,7 @@ from Thorlabs.MotionControl.GenericMotorCLI import *
 from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
 from System import Decimal  # necessary for real world units
 
-class Stage() :
+class ThorlabsStage() :
 
     def __init__(self,serial_no="45441684"):
 
