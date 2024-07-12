@@ -8,7 +8,7 @@ from tkinter import ttk
 import tkinter.font
 import numpy as np
 import yaml
-import socket
+import remote
 from numpy.random import randint
 try :
     from alpaca import discovery, management
@@ -74,12 +74,6 @@ def ascom_init(svrs) :
     print('    F : focusser command')
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
-
-remote = None
-def remote_init(svr) :
-    global remote
-    remote=socket.socket(socket.AF_INET, socket.SOCK_STREAM)                                                                                        
-    remote.connect((svr,65431))                                                                                                          
 
 #from coordio import sky, site, time, ICRS
 
@@ -352,14 +346,11 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 camframe.temperature.set('N/A')
                 camframe.cooler.set('N/A')
 
-            if remote is not None :
-                remote.send(b'iodine_pos')
-                pos=remote.recv(64).decode().split()[0].strip('>')
+            if remote_srv is not None :
+                pos = remote.client(remote_srv,'iodine_pos')
                 iodineframe.position.set(pos)
-                remote.send(b'iodine_tact')
-                temp=remote.recv(64).decode().replace('\r\n','').replace('>','')
-                remote.send(b'iodine_tset')
-                tset=remote.recv(64).decode().replace('\r\n','').replace('>','')
+                temp = remote.client(remote_srv,'iodine_tact')
+                tset = remote.client(remote_srv,'iodine_tset')
                 iodineframe.temp.set(temp+' / '+tset)
 
         except : 
@@ -403,7 +394,6 @@ def init() :
     pwi_init(pwi_srv)
     print('start_status...')
     remote_srv = config['devices']['remote_srv']
-    remote_init(remote_srv)
     if updatecamera :
         status(T=T,F=F,D=D,pwi=pwi,C=C[0])
     else :

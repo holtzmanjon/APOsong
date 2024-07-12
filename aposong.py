@@ -14,7 +14,7 @@ from datetime import datetime
 import multiprocessing as mp
 import threading
 import yaml
-import socket
+import remote
 import subprocess
 
 import logging
@@ -106,7 +106,7 @@ def ascom_init(svrs) :
                 C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
-    pdb.set_trace()
+
     C[0].Magnification=1.33
     print()
     print("All ASCOM commands available through devices: ")
@@ -699,27 +699,24 @@ def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
     """
     if val is not None :
-        remote.send(b'iodine_tset {:d}'.format(val))
+        tset = remote.client(remote_srv,'iodine_tset {:d}'.format(val*10))
     else :
-        remote.send(b'iodine_tset')
-    tset=remote.recv(64).decode().replace('\r\n','').replace('>','')
+        tset = remote.client(remote_srv,'iodine_tset')
     return tset
 
 def iodine_tact() :
     """ Get/set iodine cell actual temperature
     """
-    remote.send(b'iodine_tset {:d}'.format(val))
-    tact=remote.recv(64).decode().replace('\r\n','').replace('>','')
+    tact = remote.client(remote_srv,'iodine_tact')
     return tact
 
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
     if val is not None :
-        remote.send(b'iodine_pos {:d}'.format(val))
+        pos = remote.client(remote_srv,'iodine_pos {:d}'.format(val))
     else :
-        remote.send(b'iodine_pos')
-    pos=remote.recv(64).decode().replace('\r\n','').replace('>','')
+        pos = remote.client(remote_srv,'iodine_pos')
     return pos
 
 def domehome() :
@@ -912,7 +909,6 @@ def init() :
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
     remote_srv = config['devices']['remote_srv']
-    remote_init(remote_srv)
     #print('start_status...')
     #start_status(updatecamera)
     disp=tv.TV(figsize=(9.5,6))
@@ -926,12 +922,6 @@ def pwi_init(pwi_srv) :
         for axis in [0,1] : pwi.mount_enable(axis)
     else :
         pwi = None
-
-remote = None
-def remote_init(svr) :
-    global remote
-    remote=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    remote.connect((svr,65431))     
 
 logger=logging.getLogger(__name__)
 init()
