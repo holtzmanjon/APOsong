@@ -41,9 +41,9 @@ def remote() :
                 conn.sendall(str(s2.get_position()).encode())
             elif cmd == 'iodine_tset' :
                 if len(val) > 0 :
-                    tc.write(b'TSET1={:d}\r'.format(val))
+                    tc.write('TSET1={:d}\r'.format(val).encode())
                     tc.readline()
-                    tc.write(b'TSET2={:d}\r'.format(val))
+                    tc.write('TSET2={:d}\r'.format(val).encode())
                     tc.readline()
                 tc.write(b'TSET1?\r')
                 conn.sendall(tc.readline())
