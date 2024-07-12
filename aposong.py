@@ -107,7 +107,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
-    C[0].Magnification=1.5
+    C[0].Magnification=1.33
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -677,7 +677,7 @@ def park() :
     """
     domesync(False)
     try: T.Park()
-    except: logger.exception('telescope.Park raised an exception')
+    except: logger.error('telescope.Park raised an exception')
     D.Park()
 
 def foc(val, relative=False) :
@@ -731,6 +731,8 @@ def mirror_covers(open=False) :
         Covers.OpenCover()
     elif not open and current != 1 :
         Covers.CloseCover()
+        logger.info('waiting 20 seconds for mirror covers to close...')
+        time.sleep(20)
 
 def louvers(open=False) :
     """ Open louvers
@@ -768,8 +770,6 @@ def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     if fans : fans_off()
     if covers : 
         mirror_covers(False)
-        logger.info('waiting 20 seconds for mirror covers to close...')
-        time.sleep(20)
     if dome : 
         # don't wait for mirror covers to report closed, in case they don't!
         park()

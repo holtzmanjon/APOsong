@@ -32,7 +32,7 @@ handlers:
 
 root:
     level: INFO
-    handlers: [console,hourly,daily]
+    handlers: [console,daily]
 
 loggers:
   <module>:

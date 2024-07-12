@@ -293,6 +293,10 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
         try :
+            # if dome has been closed by 3.5m but can now be opened again, do it
+            if safety.issafe() and aposong.D.ShutterStatus != 0 :
+                logger.info('reopening dome')
+                aposong.domeopen()
             logger.info('waiting for nautical twilight: {:.3f}'.format(
                         (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
             time.sleep(60)
@@ -323,14 +327,14 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
             aposong.guide(False)
-            foc=focus(foc0=foc0,display=display)
+            foc0=focus(foc0=foc0,display=display)
             foctime=tnow
         else :
-            best=getbest(criterion=criterion,maxdec=maxdec)
+            best=getbest(criterion=criterion,maxdec=maxdec,skip=skiptarg)
             if best is None :
                 time.sleep(60)
             else :
-                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),skip=skiptarg)
+                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
                 # if object failed, skip it for the next selection, but can try again after that
                 if success : 
                     oldtarg=best['targname'] 
@@ -352,7 +356,7 @@ def focus(foc0=28800,display=None) :
     t=Time.now()
     t.location=EarthLocation.of_site('APO')
     lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=3*u.degree)
+    aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
 
     f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-150 or f>foc0+150 :
