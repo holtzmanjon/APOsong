@@ -354,10 +354,10 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
 
             if remote is not None :
                 remote.send(b'iodine_pos')
-                pos=remote.recv(64).decode().split()[0]
+                pos=remote.recv(64).decode().split()[0].strip('>')
                 iodineframe.position.set(pos)
                 remote.send(b'iodine_temp')
-                temp=remote.recv(64).decode().split()[0]
+                temp=remote.recv(64).decode().split()[0].strip('>')
                 iodineframe.temp.set(temp)
 
         except : 

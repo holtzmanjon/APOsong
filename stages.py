@@ -39,14 +39,21 @@ def remote() :
                 if len(val) > 0 :
                     s2.move(int(val))
                 conn.sendall(str(s2.get_position()).encode())
-            elif cmd == 'iodine_temp' :
+            elif cmd == 'iodine_tset' :
                 if len(val) > 0 :
-                    tc.write(b'TSET1=140\r')
+                    tc.write(b'TSET1={:d}\r'.format(val))
                     tc.readline()
-                    tc.write(b'TSET2=140\r')
+                    tc.write(b'TSET2={:d}\r'.format(val))
                     tc.readline()
-                tc.write(b'TACT1?\r')
+                tc.write(b'TSET1?\r')
                 conn.sendall(tc.readline())
+            elif cmd == 'iodine_tact' :
+                if len(val) > 0 :
+                    tc.write(b'TACT1\r')
+                    t1=tc.readline()
+                    tc.write(b'TACT2\r')
+                    t2=tc.readline()
+                conn.sendall(t1+b' '+t2)
     s1.close()
     s2.close()
     tc.close()
