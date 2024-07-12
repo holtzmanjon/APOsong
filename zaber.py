@@ -29,4 +29,4 @@ class ZaberStage() :
         return self.axis.get_position(Units.LENGTH_MILLIMETRES)
 
     def close(self) :
-        close(self.connection)
+        self.connection.close()

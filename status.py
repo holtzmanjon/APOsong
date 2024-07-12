@@ -1,4 +1,4 @@
-#import tkthread
+import tkthread
 #tkthread.patch()
 #tkthread.tkinstall(ensure_root=True)
 
@@ -8,6 +8,7 @@ from tkinter import ttk
 import tkinter.font
 import numpy as np
 import yaml
+import socket
 from numpy.random import randint
 try :
     from alpaca import discovery, management
@@ -74,6 +75,11 @@ def ascom_init(svrs) :
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
 
+remote = None
+def remote_init(svr) :
+    global remote
+    remote=socket.socket(socket.AF_INET, socket.SOCK_STREAM)                                                                                        
+    remote.connect((svr,65431))                                                                                                          
 
 #from coordio import sky, site, time, ICRS
 
@@ -183,6 +189,19 @@ class CameraWgt(ttk.Frame) :
         self.cooler = StringVar()
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
+class IodineWgt(ttk.Frame) :
+
+    def __init__(self,container) :
+        super().__init__(container) 
+
+        ttk.Label(self,text="IODINE STAGE",width=16).grid(column=1,row=1,sticky=(W))
+        self.position = StringVar()
+        ttk.Label(self, textvariable=self.position).grid(column=2,row=1,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="IODINE TEMP",width=16).grid(column=3,row=1,sticky=(W))
+        self.temp = StringVar()
+        ttk.Label(self, textvariable=self.temp).grid(column=4,row=1,sticky=(W,E),padx=10)
+
 
 def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     """ Start status window and updater
@@ -218,6 +237,12 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
 
     camframe=CameraWgt(mainframe)
     camframe.grid(column=1,row=5,stick=(W))
+
+    line=ttk.Separator(mainframe,orient='horizontal')
+    line.grid(column=1,row=6,stick=(E,W))
+
+    iodineframe=IodineWgt(mainframe)
+    iodineframe.grid(column=1,row=7,stick=(W))
 
     for child in mainframe.winfo_children(): 
         child.grid_configure(padx=5, pady=5)
@@ -326,6 +351,15 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 camframe.state.set('N/A')
                 camframe.temperature.set('N/A')
                 camframe.cooler.set('N/A')
+
+            if remote is not None :
+                remote.send(b'iodine_pos')
+                pos=remote.recv(64).decode().split()[0]
+                iodineframe.position.set(pos)
+                remote.send(b'iodine_temp')
+                temp=remote.recv(64).decode().split()[0]
+                iodineframe.temp.set(temp)
+
         except : 
             telframe.ut.set('ERROR')
 
@@ -342,7 +376,7 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
 def init() :
     """ Start ascom and pwi connections 
     """
-    global pwi_srv
+    global pwi_srv, remote_srv
     try :
         with open('aposong.yml','r') as config_file :
             config = yaml.safe_load(config_file)
@@ -366,6 +400,8 @@ def init() :
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
     print('start_status...')
+    remote_srv = config['devices']['remote_srv']
+    remote_init(remote_srv)
     if updatecamera :
         status(T=T,F=F,D=D,pwi=pwi,C=C[0])
     else :
