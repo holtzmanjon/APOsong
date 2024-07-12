@@ -356,9 +356,11 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 remote.send(b'iodine_pos')
                 pos=remote.recv(64).decode().split()[0].strip('>')
                 iodineframe.position.set(pos)
-                remote.send(b'iodine_temp')
-                temp=remote.recv(64).decode().split()[0].strip('>')
-                iodineframe.temp.set(temp)
+                remote.send(b'iodine_tact')
+                temp=remote.recv(64).decode().replace('\r\n','').replace('>','')
+                remote.send(b'iodine_tset')
+                tset=remote.recv(64).decode().replace('\r\n','').replace('>','')
+                iodineframe.temp.set(temp+' / '+tset)
 
         except : 
             telframe.ut.set('ERROR')
