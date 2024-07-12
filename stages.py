@@ -48,11 +48,10 @@ def remote() :
                 tc.write(b'TSET1?\r')
                 conn.sendall(tc.readline())
             elif cmd == 'iodine_tact' :
-                if len(val) > 0 :
-                    tc.write(b'TACT1\r')
-                    t1=tc.readline()
-                    tc.write(b'TACT2\r')
-                    t2=tc.readline()
+                tc.write(b'TACT1?\r')
+                t1=tc.readline()
+                tc.write(b'TACT2?\r')
+                t2=tc.readline()
                 conn.sendall(t1+b' '+t2)
     s1.close()
     s2.close()
