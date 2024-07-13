@@ -704,7 +704,7 @@ def iodine_tset(val=None) :
         tset = remote.client(remote_srv,'iodine_tset')
     return tset
 
-def iodine_tact() :
+def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
     tact = remote.client(remote_srv,'iodine_tact')
@@ -874,6 +874,11 @@ def commands() :
     print("  focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions")
     print("  settemp(temp): set camera temperature set point")
     print("  cooler(state): set camera cooler state on (True) or off (False)")
+    print()
+    print("Iodine commands")
+    print("  iodine_position([val]) : get or set (with val) iodine stage position
+    print("  iodine_tset(val) : set iodine temperature (both channels)
+    print("  iodine_tget(): get actual iodine temperatures")
     print()
     print("Status commands")
     print("  start_status(): start status window")
