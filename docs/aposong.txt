@@ -7,12 +7,14 @@ Introduction
 aposong provides a Python interface to the observing system for the SONG node at Apache
 Point Observatory. It communicates with devices attached to other computers on the
 internal APO network: the Planewave 1m telescope, the Planewave mirror covers,
-the focal plane camera on the telescope, the dome, a safety monitor that checks
+the focal plane unit and camera on the telescope, the dome, a safety monitor that checks
 status of other telescopes on site, and, eventually, a spectrograph camera.
 
 Communication with these devices is achieved, for the most part, using the
 ASCOM/Alpaca protocol, although a few more specialized commands are communicated
-through non-standard interfaces. 
+through non-standard interfaces. Control of the iodine cell, both the stage
+position and the temperature control are achieved through a simple socket
+interface.
 
 The main module, aposong, opens up an Alpaca device for each of the devices. It
 provides routines for many basic observatory tasks, e.g., opening and closing,
