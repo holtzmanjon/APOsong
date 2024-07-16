@@ -12,7 +12,7 @@ try :
     from serial import Serial
 except : 
     print('no serial')
-    serial = None
+    Serial = None
 import socket
 
 HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
@@ -30,7 +30,7 @@ def server() :
       zaber_stage=zaber.ZaberStage()
   else :
       zaber_stage = None
-  if serial is not None :
+  if Serial is not None :
       tc300=Serial('COM3',115200,timeout=1)
   else :
       tc300 = None
