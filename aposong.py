@@ -876,8 +876,8 @@ def commands() :
     print("  cooler(state): set camera cooler state on (True) or off (False)")
     print()
     print("Iodine commands")
-    print("  iodine_position([val]) : get or set (with val) iodine stage position
-    print("  iodine_tset(val) : set iodine temperature (both channels)
+    print("  iodine_position([val]) : get or set (with val) iodine stage position")
+    print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
     print()
     print("Status commands")
