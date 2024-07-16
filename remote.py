@@ -1,9 +1,18 @@
-try : import lts
-except : print('no lts')
-try :import zaber
-except : print('no zaber')
-try :from serial import Serial
-except : print('no serial')
+try : 
+    import lts
+except : 
+    print('no lts')
+    lts = None
+try :
+    import zaber
+except : 
+    print('no zaber')
+    zaber = None
+try :
+    from serial import Serial
+except : 
+    print('no serial')
+    serial = None
 import socket
 
 HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
@@ -13,9 +22,18 @@ PORT = 65431  # Port to listen on (non-privileged ports are > 1023)
 def server() :
   """ Run simple remote socket server 
   """
-  s1=lts.ThorlabsStage()
-  s2=zaber.ZaberStage()
-  tc=Serial('COM3',115200,timeout=1)
+  if lts is not None :
+      lts_stage=lts.ThorlabsStage()
+  else :
+      lts_stage = None
+  if zaber is not None :
+      zaber_stage=zaber.ZaberStage()
+  else :
+      zaber_stage = None
+  if serial is not None :
+      tc300=Serial('COM3',115200,timeout=1)
+  else :
+      tc300 = None
 
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
@@ -31,34 +49,42 @@ def server() :
                 break
             print('received: ', data)
             input = data.decode()
-            cmd = input.split()[0]
-            try: val = input.split()[1]
+            device = input.split()[0]
+            cmd = input.split()[1]
+            try: val = input.split()[2]
             except : val = ''
-            if cmd == 'iodine_pos' :
-                if len(val) > 0 :
-                    s1.move(int(val))
-                conn.sendall(str(s1.get_position()).encode())
-            elif cmd == 'focus' :
-                if len(val) > 0 :
-                    s2.move(int(val))
-                conn.sendall(str(s2.get_position()).encode())
-            elif cmd == 'iodine_tset' :
-                if len(val) > 0 :
-                    tc.write('TSET1={:s}\r'.format(val).encode())
-                    tc.readline()
-                    tc.write('TSET2={:s}\r'.format(val).encode())
-                    tc.readline()
-                tc.write(b'TSET1?\r')
-                conn.sendall(tc.readline())
-            elif cmd == 'iodine_tact' :
-                tc.write(b'TACT1?\r')
-                t1=tc.readline()
-                tc.write(b'TACT2?\r')
-                t2=tc.readline()
-                conn.sendall(t1+b' '+t2)
-    s1.close()
-    s2.close()
-    tc.close()
+            if device == 'lts' :
+                if lts is None : 
+                    conn.sendall(b'Error')
+                elif cmd == 'position' :
+                    if len(val) > 0 :
+                        lts_stage.move(int(val))
+                    conn.sendall(str(lts_stage.get_position()).encode())
+            elif device == 'zaber' :
+                if zaber is None : 
+                    conn.sendall(b'Error')
+                if cmd == 'position' :
+                    if len(val) > 0 :
+                        zaber_stage.move(int(val))
+                conn.sendall(str(zaber_stage.get_position()).encode())
+            elif device == 'tc300' :
+                if cmd == 'tset' :
+                    if len(val) > 0 :
+                        tc300.write('TSET1={:s}\r'.format(val).encode())
+                        tc300.readline()
+                        tc300.write('TSET2={:s}\r'.format(val).encode())
+                        tc300.readline()
+                    tc300.write(b'TSET1?\r')
+                    conn.sendall(tc300.readline())
+                elif cmd == 'tact' :
+                    tc300.write(b'TACT1?\r')
+                    t1=tc300.readline()
+                    tc300.write(b'TACT2?\r')
+                    t2=tc300.readline()
+                    conn.sendall(t1+b' '+t2)
+    if lts_stage is not None : lts_stage.close()
+    if zaber_stage is not None : zaber_stage.close()
+    if tc300 is not None : tc300.close()
 
 def client(svr,cmd) :
     if svr is None : return 'ERROR'
