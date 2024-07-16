@@ -1,0 +1,9 @@
+status module
+**************
+
+Module functions
+++++++++++++++++
+.. automodule:: status
+   :members:
+   :member-order: bysource
+

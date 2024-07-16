@@ -34,6 +34,9 @@ and camera(s), and also open a pyvista display window into which images can
 be automatically displayed as they are obtained. Otherwise, you get a normal
 python interface, but with a set of observatory commands now defined.
 
+Commands
+++++++++
+
 Information about individual commands and parameters is best obtained through
 the docstrings, available below or using interactive help when running the
 Python interface, but a summary of commands is:
@@ -61,6 +64,19 @@ Camera commands :
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
 
+Focal plane unit commands :
+  - iodine_position([val]) : get or set (with val) iodine stage position
+  - iodine_tset(val) : set iodine temperature (both channels)
+  - iodine_tget(): get actual iodine temperatures
+
+
+Configuration
++++++++++++++
+
+Some basic configuration is done using the aposong.yml file. This file configures
+the IP addresses for the ASCOM Remote servers, the PWI4 server, and the APOSong
+remote server that passes commands through a simple socket interface to some
+of the custom devices.
 
 Module functions
 ++++++++++++++++

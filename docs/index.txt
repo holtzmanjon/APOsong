@@ -12,6 +12,8 @@ Welcome to APOsong's documentation!
 
    aposong
    robotic
+   remote
+   status
 
 
 Indices and tables

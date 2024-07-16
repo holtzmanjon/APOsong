@@ -1,0 +1,9 @@
+remote module
+**************
+
+Module functions
+++++++++++++++++
+.. automodule:: remote
+   :members:
+   :member-order: bysource
+
