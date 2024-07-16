@@ -699,24 +699,24 @@ def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
     """
     if val is not None :
-        tset = remote.client(remote_srv,'iodine_tset {:d}'.format(val*10))
+        tset = remote.client(remote_srv,'tc300 tset {:d}'.format(val*10))
     else :
-        tset = remote.client(remote_srv,'iodine_tset')
+        tset = remote.client(remote_srv,'tc300 tset')
     return tset
 
 def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
-    tact = remote.client(remote_srv,'iodine_tact')
+    tact = remote.client(remote_srv,'tc300 tact')
     return tact
 
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
     if val is not None :
-        pos = remote.client(remote_srv,'iodine_pos {:d}'.format(val))
+        pos = remote.client(remote_srv,'lts position {:d}'.format(val))
     else :
-        pos = remote.client(remote_srv,'iodine_pos')
+        pos = remote.client(remote_srv,'lts position')
     return pos
 
 def domehome() :
