@@ -8,8 +8,7 @@ devices :
 
   pwi_srv : 10.75.0.220
 #  pwi_srv : 
-
-  remote_srv : 172.24.4.202
+  remote_srv : 10.75.0.220
 
 dataroot : /data/1m
 updatecamera : False

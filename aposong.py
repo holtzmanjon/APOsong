@@ -115,7 +115,15 @@ def ascom_init(svrs) :
     print('    F : focusser command')
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
- 
+
+def getcam(camera) :
+    """ Get correct list index for specified camera (ASCOM doesn't always deliver them in order!)
+    """
+    for index,c in enumerate(C) :
+        if c.device_number == camera : 
+            return index 
+    print('no such camera!')
+    return -1
 
 # Camera commands
 def qck(exptime,filt='current') :
@@ -160,28 +168,29 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         filt = Filt.Names[Filt.Position]
 
     try :
-        C[cam].BinX=bin
-        C[cam].BinY=bin
+        icam = getcam(cam) 
+        C[icam].BinX=bin
+        C[icam].BinY=bin
         if box is not None :
-            C[cam].StartX = box.xmin
-            C[cam].StartY = box.ymin
+            C[icam].StartX = box.xmin
+            C[icam].StartY = box.ymin
             nx = box.ncol()
             ny = box.nrow()
         else :
-            C[cam].StartX = 0
-            C[cam].StartY = 0
-            nx = C[cam].CameraXSize//bin
-            ny = C[cam].CameraYSize//bin
-        C[cam].NumX = nx
-        C[cam].NumY = ny
+            C[icam].StartX = 0
+            C[icam].StartY = 0
+            nx = C[icam].CameraXSize//bin
+            ny = C[icam].CameraYSize//bin
+        C[icam].NumX = nx
+        C[icam].NumY = ny
         t = Time.now()
-        C[cam].StartExposure(exptime,light)
+        C[icam].StartExposure(exptime,light)
         for i in range(int(exptime),0,-1) :
             print('{:<4d}'.format(i),end='\r')
             time.sleep(0.99)
-        while not C[cam].ImageReady or C[cam].CameraState != 0:
+        while not C[icam].ImageReady or C[icam].CameraState != 0:
             time.sleep(1.0)
-        data = np.array(C[cam].ImageArray).T
+        data = np.array(C[icam].ImageArray).T
     except :
         logger.exception('ERROR : exposure failed')
         return exposure
@@ -197,7 +206,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['EXPTIME'] = exptime 
     hdu.header['FILTER'] = filt 
     try : 
-        hdu.header['FOCUS'] = F.Position
+        hdu.header['FOCUS'] = getfoc()
     except : pass
     try :
         stat = pwi.status()
@@ -208,9 +217,9 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         hdu.header['ROT'] = stat.rotator.mech_position_degs
         hdu.header['TELESCOP'] = 'APO SONG 1m'
     except : pass
-    hdu.header['CCD-TEMP'] = C[cam].CCDTemperature
-    hdu.header['XBINNING'] = C[cam].BinX
-    hdu.header['YBINNING'] = C[cam].BinY
+    hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
+    hdu.header['XBINNING'] = C[icam].BinX
+    hdu.header['YBINNING'] = C[icam].BinY
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
 
@@ -252,13 +261,15 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 def settemp(temp,cam=0) :
     """ Change detector temperature set point and turn cooler on
     """
-    C[cam].SetCCDTemperature = temp
-    C[cam].CoolerOn = True
+    icam=getcam(cam)
+    C[icam].SetCCDTemperature = temp
+    C[icam].CoolerOn = True
 
 def cooler(state=True,cam=0) :
     """ Set detector cooler state on/off
     """
-    C[cam].CoolerOn = state
+    icam=getcam(cam)
+    C[icam].CoolerOn = state
 
 def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            max=30000, thresh=25,cam=0) :
@@ -288,13 +299,13 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            List of file names taken for focus run
     """
 
-    foc0=F.Position
+    foc0=getfoc()
     files=[]
     names=[]
     images=[]
     focvals= np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))
     for i,focval in enumerate(focvals) :
-        F.Move(int(focval))
+        foc(int(focval))
         if i==0 : time.sleep(5)
         while True :
             try :
@@ -304,7 +315,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
                 logger.exception('error with F.IsMoving')
             time.sleep(2)
         
-        logger.info('position: {:d} {}'.format(F.Position,moving))
+        logger.info('position: {:d} {}'.format(getfoc(),moving))
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
@@ -357,8 +368,9 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
 def pixscale(cam=0,bin=1) :
     """ Return pixscale for desired camera
     """
-    scale=206265/6000*C[cam].PixelSizeX*1.e-3*bin
-    try: scale /= C[cam].Magnification
+    icam=getcam(cam)
+    scale=206265/6000*C[icam].PixelSizeX*1.e-3*bin
+    try: scale /= C[icam].Magnification
     except: pass
     return scale
 
@@ -465,7 +477,7 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
     k,x,y=disp.tvmark()
     if x0 is None : x0=C[0].NumX//2
     if y0 is None : y0=C[0].NumY//2
-    offsetxy((x-x0),(y-y0),scale=pixscale())
+    offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
     time.sleep(settle)
 
 def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
@@ -590,7 +602,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
         guide_process = None
 
 
-def offsetxy(dx,dy,sign=-1,scale=0.16) :
+def offsetxy(dx,dy,sign=-1,scale=0.16,pa=None) :
     """
     Offset in detector coordinates
     """
@@ -650,16 +662,20 @@ def j2000totopocentric(ra,dec) :
     #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
 
 def rotator() :
-    """ Get current rotator angle, both from parallactic and telescope status
+    """ Get current rotator position angle, from parallactic angle and altitude for port 2  and telescope status for port 1
     """
-    #t=Time.now()
-    #t.location=EarthLocation.of_site('APO')
-    #lst=t.sidereal_time('mean').value
-    #ha = lst - T.RightAscension
-    #pa = skycalc.pa(ha,T.Declination,'APO')
-    stat=pwi.status()
-    inst = stat.rotator.mech_position_degs
-    pa = stat.rotator.field_angle_degs
+    stat = pwi.status()
+    if stat.m3.port == 2 :
+        t=Time.now()
+        t.location=EarthLocation.of_site('APO')
+        lst=t.sidereal_time('mean').value
+        ha = lst - T.RightAscension
+        pa = skycalc.pa(ha,T.Declination,'APO')-T.Altitude+100
+        print('calculated parallactic angle: ',pa)
+    else :
+        inst = stat.rotator.mech_position_degs
+        pa = stat.rotator.field_angle_degs
+
     return pa 
 
 def tracking(tracking) :
@@ -681,7 +697,25 @@ def park() :
     D.Park()
 
 def foc(val, relative=False) :
-    """ Change focus, absolute (default) or relative
+    """ Change focus, depending on port
+    """
+    stat = pwi.status()
+    if stat.m3.port == 1 :
+        pfoc(val, relative=relative)
+    else :
+        zfoc(val, relative=relative)
+
+def getfoc() :
+    """ Get focus, depending on port
+    """
+    stat = pwi.status()
+    if stat.m3.port == 1 :
+        return F.Position
+    else :
+        return zfoc()
+
+def pfoc(val, relative=False) :
+    """ Change Planewave port 1 focus, absolute (default) or relative
 
     Parameters
     ----------
@@ -695,12 +729,14 @@ def foc(val, relative=False) :
     F.Move(val)
     return val
 
-def zfoc(val, relative=False) :
+def zfoc(val=None, relative=False) :
     """ Change camera focus, absolute (default) or relative
     """
+    if val is None :
+        return remote.client(remote_srv,'zaber position') 
     if relative :
         val += remote.client(remote_srv,'zaber position') 
-    val = remote.client(remote_srv,'zaber position {:d}'.format(val)) 
+    val = remote.client(remote_srv,'zaber position {:f}'.format(val/1000.)) 
     return val
 
 def iodine_tset(val=None) :
@@ -718,11 +754,21 @@ def iodine_tget() :
     tact = remote.client(remote_srv,'tc300 tact')
     return tact
 
+def iodine_in(val=21.) :
+    """ Move iodine cell into beam
+    """
+    iodine_position(val)
+
+def iodine_out(val=141.) :
+    """ Move iodine cell out of beam
+    """
+    iodine_position(val)
+
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
     if val is not None :
-        pos = remote.client(remote_srv,'lts position {:d}'.format(val))
+        pos = remote.client(remote_srv,'lts position {:f}'.format(val))
     else :
         pos = remote.client(remote_srv,'lts position')
     return pos
@@ -746,8 +792,15 @@ def fans_on(roles=None):
     pwi.fans_on(roles)
 
 def fans_off(roles=None):
+    """ Turn off PWI fans
+    """
     logger.info("Turning fans off ...")
     pwi.fans_off(roles)
+
+def port(port) :
+    """ Change PWI M3 port
+    """
+    pwi.m3_goto(port)
 
 def mirror_covers(open=False) :
     """ Open/close mirror covers
@@ -875,6 +928,7 @@ def commands() :
     print("  foc(focus) : set focus to specified value")
     print("  tracking(True|False): turn tracking on/off")
     print("  mirror_covers(True|False): control mirror covers")
+    print("  port(port): move tertiary to requested port")
     print("  park(): park telescope and dome")
     print()
     print("Camera commands")
@@ -884,6 +938,8 @@ def commands() :
     print("  cooler(state): set camera cooler state on (True) or off (False)")
     print()
     print("Iodine commands")
+    print("  iodine_in : move iodine cell into beam")
+    print("  iodine_out : move iodine cell out of beam")
     print("  iodine_position([val]) : get or set (with val) iodine stage position")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")

@@ -130,6 +130,10 @@ class TelescopeWgt(ttk.Frame) :
         self.focus = StringVar()
         ttk.Label(self, textvariable=self.focus).grid(column=4,row=row,sticky=(E),padx=15) 
 
+        ttk.Label(self,text="PORT").grid(column=5,row=row,sticky=(W))
+        self.port = StringVar()
+        ttk.Label(self, textvariable=self.port).grid(column=6,row=row,sticky=(E),padx=15) 
+
 
 class DomeWgt(ttk.Frame) :
 
@@ -261,6 +265,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
+            if pwi is not None :
+                stat = pwi.status()
 
             if T is None and pwi is None :
                 telframe.ra.set('N/A')
@@ -280,9 +286,9 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
                 #telframe.dec.set('{:f}'.format(icrs[0][1]))
                 else :
-                    stat = pwi.status()
                     ra = stat.mount.ra_j2000_hours
                     dec = stat.mount.dec_j2000_degs
+                    telframe.port.set('{:d}'.format(stat.m3.port))
                 c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
                 radec=c.to_string('hmsdms',sep=':',precision=1) 
                 ras=radec.split()[0]
@@ -306,7 +312,14 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 telframe.rot.set('missing')
                 telframe.pa.set('missing')
 
-            if F is not None :
+            if pwi is not None :
+                port = stat.m3.port
+                if port == 1 :
+                    telframe.focus.set('{:d}'.format(F.Position))
+                else :
+                    foc = int(1000*float(remote.client(remote_srv,'zaber position')))
+                    telframe.focus.set('{:d}'.format(foc))
+            elif F is not None :
                 telframe.focus.set('{:d}'.format(F.Position))
             else :
                 telframe.focus.set('N/A')
