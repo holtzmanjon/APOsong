@@ -695,6 +695,14 @@ def foc(val, relative=False) :
     F.Move(val)
     return val
 
+def zfoc(val, relative=False) :
+    """ Change camera focus, absolute (default) or relative
+    """
+    if relative :
+        val += remote.client(remote_srv,'zaber position') 
+    val = remote.client(remote_srv,'zaber position {:d}'.format(val)) 
+    return val
+
 def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
     """
