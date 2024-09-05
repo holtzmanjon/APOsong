@@ -15,8 +15,8 @@ except :
     Serial = None
 import socket
 
-HOST = "10.75.0.202"  # Standard loopback interface address (localhost)
-HOST = "172.24.4.202"  # Standard loopback interface address (localhost)
+HOST = "10.75.0.220"  # Standard loopback interface address (localhost)
+#HOST = "172.24.4.202"  # Standard loopback interface address (localhost)
 PORT = 65431  # Port to listen on (non-privileged ports are > 1023)
 
 def server() :
@@ -27,11 +27,11 @@ def server() :
   else :
       lts_stage = None
   if zaber is not None :
-      zaber_stage=zaber.ZaberStage()
+      zaber_stage=zaber.ZaberStage(port='COM6')
   else :
       zaber_stage = None
   if Serial is not None :
-      tc300=Serial('COM3',115200,timeout=1)
+      tc300=Serial('COM7',115200,timeout=1)
   else :
       tc300 = None
 
@@ -58,21 +58,25 @@ def server() :
                     conn.sendall(b'Error')
                 elif cmd == 'position' :
                     if len(val) > 0 :
-                        lts_stage.move(int(val))
+                        lts_stage.move(float(val))
                     conn.sendall(str(lts_stage.get_position()).encode())
             elif device == 'zaber' :
                 if zaber is None : 
                     conn.sendall(b'Error')
                 if cmd == 'position' :
                     if len(val) > 0 :
-                        zaber_stage.move(int(val))
+                        zaber_stage.move(float(val))
                 conn.sendall(str(zaber_stage.get_position()).encode())
             elif device == 'tc300' :
                 if cmd == 'tset' :
                     if len(val) > 0 :
                         tc300.write('TSET1={:s}\r'.format(val).encode())
                         tc300.readline()
+                        tc300.write('EN1=1\r'.encode())
+                        tc300.readline()
                         tc300.write('TSET2={:s}\r'.format(val).encode())
+                        tc300.readline()
+                        tc300.write('EN2=1\r'.encode())
                         tc300.readline()
                     tc300.write(b'TSET1?\r')
                     conn.sendall(tc300.readline())
