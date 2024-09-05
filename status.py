@@ -346,10 +346,10 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 camframe.temperature.set('N/A')
                 camframe.cooler.set('N/A')
 
-            pos = remote.client(remote_srv,'iodine_pos')
+            pos = remote.client(remote_srv,'lts position')
             iodineframe.position.set(pos)
-            temp = remote.client(remote_srv,'iodine_tact')
-            tset = remote.client(remote_srv,'iodine_tset')
+            temp = remote.client(remote_srv,'tc300 tact')
+            tset = remote.client(remote_srv,'tc300 tset')
             iodineframe.temp.set(temp+' / '+tset)
 
         except : 
