@@ -5,7 +5,10 @@ import sys, getopt
 from serial import Serial
 from time import sleep
 
-import aposong
+try: import aposong
+except :
+    print("failed to import aposong, can't use cals()")
+    pass
 
 HOST = "10.75.0.22"  # Standard loopback interface address (localhost)
 PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
