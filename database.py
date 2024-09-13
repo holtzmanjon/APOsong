@@ -183,7 +183,6 @@ class DBSession(object):
                 return data
 
             # Get numpy data types
-            pdb.set_trace()
             d2d = {'smallint':int, 'integer':int, 'bigint':int, 'real':np.float32, 'double precision':np.float64,
                    'text':(str,200),'char':(str,5),'timestamp':(str,50), 'timestamp with time zone':(str,50),
                    'timestamp without time zone':(str,50),'boolean':bool}
