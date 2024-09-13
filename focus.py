@@ -1,14 +1,16 @@
 import glob
+import os
 import numpy as np
 from astropy.io import fits
 from pyvista import centroid, stars, tv
+import matplotlib
 import matplotlib.pyplot as plt
 import pdb
 from photutils.detection import find_peaks
 from photutils import DAOStarFinder
-from holtztools import plots
+from holtztools import plots, html
 import time
-
+import database
 import logging
 import yaml
 import logging.config
@@ -21,8 +23,8 @@ logging.config.dictConfig(config)
 logger=logging.getLogger(__name__)
 
 
-def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12], 
-          pixscale=0.5, display=None, plot=False,max=max,red=None) :
+def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12], 
+          pixscale=0.5, display=None, plot=False,max=None,red=None, root='',hard=False) :
     """ Get best focus position from a set of focus run images
 
         For each image, find stars and do concentric aperture photometry to 
@@ -42,9 +44,9 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
     for ifile,file in enumerate(files) :
         # read file and get focus value
         if red is None :
-            a=fits.open(file)[0]
+            a=fits.open(root+file)[0]
         else :
-            a=red.rd(file)
+            a=red.rd(root+file)
         im=a.data.astype(float)
         foc[ifile]=a.header['FOCUS']
         logger.info('focus: {:s} {:f}'.format(file,foc[ifile]))
@@ -153,7 +155,8 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         # plot and/or display
         if plot :
             fig2,ax2 = plots.multi(1,1)
-            plots.plotp(ax2,foc[gd],hfmed[gd],xt='Focus',yt='R(half total)',size=50)
+            plots.plotp(ax2,foc[gd],hfmed[gd]*2*pixscale,xt='Focus',yt='R(half total)',size=50)
+            ax2.set_title('{:s} {:s}'.format(files[0],a.header['DATE-OBS']))
         if display is not None :
             plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale*2,
                         xt='Focus',yt='R(half total)',size=50)
@@ -165,10 +168,43 @@ def focus(files, apers=np.arange(0.3,4,0.2), thresh=100, fwhm=2, skyrad=[8,12],
         raise Exception('focus run failed')
 
     if plot :
-        print('Hit RETURN key to close plot windows and continue: ')
-        inp=input()
+        if hard :
+            fig2.savefig(root+files[0].replace('.fits','.png'))
+        else :
+            print('Hit RETURN key to close plot windows and continue: ')
+            inp=input()
         plt.close(fig)
         plt.close(fig2)
 
     return bestfitfoc, bestfithf,  bestfoc, besthf
     # return best fit values and minimum values
+
+def mkplots(mjd,display=None,root='/data/1m/') :
+
+    matplotlib.use('Agg')
+    d=database.DBSession()
+    out=d.query('obs.focus',fmt='list')
+    i =np.where(np.array(out[0]) == 'mjd')[0][0]
+    ifile =np.where(np.array(out[0]) == 'files')[0][0]
+    mjds=[]
+    files=[]
+    for o in out[1:] : 
+        mjds.append(o[i])
+        files.append(o[ifile])
+
+    gd=np.where(np.array(mjds).astype(int) == mjd)[0]
+
+    grid=[]
+    row=[]
+    for i,seq in enumerate(gd) :
+        print(files[seq])
+        try : 
+            #focus(files[seq],pixscale=0.22,display=display,root=root,plot=True,hard=True)
+            if i>0 and i%5 == 0 :
+                grid.append(row)
+                row=[]
+            row.append(os.path.basename(files[seq][0].replace('.fits','.png')))
+        except : continue
+    dir=files[seq][0].split('/')[0]
+    html.htmltab(grid,file=root+dir+'/focus.html',size=250)
+
