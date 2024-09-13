@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+import socket
+import timer
+
+t=timer.Timer()
+t.start()
+timeout=7200
+with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+    s.bind(('10.75.0.19', 6251))
+    while t.elapsed()<timeout :
+        print(t.elapsed())
+        #s.listen()
+        #conn, addr = s.accept()
+        mesg,address = s.recvfrom(1024)
+        print('received: ', mesg)
+        s.sendto('open'.encode(),address)
