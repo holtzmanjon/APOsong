@@ -157,7 +157,7 @@ class DomeWgt(ttk.Frame) :
         self.coverstate = StringVar()
         ttk.Label(self, textvariable=self.coverstate).grid(column=2,row=row,sticky=(E),padx=10) 
 
-        ttk.Label(self,text="35M").grid(column=3,row=row,sticky=(W))
+        ttk.Label(self,text="35M/25M").grid(column=3,row=row,sticky=(W))
         self.stat35m = StringVar()
         self.statcolor = StringVar()
         ttk.Label(self, textvariable=self.stat35m, foreground=self.statcolor.get()).grid(column=4,row=row,sticky=(E),padx=10) 
@@ -337,7 +337,7 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 domeframe.shutter.set('N/A')
                 domeframe.slewing.set('N/A')
 
-            domeframe.stat35m.set(safety.stat()[0])
+            domeframe.stat35m.set(safety.stat()[0]+'/'+safety.encl25Open())
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
 
@@ -368,7 +368,7 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
         except : 
             telframe.ut.set('ERROR')
 
-        root.after(1000,update)
+        root.after(5000,update)
 
     import signal
     def handler(signum,frame):
@@ -408,9 +408,19 @@ def init() :
     try: remote_srv = config['devices']['remote_srv']
     except: remote_srv = None
     if updatecamera :
-        status(T=T,F=F,D=D,pwi=pwi,C=C[0])
+        status(T=T,F=F,D=D,pwi=pwi,C=C[getcam(0)])
     else :
         status(T=T,F=F,D=D,pwi=pwi)
+
+
+def getcam(camera) :
+    """ Get correct list index for specified camera (ASCOM doesn't always deliver them in order!)
+    """
+    for index,c in enumerate(C) :
+        if c.device_number == camera :
+            return index
+    print('no such camera!')
+    return -1
 
 def pwi_init(pwi_srv) :
     global pwi
