@@ -47,6 +47,7 @@ class Target() :
         tab['ra'] = [self.ra]
         tab['dec'] = [self.dec]
         tab['epoch'] = [self.epoch]
+        return tab
 
     def acquire(self,display=None,prop=0.0) :
         aposong.guide(False)
@@ -415,15 +416,16 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
-def mkhtml(t=None) :
-    if t is None : t = Time.now()
-    y,m,d,hr,mi,se = t.ymdhms
+def mkhtml(time=None) :
+    if time is None : time = Time.now()
+    mkmovie(time)
+    mkfocusplots(time)
+    mkhtml(time)
+
+def mkmovie(time,root='/data/1m/',clobber=False) :
+    y,m,d,hr,mi,se = time.ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
-    mkmovie(ut)
-    mkplots(int(t.mjd))
 
-
-def mkmovie(ut,root='/data/1m/') :
     matplotlib.use('Agg')
     dir=root+ut+'/guide'
     red=imred.Reducer(dir=dir)
@@ -445,7 +447,8 @@ def mkmovie(ut,root='/data/1m/') :
         plt.close('all')
         t=tv.TV()
         out='{:s}/{:d}.gif'.format(dir,seq[0])
-        red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+        if clobber or not os.path.isfile(out) :
+            red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
         if i>0 and i%5 == 0 :
             grid.append(row)
             row=[]
@@ -455,11 +458,12 @@ def mkmovie(ut,root='/data/1m/') :
     grid.append(row)
     html.htmltab(grid,file=root+ut+'/guide.html',size=200)
 
-def mkplots(mjd,display=None,root='/data/1m/') :
+def mkfocusplots(time,display=None,root='/data/1m/',clobber=False) :
 
     matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
+    d.close()
     i =np.where(np.array(out[0]) == 'mjd')[0][0]
     ifile =np.where(np.array(out[0]) == 'files')[0][0]
     mjds=[]
@@ -468,22 +472,50 @@ def mkplots(mjd,display=None,root='/data/1m/') :
         mjds.append(o[i])
         files.append(o[ifile])
 
-    gd=np.where(np.array(mjds).astype(int) == mjd)[0]
+    gd=np.where(np.array(mjds).astype(int) == int(time.mjd))[0]
 
     grid=[]
     row=[]
-    for i,seq in enumerate(gd) :
+    i=0
+    for seq in gd :
         print(files[seq])
         try : 
-            dofocus.focus(files[seq],pixscale=0.22,display=display,root=root,plot=True,hard=True)
+            if clobber or not os.path.isfile(root+files[seq][0].replace('.fits','.png')) :
+                dofocus.focus(files[seq],display=display,root=root,plot=True,hard=True,
+                              pixscale=aposong.pixscale(aposong.getcam(0)))
             if i>0 and i%5 == 0 :
                 grid.append(row)
                 row=[]
             row.append(os.path.basename(files[seq][0].replace('.fits','.png')))
-        except : continue
+            i+=1
+        except : 
+            continue
+    i-=1
     for ii in range(i%5+1,5) :
         row.append('')
     grid.append(row)
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
+def mkhtml(mjd,root='/data/1m') :
+    y,m,d,hr,mi,se = time.ymdhms
+    ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
+    d=database.DBSession()
+    out=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d}'.format(mjd,mjd+1))
+    d.close()
+
+    exp_no=[]
+    for file in out['file'] :
+        try :
+            exp_no.append(int(file.split('.')[-2]))
+        except :
+            exp_no.append(-1)
+
+    j = np.argsort(out['dateobs'])
+
+    fp = '{:s}/{:s}/{:s}.html'.format(root,ut,ut)
+    
+    for o in out[j] :
+        print(o['file'],o['camera'],o['exptime'])
+
+    return out[j]
