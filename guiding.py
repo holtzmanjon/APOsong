@@ -1,4 +1,5 @@
 import matplotlib
+import glob
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
@@ -7,9 +8,10 @@ import time
 import pdb
 from astropy.io import fits
 import numpy as np
+from holtztools import html
 
 display=None
-def show(n,date='UT240503',sleep=0.5,max=30000) :
+def show(n,date='UT240503',sleep=0.5,max=30000,pause=False) :
     global display
 
     if display is None :
@@ -17,12 +19,11 @@ def show(n,date='UT240503',sleep=0.5,max=30000) :
 
     red=imred.Reducer(dir='/data/1m/{:s}/guide/'.format(date))
     while True :
-      print(n)
       try :
         a=red.rd(n)
         print(a.header['EXPTIME'])
         display.tv(a,max=max)
-        if a.shape[0] > 200 :
+        if pause and a.shape[0] > 200 :
             display.imexam()
         n+=1
       except: pass
@@ -133,3 +134,31 @@ def mkmask(data,x0,y0,maskrad=7) :
     mask[bd]=1
     return mask
 
+def mkmovie(ut,root='/data/1m/') :
+    matplotlib.use('Agg')
+    dir=root+ut+'/guide'
+    red=imred.Reducer(dir=dir)
+    files=glob.glob(dir+'/acquire*.fits')
+    ims=[]
+    seqs=[]
+    for file in files :
+        im=int(file.split('.')[-2])
+        ims.append(im)
+    for i,im in enumerate(ims[1:]) :
+        if ims[i]-ims[i-1] > 1 :
+            seqs.append([ims[i-1]+1,ims[i]])
+
+    print(ims)
+    print(seqs)
+    grid=[]
+    row=[]
+    for i,seq in enumerate(seqs):
+        plt.close('all')
+        t=tv.TV()
+        out='{:s}/{:d}.gif'.format(dir,seq[0])
+        #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+        if i>0 and i%5 == 0 :
+            grid.append(row)
+            row=[]
+        row.append('guide/{:d}.gif'.format(seq[0]))
+    html.htmltab(grid,file=root+ut+'/guide.html',size=200)
