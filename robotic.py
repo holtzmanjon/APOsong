@@ -3,8 +3,14 @@ from astropy.time import Time
 from astropy.table import Table, hstack, vstack
 import astropy.units as u
 from astroplan import Observer, time_grid_from_range
+import matplotlib
+import matplotlib.pyplot as plt
+from pyvista import imred,tv
+from holtztools import html
 
 import copy
+import glob
+import os
 import pdb
 import numpy as np
 import time
@@ -12,6 +18,8 @@ import time
 import logging
 import yaml
 import logging.config
+ 
+import focus as dofocus
 
 try:
     with open('logging.yml', 'rt') as f:
@@ -40,7 +48,7 @@ class Target() :
         tab['dec'] = [self.dec]
         tab['epoch'] = [self.epoch]
 
-    def acquire(self,display=None,prop=0.8) :
+    def acquire(self,display=None,prop=0.0) :
         aposong.guide(False)
         aposong.slew(self.ra,self.dec)
         aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=prop)
@@ -130,13 +138,12 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
     """ 
     Get best request given table of requests and time
     """
+    apo=EarthLocation.of_site(site)
     if t is None :
-        t = Time.now()
+        t = Time(Time.now(),location=apo)
     if requests is None :
         requests = getrequests()
 
-    apo=EarthLocation.of_site(site)
-    t.location=apo
     lst=t.sidereal_time('mean')
     logger.info('Looking for request, lst: {:s}'.format(lst))
     if criterion == 'setting' : 
@@ -353,8 +360,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
 def focus(foc0=28800,display=None) :
     """ Do focus run for object on meridian
     """    
-    t=Time.now()
-    t.location=EarthLocation.of_site('APO')
+    t=Time(Time.now(), location=EarthLocation.of_site('APO'))
     lst=t.sidereal_time('mean').value
     aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
 
@@ -408,3 +414,71 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
     sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera)
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
+
+def mkhtml(t=None) :
+    if t is None : t = Time.now()
+    pdb.set_trace()
+    y,m,d,hr,mi,se = t.ymdhms
+    ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
+    mkmovie(ut)
+    mkplots(int(t.mjd))
+
+
+def mkmovie(ut,root='/data/1m/') :
+    matplotlib.use('Agg')
+    dir=root+ut+'/guide'
+    red=imred.Reducer(dir=dir)
+    files=glob.glob(dir+'/acquire*.fits')
+    ims=[]
+    seqs=[]
+    for file in files :
+        im=int(file.split('.')[-2])
+        ims.append(im)
+    for i,im in enumerate(ims[1:]) :
+        if ims[i]-ims[i-1] > 1 :
+            seqs.append([ims[i-1]+1,ims[i]])
+
+    print(ims)
+    print(seqs)
+    grid=[]
+    row=[]
+    for i,seq in enumerate(seqs):
+        plt.close('all')
+        t=tv.TV()
+        out='{:s}/{:d}.gif'.format(dir,seq[0])
+        red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+        if i>0 and i%5 == 0 :
+            grid.append(row)
+            row=[]
+        row.append('guide/{:d}.gif'.format(seq[0]))
+    html.htmltab(grid,file=root+ut+'/guide.html',size=200)
+
+def mkplots(mjd,display=None,root='/data/1m/') :
+
+    matplotlib.use('Agg')
+    d=database.DBSession()
+    out=d.query('obs.focus',fmt='list')
+    i =np.where(np.array(out[0]) == 'mjd')[0][0]
+    ifile =np.where(np.array(out[0]) == 'files')[0][0]
+    mjds=[]
+    files=[]
+    for o in out[1:] : 
+        mjds.append(o[i])
+        files.append(o[ifile])
+
+    gd=np.where(np.array(mjds).astype(int) == mjd)[0]
+
+    grid=[]
+    row=[]
+    for i,seq in enumerate(gd) :
+        print(files[seq])
+        try : 
+            dofocus.focus(files[seq],pixscale=0.22,display=display,root=root,plot=True,hard=True)
+            if i>0 and i%5 == 0 :
+                grid.append(row)
+                row=[]
+            row.append(os.path.basename(files[seq][0].replace('.fits','.png')))
+        except : continue
+    dir=files[seq][0].split('/')[0]
+    html.htmltab(grid,file=root+dir+'/focus.html',size=250)
+
