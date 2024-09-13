@@ -107,7 +107,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'SafetyMonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
-    C[0].Magnification=1.33
+    C[getcam(0)].Magnification=1.33
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
@@ -272,7 +272,7 @@ def cooler(state=True,cam=0) :
     C[icam].CoolerOn = state
 
 def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
-           max=30000, thresh=25,cam=0) :
+           max=30000, thresh=25,cam=0,plot=False) :
     """ Obtain a focus run
 
     Parameters
@@ -332,8 +332,8 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
     #plt.axis('off')
     try :
-        bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam),
-                                                display=display,max=max,thresh=thresh)
+        bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam,bin=bin),
+                                                display=display,max=max,thresh=thresh,plot=plot)
         if bestfitfoc > 0 :
             logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
                   bestfitfoc,bestfithf))
@@ -466,21 +466,25 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
     best = result['_r'].argmin()
     logger.info(result[best])
     if goto: 
-        slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
+        try: 
+            slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
+        except : 
+            slew(result['RA_ICRS'][best]/15., result['DE_ICRS'][best])
 
-def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3) :
+def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     """ Center star
     """
     exp=expose(exptime,filt=filt,bin=bin)
     disp.tv(exp.hdu)
     print('mark star on display: ')
     k,x,y=disp.tvmark()
-    if x0 is None : x0=C[0].NumX//2
-    if y0 is None : y0=C[0].NumY//2
+    icam=getcam(cam)
+    if x0 is None : x0=C[icam].NumX//2
+    if y0 is None : y0=C[icam].NumY//2
     offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
     time.sleep(settle)
 
-def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
+def guide(start=True,x0=774,y0=463,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
           display=None,prop=0.0,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
@@ -585,6 +589,7 @@ def guide(start=True,x0=661,y0=524,rad=25,exptime=5,bin=1,filt=None,data=None,ma
             pdb.set_trace()
 
         guiding.run_guide = True
+        # navg no greater than 5, no less than 1, otherwise 5/exptime
         navg=np.min([5,np.max([1,int(5/exptime)])])
         logger.info('starting guiding: {:.2f} {:.2f} exptime: {:.2f} navg: {:d} prop: {:.2f}'.format(
                      x0,y0,exptime, navg, prop))
@@ -610,6 +615,7 @@ def offsetxy(dx,dy,sign=-1,scale=0.16,pa=None) :
     dra =  -dx*np.cos(pa) - dy*np.sin(pa)
     ddec = -dx*np.sin(pa) + dy*np.cos(pa) 
     offset(dra*scale,ddec*scale)
+    #offset(dra*scale/np.cos(T.Declination*np.pi/180.),ddec*scale)
 
 def offset(dra, ddec) :
     """
@@ -666,12 +672,10 @@ def rotator() :
     """
     stat = pwi.status()
     if stat.m3.port == 2 :
-        t=Time.now()
-        t.location=EarthLocation.of_site('APO')
+        t=Time(Time.now(),location=EarthLocation.of_site('APO'))
         lst=t.sidereal_time('mean').value
         ha = lst - T.RightAscension
         pa = skycalc.pa(ha,T.Declination,'APO')-T.Altitude+100
-        print('calculated parallactic angle: ',pa)
     else :
         inst = stat.rotator.mech_position_degs
         pa = stat.rotator.field_angle_degs
@@ -701,9 +705,9 @@ def foc(val, relative=False) :
     """
     stat = pwi.status()
     if stat.m3.port == 1 :
-        pfoc(val, relative=relative)
+        return pfoc(val, relative=relative)
     else :
-        zfoc(val, relative=relative)
+        return zfoc(val, relative=relative)
 
 def getfoc() :
     """ Get focus, depending on port
@@ -733,11 +737,12 @@ def zfoc(val=None, relative=False) :
     """ Change camera focus, absolute (default) or relative
     """
     if val is None :
-        return remote.client(remote_srv,'zaber position') 
+        val= remote.client(remote_srv,'zaber position') 
+        return int(float(val)*1000)
     if relative :
         val += remote.client(remote_srv,'zaber position') 
     val = remote.client(remote_srv,'zaber position {:f}'.format(val/1000.)) 
-    return val
+    return int(float(val)*1000)
 
 def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
