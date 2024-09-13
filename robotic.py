@@ -417,7 +417,6 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
 
 def mkhtml(t=None) :
     if t is None : t = Time.now()
-    pdb.set_trace()
     y,m,d,hr,mi,se = t.ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     mkmovie(ut)
@@ -451,6 +450,9 @@ def mkmovie(ut,root='/data/1m/') :
             grid.append(row)
             row=[]
         row.append('guide/{:d}.gif'.format(seq[0]))
+    for ii in range(i%5+1,5) :
+        row.append('')
+    grid.append(row)
     html.htmltab(grid,file=root+ut+'/guide.html',size=200)
 
 def mkplots(mjd,display=None,root='/data/1m/') :
@@ -479,6 +481,9 @@ def mkplots(mjd,display=None,root='/data/1m/') :
                 row=[]
             row.append(os.path.basename(files[seq][0].replace('.fits','.png')))
         except : continue
+    for ii in range(i%5+1,5) :
+        row.append('')
+    grid.append(row)
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
