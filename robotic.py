@@ -358,6 +358,8 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
 
+    mkhtml()
+
 def focus(foc0=28800,display=None) :
     """ Do focus run for object on meridian
     """    
@@ -416,14 +418,24 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
-def mkhtml(time=None) :
-    if time is None : time = Time.now()
-    mkmovie(time)
-    mkfocusplots(time)
-    mkhtml(time)
+def mkhtml(mjd=None) :
+    """ Make HTML pages for a night of observing
 
-def mkmovie(time,root='/data/1m/',clobber=False) :
-    y,m,d,hr,mi,se = time.ymdhms
+    Parameters
+    ----------
+    mjd : int, default=None
+          make pages for specified MJD, now if mjd=None
+    """
+    if mjd is None : 
+        mjd = int(Time.now().mjd)
+    mkmovie(mjd)
+    mkfocusplots(mjd)
+    mklog(mjd)
+
+def mkmovie(mjd,root='/data/1m/',clobber=False) :
+    """ Make guider movies from guide images in guide subdirectory for specified MJD
+    """
+    y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
 
     matplotlib.use('Agg')
@@ -458,8 +470,9 @@ def mkmovie(time,root='/data/1m/',clobber=False) :
     grid.append(row)
     html.htmltab(grid,file=root+ut+'/guide.html',size=200)
 
-def mkfocusplots(time,display=None,root='/data/1m/',clobber=False) :
-
+def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
+    """ Make focus plot from focus sequences from database for specified MJD
+    """
     matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
@@ -472,7 +485,7 @@ def mkfocusplots(time,display=None,root='/data/1m/',clobber=False) :
         mjds.append(o[i])
         files.append(o[ifile])
 
-    gd=np.where(np.array(mjds).astype(int) == int(time.mjd))[0]
+    gd=np.where(np.array(mjds).astype(int) == mjd)[0]
 
     grid=[]
     row=[]
@@ -497,25 +510,44 @@ def mkfocusplots(time,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mkhtml(mjd,root='/data/1m') :
-    y,m,d,hr,mi,se = time.ymdhms
+def mklog(mjd,root='/data/1m') :
+    """ Makes master log page for specified MJD with observed table, exposure table, and links
+    """
+    y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
+
     d=database.DBSession()
-    out=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d}'.format(mjd,mjd+1))
+    out=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d}'.format(mjd,mjd+1),fmt='table')
+    obs=d.query(sql='''
+          select * from robotic.observed as obs 
+          join robotic.request as req on obs.request_pk = req.request_pk 
+          where mjd>{:d} and mjd<{:d}'''.format(mjd,mjd+1),fmt='table')
     d.close()
 
-    exp_no=[]
-    for file in out['file'] :
-        try :
-            exp_no.append(int(file.split('.')[-2]))
-        except :
-            exp_no.append(-1)
+    j = np.argsort(obs['mjd'])
+    obs = obs[j]
+    for o in obs :
+        for i,f in enumerate(o['files']) : o['files'][i] = os.path.basename(o['files'][i])
 
+    gd = np.where(out['file'] != '')[0]
+    out=out[gd]
     j = np.argsort(out['dateobs'])
+    out=out[j]
+    out['exptime'].format='{:.2f}'
 
-    fp = '{:s}/{:s}/{:s}.html'.format(root,ut,ut)
-    
-    for o in out[j] :
-        print(o['file'],o['camera'],o['exptime'])
+    fp = open('{:s}/{:s}/{:s}.html'.format(root,ut,ut),'w')
 
-    return out[j]
+    fp.write('<HTML><BODY>\n')
+    fp.write('<h2>{:s}  MJD: {:d}</h2><br>'.format(ut,mjd))
+    fp.write('<A HREF=guide.html>Guider movies</A><BR>\n')
+    fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
+
+    fp.write('<p>Observed robotic requests: <BR>\n')
+    tab = html.tab(obs['targname','mjd','schedulename','sequencename','priority','files'],file=fp)
+
+    fp.write('<p>Exposures: <BR>\n')
+    tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus'],file=fp)
+    fp.write('</BODY></HTML>\n')
+    fp.close()
+
+    return out
