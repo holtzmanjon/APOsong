@@ -58,6 +58,8 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
     x,y = x0,y0
     red=imred.Reducer(dir='/data/1m/{:s}/guide/'.format(date))
 
+    pixscale=aposong.pixscale()
+
     while run_guide :
         logger.debug('guide start: {:.1f} {:.1f} {:.1f} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,exptime,navg))
         if disp is not None : disp.tvclear()
@@ -106,13 +108,15 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
                 if exptime>0 : 
                     dx=xtot/nseq-x0
                     xrem=(1-prop)*dx
-                    if abs(xrem) > 2 : xoff=dx
-                    else : xoff=prop*dx
+                    if abs(xrem)*pixscale > 2 : xoff=dx
+                    elif abs(xrem)*pixscale > 0.5 : xoff=prop*dx
+                    else : xoff=0
                     dy=ytot/nseq-y0
                     yrem=(1-prop)*dy
-                    if abs(yrem) > 2 : yoff=dy
-                    else : yoff=prop*dy
-                    aposong.offsetxy(xoff,yoff,scale=aposong.pixscale())
+                    if abs(yrem)*pixscale > 2 : yoff=dy
+                    elif abs(yrem)*pixscale > 0.5 : yoff=prop*dy
+                    else : yoff=0.
+                    aposong.offsetxy(xoff,yoff,scale=pixscale)
                     time.sleep(settle)
                 else :
                     time.sleep(0.5)
