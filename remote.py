@@ -80,6 +80,12 @@ def server() :
                         tc300.readline()
                     tc300.write(b'TSET1?\r')
                     conn.sendall(tc300.readline())
+                elif cmd == 'ten' :
+                    if len(val) > 0 :
+                        tc300.write('EN1={:s}\r'.format(val).encode())
+                        tc300.readline()
+                        tc300.write('EN2={:s}\r'.format(val).encode())
+                        tc300.readline()
                 elif cmd == 'tact' :
                     tc300.write(b'TACT1?\r')
                     t1=tc300.readline()
