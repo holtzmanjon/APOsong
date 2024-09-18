@@ -2,6 +2,9 @@ import tkthread
 #tkthread.patch()
 #tkthread.tkinstall(ensure_root=True)
 
+import os
+import influxdb_client
+from influxdb_client.client.write_api import SYNCHRONOUS
 import pdb
 from tkinter import *
 from tkinter import ttk
@@ -255,6 +258,28 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
 
     safety=APOSafety.Safety()
 
+
+    url="http://localhost:8086"
+    os.environ['INFLUX_TOKEN'] = 'v-RuHY6T1pyOIL1SU9lrWYKYEU_SDZ0VWkPHOIU9hMECF7axu2wiFzY1u8N7J6s9KCbOreQKI43mJUi9pj5BbA=='
+    bucket = "iodinetemp"
+    org = "NMSU"
+    token = os.environ['INFLUX_TOKEN']
+    # Store the URL of your InfluxDB instance
+    url="http://localhost:8086"
+    client = influxdb_client.InfluxDBClient(
+       url=url,
+       token=token,
+       org=org
+    )
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+
+    temp = remote.client(remote_srv,'tc300 tact')
+    temp1,temp2=temp.split()
+    print(temp1,temp2)
+    p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2))]
+    write_api.write(bucket=bucket, org=org, record=p)
+
     def update() :
         try :
             t=Time.now()
@@ -363,6 +388,10 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             iodineframe.position.set(pos)
             temp = remote.client(remote_srv,'tc300 tact')
             tset = remote.client(remote_srv,'tc300 tset')
+            temp1,temp2=temp.split()
+            p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2))]
+            write_api.write(bucket=bucket, org=org, record=p)
             iodineframe.temp.set(temp+' / '+tset)
 
         except : 

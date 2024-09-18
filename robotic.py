@@ -31,6 +31,7 @@ except:
 logger=logging.getLogger(__name__)
 
 import aposong 
+import eshel
 import database
 import APOSafety
 
@@ -49,7 +50,7 @@ class Target() :
         tab['epoch'] = [self.epoch]
         return tab
 
-    def acquire(self,display=None,prop=0.0) :
+    def acquire(self,display=None,prop=0.7) :
         aposong.guide(False)
         aposong.slew(self.ra,self.dec)
         aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=prop)
@@ -285,7 +286,8 @@ def obsopen(opentime,safety) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,obs='apo',tz='US/Mountain',criterion='best',maxdec=None) :
+def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,obs='apo',tz='US/Mountain',
+            criterion='best',maxdec=None,eshelcals=True) :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
@@ -297,6 +299,10 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     # setup up Safety object and open dome when safe after desired time relative to sunset
     safety = APOSafety.Safety()
     obsopen(sunset+dt_sunset*u.hour,safety)
+
+    # cals
+    #if eshelcals :
+    #    eshel.cals()
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -357,6 +363,9 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
 
     logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
+
+    if eshelcals :
+        eshel.cals()
 
     mkhtml()
 

@@ -1,5 +1,6 @@
 import matplotlib
 import glob
+import os
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
@@ -10,24 +11,70 @@ from astropy.io import fits
 import numpy as np
 from holtztools import html
 
+import influxdb_client
+from influxdb_client.client.write_api import SYNCHRONOUS
+
+bucket = "guider"
+org = "NMSU"
+def setup_influx() :
+    url="http://localhost:8086"
+    os.environ['INFLUX_TOKEN'] = 'v-RuHY6T1pyOIL1SU9lrWYKYEU_SDZ0VWkPHOIU9hMECF7axu2wiFzY1u8N7J6s9KCbOreQKI43mJUi9pj5BbA=='
+    # Store the URL of your InfluxDB instance
+    url="http://localhost:8086"
+    token = os.environ['INFLUX_TOKEN']
+    client = influxdb_client.InfluxDBClient(
+       url=url,
+       token=token,
+       org=org
+    )
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+    return write_api
+
+
 display=None
-def show(n,date='UT240503',sleep=0.5,max=30000,pause=False) :
+def show(n,date='UT240503',sleep=0.5,max=30000,pause=False,weight=False,rad=25,maskrad=7,prop=0.7) :
     global display
 
     if display is None :
         display=tv.TV(figsize=(8,4))
 
     red=imred.Reducer(dir='/data/1m/{:s}/guide/'.format(date))
+    red.formstr=['*.{:04d}.f*']
+    pixscale=aposong.pixscale()
+
+    write_api = setup_influx()
     while True :
-      try :
-        a=red.rd(n)
-        print(a.header['EXPTIME'])
-        display.tv(a,max=max)
-        if pause and a.shape[0] > 200 :
+      #try :
+        hdu=red.rd(n)
+        print(hdu.header['EXPTIME'])
+        mask=np.zeros_like(hdu.data)
+        yg,xg=np.mgrid[0:hdu.data.shape[0],0:hdu.data.shape[1]]
+        x0=hdu.data.shape[1]//2
+        y0=hdu.data.shape[0]//2
+        r2=(xg-x0)**2+(yg-y0)**2
+        bd=np.where(r2<maskrad**2)
+        mask[bd]=1
+
+
+        display.tv(hdu,max=max)
+        center=centroid.rasym_centroid(hdu.data,x0,y0,rad,mask=mask,skyrad=[35,40],plot=display,weight=weight)
+        dx=(center.x-x0)
+        dy=(center.y-y0)
+        print(dx,dy,center.tot)
+        if pause and hdu.shape[0] > 200 :
             display.imexam()
+
+        if abs(dx)*pixscale > 2 : xoff=dx-dx/abs(dx)
+        elif abs(dx)*pixscale > 0.5 : xoff=prop*dx
+        else : xoff=0
+        if abs(dy)*pixscale > 2 : yoff=dy-dy/abs(dy)
+        elif abs(dy)*pixscale > 0.5 : yoff=prop*dy
+        else : yoff=0.
+
+
         n+=1
-      except: pass
-      time.sleep(sleep)
+      #except: pass
+        time.sleep(sleep)
 
 run_guide = True
 guide_process = None
@@ -60,6 +107,7 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
 
     pixscale=aposong.pixscale()
 
+    write_api = setup_influx()
     while run_guide :
         logger.debug('guide start: {:.1f} {:.1f} {:.1f} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,exptime,navg))
         if disp is not None : disp.tvclear()
@@ -81,12 +129,14 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             if center.x<0 or center.tot < 10000:
                 try :
                     # if rasync_centroid fails, try marginal_gfit
+                    logger.info('marginal: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
                     center=centroid.marginal_gfit(hdu.data,x,y,rad)
                     logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(center.x,center.y,center.tot))
                     if center.tot < 10000 : continue
                 except:
                     # if marginal_gfit fails, use peak
-                    center=centroid.peak(hdu.data,x,y)
+                    logger.info('peak: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
+                    center=centroid.peak(hdu.data,x,y,rad)
                     if center.tot < 1000 :
                         logger.info('peak<1000, no offset')
                         continue
@@ -106,17 +156,30 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             else :
                 logger.debug('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0,center.tot))
                 if exptime>0 : 
+                    x=xtot/nseq
                     dx=xtot/nseq-x0
-                    xrem=(1-prop)*dx
-                    if abs(xrem)*pixscale > 2 : xoff=dx
-                    elif abs(xrem)*pixscale > 0.5 : xoff=prop*dx
+                    # if offset>2 arcsec, apply full offset less one pixel
+                    # elif >0.5 arcsec, apply prop*offset
+                    # else no offset 
+                    if abs(dx)*pixscale > 2 : xoff=dx-dx/abs(dx)
+                    elif abs(dx)*pixscale > 0.5 : xoff=prop*dx
                     else : xoff=0
+                    y=ytot/nseq
                     dy=ytot/nseq-y0
-                    yrem=(1-prop)*dy
-                    if abs(yrem)*pixscale > 2 : yoff=dy
-                    elif abs(yrem)*pixscale > 0.5 : yoff=prop*dy
+                    if abs(dy)*pixscale > 2 : yoff=dy-dy/abs(dy)
+                    elif abs(dy)*pixscale > 0.5 : yoff=prop*dy
                     else : yoff=0.
                     aposong.offsetxy(xoff,yoff,scale=pixscale)
+                    p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("x0", float(x0)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("y0", float(y0)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("x", float(x)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("y", float(y)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("dx", float(dx*pixscale)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("dy", float(dy*pixscale)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("xoff", float(xoff*pixscale)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("yoff", float(yoff*pixscale)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("nseq", nseq)]
+                    write_api.write(bucket=bucket, org=org, record=p)
                     time.sleep(settle)
                 else :
                     time.sleep(0.5)

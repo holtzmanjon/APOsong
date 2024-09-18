@@ -2,12 +2,17 @@
 
 import socket
 import sys, getopt
-from serial import Serial
+try :
+    from serial import Serial
+except :
+    print('failed to import Serial, OK if client')
+    pass
+
 from time import sleep
 
 try: import aposong
 except :
-    print("failed to import aposong, can't use cals()")
+    print("failed to import aposong, OK if server")
     pass
 
 HOST = "10.75.0.22"  # Standard loopback interface address (localhost)
@@ -28,7 +33,7 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
   
     try : esock.sendall(str(val).encode())
     except :
-        logger.error("communication error: is remote program running?")
+        print("communication error: is remote program running?")
     if close :
         esock.shutdown(socket.SHUT_RDWR)
         esock.close()

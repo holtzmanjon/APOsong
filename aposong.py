@@ -484,9 +484,9 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
     time.sleep(settle)
 
-def guide(start=True,x0=774,y0=463,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
+def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
-          display=None,prop=0.0,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
+          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
 
         Parameters
@@ -667,15 +667,20 @@ def j2000totopocentric(ra,dec) :
     #v6 = convert.cat2v6(ra*np.pi/180,dec*np.pi/180)
     #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
 
-def rotator() :
+def rotator(offset=100.) :
     """ Get current rotator position angle, from parallactic angle and altitude for port 2  and telescope status for port 1
+
+    Parameters
+    ----------
+    offset : float, default=100
+             Angle constant (degrees) that needs to be set depending on camera/fixed rotator position for port 2
     """
     stat = pwi.status()
     if stat.m3.port == 2 :
         t=Time(Time.now(),location=EarthLocation.of_site('APO'))
         lst=t.sidereal_time('mean').value
         ha = lst - T.RightAscension
-        pa = skycalc.pa(ha,T.Declination,'APO')-T.Altitude+100
+        pa = skycalc.parang(ha,T.Declination,'APO')-T.Altitude+offset
     else :
         inst = stat.rotator.mech_position_degs
         pa = stat.rotator.field_angle_degs
@@ -740,7 +745,7 @@ def zfoc(val=None, relative=False) :
         val= remote.client(remote_srv,'zaber position') 
         return int(float(val)*1000)
     if relative :
-        val += remote.client(remote_srv,'zaber position') 
+        val += int(float(remote.client(remote_srv,'zaber position') )*1000)
     val = remote.client(remote_srv,'zaber position {:f}'.format(val/1000.)) 
     return int(float(val)*1000)
 
@@ -759,15 +764,17 @@ def iodine_tget() :
     tact = remote.client(remote_srv,'tc300 tact')
     return tact
 
-def iodine_in(val=21.) :
+def iodine_in(val=21.,focoffset=-4625) :
     """ Move iodine cell into beam
     """
     iodine_position(val)
+    foc(focoffset,relative=True)
 
-def iodine_out(val=141.) :
+def iodine_out(val=141.,focoffset=4625) :
     """ Move iodine cell out of beam
     """
     iodine_position(val)
+    foc(focoffset,relative=True)
 
 def iodine_position(val=None) :
     """ Get/set iodine stage position
