@@ -389,6 +389,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             temp = remote.client(remote_srv,'tc300 tact')
             tset = remote.client(remote_srv,'tc300 tset')
             temp1,temp2=temp.split()
+            if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
+                remote.client(remote_srv,'tc300 ten 0')
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2))]
             write_api.write(bucket=bucket, org=org, record=p)

@@ -39,6 +39,8 @@ from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
+import eshel
+
 # alpaca imports, put in try/except for readthedocs
 try:
   from alpaca import discovery, management
@@ -518,6 +520,14 @@ def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,ma
     """
 
     global guide_process
+
+    # refine position of hole
+    eshel.lamps(mirror=True,quartz=True)
+    a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp)
+    eshel.lamps(close=False)
+    center=centroid.rasym_centroid(a.hdu.data,x0,y0,rad=12)
+    x0=center.x
+    y0=center.y
 
     if start and guide_process is None :
         if data is None :

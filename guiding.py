@@ -44,7 +44,7 @@ def show(n,date='UT240503',sleep=0.5,max=30000,pause=False,weight=False,rad=25,m
 
     write_api = setup_influx()
     while True :
-      #try :
+      try :
         hdu=red.rd(n)
         print(hdu.header['EXPTIME'])
         mask=np.zeros_like(hdu.data)
@@ -73,8 +73,8 @@ def show(n,date='UT240503',sleep=0.5,max=30000,pause=False,weight=False,rad=25,m
 
 
         n+=1
-      #except: pass
-        time.sleep(sleep)
+      except: pass
+      time.sleep(sleep)
 
 run_guide = True
 guide_process = None
@@ -147,6 +147,7 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
         if center.x>0 and center.y>0 :
             if disp is not None: 
                 disp.tvcirc(center.x,center.y,rad=2)
+                disp.tvcirc(x0,y0,rad=1,color='g')
             xtot+=center.x
             ytot+=center.y
             if nseq < navg :
