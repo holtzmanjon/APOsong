@@ -95,7 +95,7 @@ logger=logging.getLogger(__name__)
 import aposong
 
 def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=None,name='guide/guide',
-            prop=0.7, rasym=True,settle=3,vmax=10000,box=None,date='UT240503',weight=False) :
+            prop=0.7, ki=0.2, maxint=10,rasym=True,settle=3,vmax=10000,box=None,date='UT240503',weight=False) :
     """ Actual guide loop
     """
     # accumulators for navg offsets 
@@ -144,6 +144,9 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             center==centroid.marginal_gfit(hdu.data,x,y,rad)
             tot=-9
 
+        xint=np.zeros(maxint)
+        yint=np.zeros(maxint)
+        nint=0
         if center.x>0 and center.y>0 :
             if disp is not None: 
                 disp.tvcirc(center.x,center.y,rad=2)
@@ -153,22 +156,34 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             if nseq < navg :
                 logger.debug('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(nseq,center.x-x0,center.y-y0,center.tot))
                 logger.debug('  accumulated offset:   {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0))
+                dx=center.x-x0
+                dy=center.y-y0
+                p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("dx", float(dx*pixscale)),
+                     influxdb_client.Point("my_measurement").tag("location", "APO").field("dy", float(dy*pixscale)),
+                     influxdb_client.Point("my_measurement").tag("location", "APO").field("nseq", nseq)]
+                write_api.write(bucket=bucket, org=org, record=p)
                 nseq+=1
             else :
                 logger.debug('  APPLIED OFFSET: {:.1f} {:.1f} {:.1f}'.format(xtot/nseq-x0,ytot/nseq-y0,center.tot))
                 if exptime>0 : 
+                    # average offsets over navg points
                     x=xtot/nseq
                     dx=xtot/nseq-x0
-                    # if offset>2 arcsec, apply full offset less one pixel
-                    # elif >0.5 arcsec, apply prop*offset
-                    # else no offset 
-                    if abs(dx)*pixscale > 2 : xoff=dx-dx/abs(dx)
-                    elif abs(dx)*pixscale > 0.5 : xoff=prop*dx
-                    else : xoff=0
                     y=ytot/nseq
                     dy=ytot/nseq-y0
-                    if abs(dy)*pixscale > 2 : yoff=dy-dy/abs(dy)
-                    elif abs(dy)*pixscale > 0.5 : yoff=prop*dy
+                    # integral offsets over maxint points
+                    xint[nint//maxint]=dx
+                    yint[nint//maxint]+=dy
+                    nint+=1
+                    # if offset>2 arcsec, apply full offset less one pixel
+                    # elif >0.1 arcsec, apply prop*offset
+                    # else no offset 
+                    if abs(dx)*pixscale > 2 : xoff=dx-dx/abs(dx)
+                    elif abs(dx)*pixscale > 0.1 : xoff=prop*dx + ki*xint.mean()
+                    else : xoff=0
+                  
+                    if abs(dy)*pixscale > 2 : yoff=dy-dy/abs(dy) + ki*yint.mean()
+                    elif abs(dy)*pixscale > 0.1 : yoff=prop*dy
                     else : yoff=0.
                     aposong.offsetxy(xoff,yoff,scale=pixscale)
                     p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("x0", float(x0)),
