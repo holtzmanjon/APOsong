@@ -136,7 +136,11 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
                 except:
                     # if marginal_gfit fails, use peak
                     logger.info('peak: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
-                    center=centroid.peak(hdu.data,x,y,rad)
+                    try: 
+                        center=centroid.peak(hdu.data,x,y,rad)
+                    except:
+                        logger.debug('error in peak')
+                        continue
                     if center.tot < 1000 :
                         logger.info('peak<1000, no offset')
                         continue

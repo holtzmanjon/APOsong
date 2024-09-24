@@ -1,12 +1,13 @@
 from astropy.coordinates import SkyCoord,EarthLocation
 from astropy.time import Time
 from astropy.table import Table, hstack, vstack
+from astropy.io import fits
 import astropy.units as u
 from astroplan import Observer, time_grid_from_range
 import matplotlib
 import matplotlib.pyplot as plt
 from pyvista import imred,tv
-from holtztools import html
+from holtztools import html, plots
 
 import copy
 import glob
@@ -322,7 +323,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
         aposong.domeopen()
 
     # focus star on meridian 
-    foc=focus(foc0=foc0,display=aposong.disp)
+    foc=focus(foc0=foc0,delta=75,n=15,display=aposong.disp)
     foctime=Time.now()
 
     oldtarg=''
@@ -369,15 +370,15 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
 
     mkhtml()
 
-def focus(foc0=28800,display=None) :
+def focus(foc0=28800,delta=75,n=9,display=None) :
     """ Do focus run for object on meridian
     """    
     t=Time(Time.now(), location=EarthLocation.of_site('APO'))
     lst=t.sidereal_time('mean').value
     aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
 
-    f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-150 or f>foc0+150 :
+    f=aposong.focrun(foc0,delta,n,2,None,bin=1,thresh=100,display=display,max=5000)
+    while f<foc0-2*delta or f>foc0+2*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
         f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
@@ -519,7 +520,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m') :
+def mklog(mjd,root='/data/1m/') :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
@@ -532,11 +533,23 @@ def mklog(mjd,root='/data/1m') :
           join robotic.request as req on obs.request_pk = req.request_pk 
           where mjd>{:d} and mjd<{:d}'''.format(mjd,mjd+1),fmt='table')
     d.close()
-
     j = np.argsort(obs['mjd'])
     obs = obs[j]
-    for o in obs :
-        for i,f in enumerate(o['files']) : o['files'][i] = os.path.basename(o['files'][i])
+    obs['request'] = ' '*80
+    for req,o in enumerate(obs) :
+        fig,ax=plots.multi(1,1)
+        for i,f in enumerate(o['files']) : 
+            try :
+                a=fits.open(o['files'][i])[0]
+                ax.plot(np.median(a.data[:,a.data.shape[1]//2-10:a.data.shape[1]//2+10],axis=1),
+                        label=os.path.basename(o['files'][i]))
+                o['files'][i] = os.path.basename(o['files'][i])
+            except :
+                pass
+        ax.legend(fontsize='x-small')
+        fig.savefig('{:s}/{:s}/{:s}_{:d}.png'.format(root,ut,o['targname'],req))
+        o['request'] = '<A HREF={:s}_{:d}.png> {:s} </A>'.format(o['targname'],req,o['targname'])
+        plt.close()
 
     gd = np.where(out['file'] != '')[0]
     out=out[gd]
@@ -552,7 +565,7 @@ def mklog(mjd,root='/data/1m') :
     fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
 
     fp.write('<p>Observed robotic requests: <BR>\n')
-    tab = html.tab(obs['targname','mjd','schedulename','sequencename','priority','files'],file=fp)
+    tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 
     fp.write('<p>Exposures: <BR>\n')
     tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus'],file=fp)

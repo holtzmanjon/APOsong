@@ -80,7 +80,7 @@ def server() :
                         tc300.readline()
                     tc300.write(b'TSET1?\r')
                     conn.sendall(tc300.readline())
-                elif cmd == 'ten' :
+                elif cmd == 'en' :
                     if len(val) > 0 :
                         tc300.write('EN1={:s}\r'.format(val).encode())
                         tc300.readline()
@@ -90,6 +90,18 @@ def server() :
                     tc300.write(b'TACT1?\r')
                     t1=tc300.readline()
                     tc300.write(b'TACT2?\r')
+                    t2=tc300.readline()
+                    conn.sendall(t1+b' '+t2)
+                elif cmd == 'volt' :
+                    tc300.write(b'VOLT1?\r')
+                    t1=tc300.readline()
+                    tc300.write(b'VOLT2?\r')
+                    t2=tc300.readline()
+                    conn.sendall(t1+b' '+t2)
+                elif cmd == 'curr' :
+                    tc300.write(b'CURR1?\r')
+                    t1=tc300.readline()
+                    tc300.write(b'CURR2?\r')
                     t2=tc300.readline()
                     conn.sendall(t1+b' '+t2)
     if lts_stage is not None : lts_stage.close()

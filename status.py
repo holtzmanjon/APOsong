@@ -388,11 +388,17 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             iodineframe.position.set(pos)
             temp = remote.client(remote_srv,'tc300 tact')
             tset = remote.client(remote_srv,'tc300 tset')
+            volt = remote.client(remote_srv,'tc300 volt')
+            curr = remote.client(remote_srv,'tc300 curr')
             temp1,temp2=temp.split()
             if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
-                remote.client(remote_srv,'tc300 ten 0')
+                remote.client(remote_srv,'tc300 en 0')
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2))]
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("volt1", float(volt1)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("volt2", float(volt2)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("curr1", float(curr1)),
+                 influxdb_client.Point("my_measurement").tag("location", "APO").field("curr2", float(curr2))]
             write_api.write(bucket=bucket, org=org, record=p)
             iodineframe.temp.set(temp+' / '+tset)
 
