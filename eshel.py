@@ -52,7 +52,7 @@ def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=10) :
 def remote() :
   """ Run simple remote socket server to send commands to cal lamp controller
   """
-  relaycard=K8056('COM4')
+  relaycard=K8056('COM5')
   relaycard.clear(9)
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
@@ -198,8 +198,8 @@ def main(argv):
     # Using the Keyspan USB to serial converter
     # device = '/dev/tty.KeySerial1'
 
-    # Using COMM / serial port 2
-    device = 'COM4'
+    # Using COM5 / serial port 2
+    device = 'COM5'
 
     with K8056(device) as relaycard:
         # clear all relays
