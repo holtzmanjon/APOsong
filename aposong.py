@@ -521,15 +521,18 @@ def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,ma
 
     global guide_process
 
-    # refine position of hole
-    eshel.lamps(mirror=True,quartz=True)
-    a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp)
-    eshel.lamps(close=False)
-    center=centroid.rasym_centroid(a.hdu.data,x0,y0,rad=12)
-    x0=center.x
-    y0=center.y
-
     if start and guide_process is None :
+        # refine position of hole
+        eshel.lamps(mirror=True,quartz=True)
+        time.sleep(3)
+        a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp,name='guide/hole')
+        time.sleep(3)
+        eshel.lamps(close=False)
+        center=centroid.rasym_centroid(a.hdu.data,x0,y0,rad=12)
+        x0=center.x
+        y0=center.y
+        logger.info('hole center : {:.2f} {:.2f}'.format(x0,y0))
+
         if data is None :
             exp=expose(exptime,filt=filt,bin=bin,display=disp,name='guide/acquire')
             hdu=exp.hdu
