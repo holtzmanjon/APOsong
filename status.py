@@ -391,6 +391,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             volt = remote.client(remote_srv,'tc300 volt')
             curr = remote.client(remote_srv,'tc300 curr')
             temp1,temp2=temp.split()
+            volt1,volt2=volt.split()
+            curr1,curr2=curr.split()
             if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
                 remote.client(remote_srv,'tc300 en 0')
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
