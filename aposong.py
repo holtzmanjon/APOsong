@@ -528,6 +528,12 @@ def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,ma
         a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp,name='guide/hole')
         time.sleep(3)
         eshel.lamps(close=False)
+        time.sleep(3)
+        # find minimum pixel
+        box=image.BOX(cr=int(y0),cc=int(x0),n=25)
+        stats=image.abx(-a.hdu.data,box)
+        x0 = stats['peakx']
+        y0 = stats['peaky'] 
         center=centroid.rasym_centroid(a.hdu.data,x0,y0,rad=12)
         x0=center.x
         y0=center.y
@@ -944,15 +950,19 @@ def commands() :
     print()
     print("Dome commands")
     print("  domehome(): move dome to home position")
+    print("  domesync(True|False): sync dome to telescope position")
+    print("  louvers(True|False): open/close louvers")
     print()
     print("Telescope commands")
     print("  slew(ra,dec): slew to coordinates")
-    print("  offset(ra,dec): offset telescope")
+    print("  offset(ra,dec): offset telescope in sky coordinates (arcsec) ")
+    print("  offsetxy(x,y): offset telescope in detector coordinates (pixels)")
     print("  usno([ra,dec]) : find/slew to USNO A2.0 star")
     print("  altaz(az,alt): slew to az/alt coordinates")
     print("  foc(focus) : set focus to specified value")
     print("  tracking(True|False): turn tracking on/off")
     print("  mirror_covers(True|False): control mirror covers")
+    print("  fans(True|False): control telescope fans")
     print("  port(port): move tertiary to requested port")
     print("  park(): park telescope and dome")
     print()
