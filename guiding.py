@@ -108,6 +108,12 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
     pixscale=aposong.pixscale()
 
     write_api = setup_influx()
+    if box is not None :
+        x0off = box.xmin
+        y0off = box.ymin
+    else : 
+        x0off = 0
+        y0off = 0
     while run_guide :
         logger.debug('guide start: {:.1f} {:.1f} {:.1f} {:.1f} {:.2f} {:d}'.format(x,y,prop,bin,exptime,navg))
         if disp is not None : disp.tvclear()
@@ -190,8 +196,8 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
                     elif abs(dy)*pixscale > 0.1 : yoff=prop*dy
                     else : yoff=0.
                     aposong.offsetxy(xoff,yoff,scale=pixscale)
-                    p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("x0", float(x0)),
-                         influxdb_client.Point("my_measurement").tag("location", "APO").field("y0", float(y0)),
+                    p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("x0", float(x0+x0off)),
+                         influxdb_client.Point("my_measurement").tag("location", "APO").field("y0", float(y0+y0off)),
                          influxdb_client.Point("my_measurement").tag("location", "APO").field("x", float(x)),
                          influxdb_client.Point("my_measurement").tag("location", "APO").field("y", float(y)),
                          influxdb_client.Point("my_measurement").tag("location", "APO").field("dx", float(dx*pixscale)),
