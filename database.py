@@ -256,6 +256,10 @@ class DBSession(object):
                     nlist = len(data[0][i])
                     try : dtype1 = np.array(data[0][i]).dtype
                     except : dtype1 = type(data[0][i][0])
+                    for j,d in enumerate(data) :
+                      try : dtype2 = np.array(data[j][i]).dtype
+                      except : dtype2 = type(data[j][i][0])
+                      if dtype2 > dtype1 : dtype1=dtype2
                     dt.append( (c, dtype1, np.array(data[0][i]).shape) )
                 else:
                     dt.append( (c, type(data[0][i])) )
