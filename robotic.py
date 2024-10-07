@@ -537,7 +537,7 @@ def mklog(mjd,root='/data/1m/') :
     obs = obs[j]
     obs['request'] = ' '*80
     for req,o in enumerate(obs) :
-        fig,ax=plots.multi(1,1)
+        fig,ax=plots.multi(1,1,figsize=(12,4))
         for i,f in enumerate(o['files']) : 
             try :
                 a=fits.open(o['files'][i])[0]
@@ -545,6 +545,7 @@ def mklog(mjd,root='/data/1m/') :
                         label=os.path.basename(o['files'][i]))
                 o['files'][i] = os.path.basename(o['files'][i])
             except :
+                print('error with ',f)
                 pass
         ax.legend(fontsize='x-small')
         fig.savefig('{:s}/{:s}/{:s}_{:d}.png'.format(root,ut,o['targname'],req))
@@ -571,5 +572,7 @@ def mklog(mjd,root='/data/1m/') :
     tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus'],file=fp)
     fp.write('</BODY></HTML>\n')
     fp.close()
+
+    os.symlink('{:s}.html'.format(ut),'{:s}/{:s}/0_{:s}.html'.format(root,ut,ut))
 
     return out
