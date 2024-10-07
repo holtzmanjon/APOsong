@@ -11,3 +11,4 @@ astroquery
 psycopg2
 psycopg2-binary
 tkthread
+influxdb_client

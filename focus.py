@@ -17,9 +17,9 @@ import logging.config
 try :
     with open('logging.yml', 'rt') as f:
         config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
 except :
     print("can't open logging.yml")
-logging.config.dictConfig(config)
 logger=logging.getLogger(__name__)
 
 
