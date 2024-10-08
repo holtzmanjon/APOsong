@@ -34,7 +34,10 @@ logger=logging.getLogger(__name__)
 import aposong 
 import eshel
 import database
-import APOSafety
+try :
+    import APOSafety
+except :
+    print("can't import APOSafety")
 
 class Target() :
     def __init__(self,name,ra,dec,epoch=2000.) :

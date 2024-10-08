@@ -28,7 +28,10 @@ except :
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
-import APOSafety
+try: 
+    import APOSafety
+except : 
+    print("Can't import APOSafety")
 import pwi4_client
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
