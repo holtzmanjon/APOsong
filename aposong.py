@@ -1023,7 +1023,8 @@ def init() :
     except : remote_srv = None
     #print('start_status...')
     #start_status(updatecamera)
-    disp=tv.TV(figsize=(9.5,6))
+    try : disp=tv.TV(figsize=(9.5,6))
+    except : print("Can't open display")
     commands()
 
 def pwi_init(pwi_srv) :
