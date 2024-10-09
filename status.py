@@ -68,7 +68,6 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'Safetymonitor' :
                 Safety = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),Safety)
 
-    pdb.set_trace()
     #C[0].Magnification=1.5
     print()
     print("All ASCOM commands available through devices: ")

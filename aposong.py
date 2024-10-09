@@ -109,7 +109,8 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'Safetymonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
-    C[getcam(0)].Magnification=1.33
+    try: C[getcam(0)].Magnification=1.33
+    except : print("can't access C[getcam(0)]")
     print()
     print("All ASCOM commands available through devices: ")
     print('    T : telescope commands')
