@@ -28,13 +28,12 @@ except :
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
-import APOSafety
 import pwi4_client
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
-    global D, T, F, Filt, C, Covers
-    D, T, F, Filt, C, Covers = (None, None, None, None, [], None)
+    global D, T, F, Filt, C, Covers, Safety
+    D, T, F, Filt, C, Covers, Safety = (None, None, None, None, [], None, None)
     print("Alpaca devices: ")
     if svrs is None : return
     for svr in svrs:
@@ -66,9 +65,10 @@ def ascom_init(svrs) :
                 Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
             elif dev['DeviceType'] == 'Camera' :
                 C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
-            elif dev['DeviceType'] == 'SafetyMonitor' :
-                S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
+            elif dev['DeviceType'] == 'Safetymonitor' :
+                Safety = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),Safety)
 
+    pdb.set_trace()
     #C[0].Magnification=1.5
     print()
     print("All ASCOM commands available through devices: ")
@@ -256,7 +256,6 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
-    safety=APOSafety.Safety()
 
 
     url="http://localhost:8086"
@@ -362,7 +361,8 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 domeframe.shutter.set('N/A')
                 domeframe.slewing.set('N/A')
 
-            domeframe.stat35m.set(safety.stat()[0]+'/'+safety.encl25Open())
+            #domeframe.stat35m.set(safety.stat()[0]+'/'+safety.encl25Open())
+            domeframe.stat35m.set(Safety.Action('stat35m')+'/'+Safety.Action('stat25m'))
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
 

@@ -106,7 +106,7 @@ def ascom_init(svrs) :
                 Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
             elif dev['DeviceType'] == 'Camera' :
                 C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
-            elif dev['DeviceType'] == 'SafetyMonitor' :
+            elif dev['DeviceType'] == 'Safetymonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
 
     C[getcam(0)].Magnification=1.33
@@ -862,6 +862,11 @@ def louvers(open=False) :
 def coverstate() :
     print(Covers.CoverState.value)
 
+def issafe() :
+    """ Query SafetyMonitor for safe to open
+    """
+    return S.IsSafe
+
 def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     """ Open dome and mirror covers
     """
@@ -947,6 +952,7 @@ def commands() :
     print("Observatory commands")
     print("  domeopen(): open dome, mirror covers")
     print("  domeclose(): close mirror covers, dome, and park")
+    print("  issafe(): check safety monitor for status")
     print()
     print("Dome commands")
     print("  domehome(): move dome to home position")

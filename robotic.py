@@ -34,7 +34,6 @@ logger=logging.getLogger(__name__)
 import aposong 
 import eshel
 import database
-import APOSafety
 
 class Target() :
     def __init__(self,name,ra,dec,epoch=2000.) :
@@ -270,7 +269,7 @@ def load_object(request,mjd,names) :
 
     return True
 
-def obsopen(opentime,safety) :
+def obsopen(opentime) :
     """ Open observatory at/after requested time and when safe 
     """
     while (Time.now()-opentime)<0 :
@@ -278,7 +277,7 @@ def obsopen(opentime,safety) :
         logger.info('waiting for sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
-    while not safety.issafe() :
+    while not aposong.issafe() :
         # wait until safe to open based on Safety
         time.sleep(30)
 
@@ -297,9 +296,8 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
-    # setup up Safety object and open dome when safe after desired time relative to sunset
-    safety = APOSafety.Safety()
-    obsopen(sunset+dt_sunset*u.hour,safety)
+    # open dome when safe after desired time relative to sunset
+    obsopen(sunset+dt_sunset*u.hour)
 
     # cals
     #if eshelcals :
@@ -309,7 +307,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
         try :
             # if dome has been closed by 3.5m but can now be opened again, do it
-            if safety.issafe() and aposong.D.ShutterStatus != 0 :
+            if aposong.issafe() and aposong.D.ShutterStatus != 0 :
                 logger.info('reopening dome')
                 aposong.domeopen()
             logger.info('waiting for nautical twilight: {:.3f}'.format(
@@ -332,7 +330,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
-        if not safety.issafe() : 
+        if not aposong.issafe() : 
             aposong.domeclose()
             time.sleep(90)
             continue
