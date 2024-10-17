@@ -75,12 +75,13 @@ class Schedule() :
         return tab
 
 class Sequence() :
-    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0]) :
+    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0],bin=[1,1,1,1,1]) :
         self.name=name
         self.n_exp=n_exp
         self.t_exp=t_exp
         self.filt=filt
         self.camera=camera
+        self.bin=bin
 
     def length(self,acquisition=60,filtmove=5,read=15) :
         tot = acquisition
@@ -90,10 +91,10 @@ class Sequence() :
 
     def observe(self,name,display=None) :
         names = []
-        for filt,nexp,texp,cam in zip(self.filt,self.n_exp,self.t_exp,self.camera) :
+        for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp) :
-                logger.info('Expose camera: {:d} exptime: {:.2f}, '.format(cam,texp))
-                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam)
+                logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
+                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam,bin=bin)
                 names.append(exp.name)
         return names
 
@@ -104,6 +105,7 @@ class Sequence() :
         tab['n_exp'] = [self.n_exp]
         tab['t_exp'] = [self.t_exp]
         tab['camera'] = [self.camera]
+        tab['bin'] = [self.bin]
         return tab
 
 class Observation() :
@@ -173,7 +175,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         am = secz(ha,c.dec,apo.lat)
 
         seq = Sequence(request['targname'],filt=request['filter'],n_exp=request['n_exp'],
-                       t_exp=request['t_exp'],camera=request['camera'])
+                       t_exp=request['t_exp'],camera=request['camera'],bin=request['bin'])
         length=seq.length()
         haend=ha+(length/3600.)*u.hourangle
         ham=hamax(c.dec,request['max_airmass'],apo.lat).to(u.hourangle)
@@ -286,8 +288,8 @@ def obsopen(opentime) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True) :
+def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10) :
     """ Full observing night sequence 
     """
     site=Observer.at_site(obs,timezone=tz)
@@ -297,6 +299,8 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
     # open dome when safe after desired time relative to sunset
+    settemp(ccdtemp,cam=0)
+    settemp(ccdtemp,cam=1)
     obsopen(sunset+dt_sunset*u.hour)
 
     # cals
@@ -319,6 +323,9 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.4,ob
     # in case 3.5m has closed while we were waiting....
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
+
+    # fans off for observing?
+    aposong.fans_off()
 
     # focus star on meridian 
     foc=focus(foc0=foc0,delta=75,n=15,display=aposong.disp)
@@ -567,7 +574,7 @@ def mklog(mjd,root='/data/1m/') :
     tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 
     fp.write('<p>Exposures: <BR>\n')
-    tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus'],file=fp)
+    tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus','ccdtemp'],file=fp)
     fp.write('</BODY></HTML>\n')
     fp.close()
 
