@@ -299,8 +299,8 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
     # open dome when safe after desired time relative to sunset
-    settemp(ccdtemp,cam=0)
-    settemp(ccdtemp,cam=1)
+    aposong.settemp(ccdtemp,cam=0)
+    aposong.settemp(ccdtemp,cam=1)
     obsopen(sunset+dt_sunset*u.hour)
 
     # cals
@@ -325,7 +325,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
         aposong.domeopen()
 
     # fans off for observing?
-    aposong.fans_off()
+    #aposong.fans_off()
 
     # focus star on meridian 
     foc=focus(foc0=foc0,delta=75,n=15,display=aposong.disp)
@@ -349,6 +349,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
             aposong.guide(False)
             foc0=focus(foc0=foc0,display=display)
             foctime=tnow
+            oldtarg=''
         else :
             best=getbest(criterion=criterion,maxdec=maxdec,skip=skiptarg)
             if best is None :
@@ -382,11 +383,11 @@ def focus(foc0=28800,delta=75,n=9,display=None) :
     lst=t.sidereal_time('mean').value
     aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
 
-    f=aposong.focrun(foc0,delta,n,2,None,bin=1,thresh=100,display=display,max=5000)
+    f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
     while f<foc0-2*delta or f>foc0+2*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
-        f=aposong.focrun(foc0,75,9,2,None,bin=1,thresh=100,display=display,max=5000)
+        f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
     return f
        
 def test() :
