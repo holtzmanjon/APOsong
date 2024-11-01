@@ -2,6 +2,7 @@
 
 import socket
 import sys, getopt
+import time
 try :
     from serial import Serial
 except :
@@ -42,12 +43,15 @@ def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=10) :
     """ Take series of eShel cals
     """
     lamps(mirror=True,quartz=True,led=True)
+    time.sleep(3)
     for i in range(flats) :
         aposong.expose(flat_exptime,filt=None,bin=1,display=display,cam=1,name='eShel_flat')
     lamps(mirror=True,thar=True)
+    time.sleep(3)
     for i in range(thar) :
         aposong.expose(thar_exptime,filt=None,bin=1,display=display,cam=1,name='eShel_ThAr')
     lamps()
+    time.sleep(3)
 
 def remote() :
   """ Run simple remote socket server to send commands to cal lamp controller
