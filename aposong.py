@@ -721,9 +721,9 @@ def park() :
     """ Park telescope and dome
     """
     domesync(False)
+    D.Park()
     try: T.Park()
     except: logger.error('telescope.Park raised an exception')
-    D.Park()
 
 def foc(val, relative=False) :
     """ Change focus, depending on port
