@@ -318,7 +318,9 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
                 decs=radec.split()[1]
                 telframe.ra.set('{:s}'.format(ras))
                 telframe.dec.set('{:s}'.format(decs))
-                h,m,s=(t.sidereal_time('mean')-ra*u.hourangle).hms
+                ha = (t.sidereal_time('mean')-ra*u.hourangle) 
+                ha = (ha+12*u.hourangle)%(24*u.hourangle)-(12*u.hourangle)
+                h,m,s=ha.hms
                 telframe.ha.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
 
             if T is not None :
