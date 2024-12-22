@@ -118,4 +118,4 @@ def client(svr,cmd) :
     return response
 
 if __name__ == '__main__' :
-    remote.server()
+    server()
