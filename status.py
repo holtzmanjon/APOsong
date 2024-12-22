@@ -448,9 +448,9 @@ def init() :
     try: remote_srv = config['devices']['remote_srv']
     except: remote_srv = None
     if updatecamera :
-        status(T=T,F=F,D=D,pwi=pwi,C=C[getcam(0)])
+        status(T=T,F=F,D=D,pwi=pwi,C=C[getcam(0)],Covers=Covers)
     else :
-        status(T=T,F=F,D=D,pwi=pwi)
+        status(T=T,F=F,D=D,pwi=pwi,Covers=Covers)
 
 
 def getcam(camera) :
