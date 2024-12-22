@@ -117,3 +117,5 @@ def client(svr,cmd) :
     remote_socket.close()
     return response
 
+if __name__ == '__main__' :
+    remote.server()
