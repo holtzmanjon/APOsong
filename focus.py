@@ -6,8 +6,7 @@ from pyvista import centroid, stars, tv
 import matplotlib
 import matplotlib.pyplot as plt
 import pdb
-from photutils.detection import find_peaks
-from photutils import DAOStarFinder
+from photutils.detection import find_peaks, DAOStarFinder
 from holtztools import plots, html
 import time
 import database
