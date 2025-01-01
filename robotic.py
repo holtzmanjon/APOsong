@@ -15,6 +15,7 @@ import os
 import pdb
 import numpy as np
 import time
+import threading
 
 import logging
 import yaml
@@ -290,8 +291,9 @@ def obsopen(opentime) :
 
 def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
             criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10) :
-    """ Full observing night sequence 
-    """
+  """ Full observing night sequence 
+  """
+  while True :
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
     sunrise =site.sun_rise_time(Time.now(),which='next')
@@ -374,7 +376,14 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
     if eshelcals :
         eshel.cals()
 
-    mkhtml()
+    matplotlib.use('Agg') 
+    #mkhtml()
+    html_process=threading.Thread(target=mkhtml)
+    html_lock=threading.Lock() 
+    html_process.start()
+    html_process.join()
+
+    input("Hit a key to start next night: ")
 
 def focus(foc0=28800,delta=75,n=9,display=None) :
     """ Do focus run for object on meridian
@@ -454,7 +463,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
 
-    matplotlib.use('Agg')
+#    matplotlib.use('Agg')
     dir=root+ut+'/guide'
     red=imred.Reducer(dir=dir)
     files=glob.glob(dir+'/acquire*.fits')
@@ -467,12 +476,13 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         if ims[i]-ims[i-1] > 1 :
             seqs.append([ims[i-1]+1,ims[i]])
 
-    print(ims)
-    print(seqs)
+    #print(ims)
+    #print(seqs)
     grid=[]
     row=[]
     for i,seq in enumerate(seqs):
-        plt.close('all')
+        try: plt.close('all')
+        except: pass
         t=tv.TV()
         out='{:s}/{:d}.gif'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
@@ -489,7 +499,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
 def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     """ Make focus plot from focus sequences from database for specified MJD
     """
-    matplotlib.use('Agg')
+#    matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
     d.close()
@@ -579,6 +589,7 @@ def mklog(mjd,root='/data/1m/') :
     fp.write('</BODY></HTML>\n')
     fp.close()
 
-    os.symlink('{:s}.html'.format(ut),'{:s}/{:s}/0_{:s}.html'.format(root,ut,ut))
+    try : os.symlink('{:s}.html'.format(ut),'{:s}/{:s}/0_{:s}.html'.format(root,ut,ut))
+    except: pass
 
     return out
