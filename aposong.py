@@ -51,6 +51,7 @@ try:
   from alpaca.focuser import *
   from alpaca.filterwheel import *
   from alpaca.camera import *
+  from alpaca.switch import *
 except:
   logger.exception('no alpaca')
 
@@ -73,8 +74,8 @@ disp = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
-    global D, S, T, F, Filt, C, Covers
-    D, S, T, F, Filt, C, Covers = (None, None, None, None, None, [], None)
+    global D, S, T, F, Filt, C, Covers, Stage
+    D, S, T, F, Filt, C, Covers,Stage  = (None, None, None, None, None, [], None, [])
     print("Alpaca devices: ")
     if svrs is None : return
     for svr in svrs:
@@ -108,6 +109,9 @@ def ascom_init(svrs) :
                 C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
             elif dev['DeviceType'] == 'Safetymonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
+            elif dev['DeviceType'] == 'Switch' :
+                Stage = isconnected(Switch(svr,dev['DeviceNumber']),Stage,append=True)
+                #Stage = Switch(svr,dev['DeviceNumber'])
 
     try: C[getcam(0)].Magnification=1.33
     except : print("can't access C[getcam(0)]")
