@@ -1,6 +1,4 @@
 import tkthread
-#tkthread.patch()
-#tkthread.tkinstall(ensure_root=True)
 
 import os
 import influxdb_client
@@ -11,73 +9,14 @@ from tkinter import ttk
 import tkinter.font
 import numpy as np
 import yaml
-import remote
 from numpy.random import randint
-try :
-    from alpaca import discovery, management
-    from alpaca.camera import *
-    from alpaca.telescope import *
-    from alpaca.covercalibrator import *
-    from alpaca.dome import *
-    from alpaca.focuser import *
-    from alpaca.filterwheel import *
-    from alpaca.safetymonitor import *
-except :
-    print('no alpaca in status')
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
 import pwi4_client
 
-# discovery seems to fail on 10.75.0.0, so hardcode servers
-def ascom_init(svrs) :
-    global D, T, F, Filt, C, Covers, Safety
-    D, T, F, Filt, C, Covers, Safety = (None, None, None, None, [], None, None)
-    print("Alpaca devices: ")
-    if svrs is None : return
-    for svr in svrs:
-        print(f"  At {svr}")
-        print (f"    V{management.apiversions(svr)} server")
-        print (f"    {management.description(svr)['ServerName']}")
-        devs = management.configureddevices(svr)
-        def isconnected(dev,target,append=False) :
-            try:
-                dev.Connected
-                if append : target.append(dev)
-                else :target = dev
-            except :
-                pass
-            return target
-
-        # open Alpaca devices
-        for dev in devs:
-            print(f"      {dev['DeviceType']}[{dev['DeviceNumber']}]: {dev['DeviceName']}")
-            if dev['DeviceType'] == 'Telescope' :
-                T =isconnected(Telescope(svr,dev['DeviceNumber']),T)
-            elif dev['DeviceType'] == 'Dome' :
-                D = isconnected(Dome(svr,dev['DeviceNumber']),D)
-            elif dev['DeviceType'] == 'CoverCalibrator' :
-                Covers = isconnected(CoverCalibrator(svr,dev['DeviceNumber']),Covers)
-            elif dev['DeviceType'] == 'Focuser' :
-                F = isconnected(Focuser(svr,dev['DeviceNumber']),F)
-            elif dev['DeviceType'] == 'FilterWheel' :
-                Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
-            elif dev['DeviceType'] == 'Camera' :
-                C = isconnected(Camera(svr,dev['DeviceNumber']),C,append=True)
-            elif dev['DeviceType'] == 'Safetymonitor' :
-                Safety = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),Safety)
-
-    #C[0].Magnification=1.5
-    print()
-    print("All ASCOM commands available through devices: ")
-    print('    T : telescope commands')
-    print('    C : camera commands')
-    print('    F : focusser command')
-    print('    Filt : filter wheel commands')
-    print('    D : dome commands')
-
-#from coordio import sky, site, time, ICRS
+import aposong
 
 class TelescopeWgt(ttk.Frame) :
 
@@ -203,7 +142,7 @@ class IodineWgt(ttk.Frame) :
         ttk.Label(self, textvariable=self.temp).grid(column=4,row=1,sticky=(W,E),padx=10)
 
 
-def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
+def status() :
     """ Start status window and updater
     """
     root = Tk()
@@ -255,8 +194,6 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
-
-
     url="http://localhost:8086"
     os.environ['INFLUX_TOKEN'] = 'v-RuHY6T1pyOIL1SU9lrWYKYEU_SDZ0VWkPHOIU9hMECF7axu2wiFzY1u8N7J6s9KCbOreQKI43mJUi9pj5BbA=='
     bucket = "iodinetemp"
@@ -271,13 +208,6 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     )
     write_api = client.write_api(write_options=SYNCHRONOUS)
 
-    temp = remote.client(remote_srv,'tc300 tact')
-    temp1,temp2=temp.split()
-    print(temp1,temp2)
-    p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2))]
-    write_api.write(bucket=bucket, org=org, record=p)
-
     def update() :
         try :
             t=Time.now()
@@ -288,114 +218,64 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
 
-            if pwi is not None :
-                stat = pwi.status()
+            stat = aposong.telescope_status()
 
-            if T is None and pwi is None :
-                telframe.ra.set('N/A')
-                telframe.dec.set('N/A')
-            else :
-                if pwi is None :
-                    ra = T.RightAscension
-                    dec = T.Declination
-                # convert from topocentric to ICRS
-                #aposite.set_time(time.Time())
-                ##print('telescope: ', T.RightAscension, T.Declination)
-                ##print('time: ', time.Time())
-                ##obs = sky.Observed([[15*T.RightAscension, T.Declination]], site=aposite)
-                #obs = sky.Observed([[T.Altitude, T.Azimuth]], site=aposite)
-                #icrs = sky.ICRS(obs)
-                ##print('ICRS:',icrs)
-                #telframe.ra.set('{:f}'.format(icrs[0][0]/15.))
-                #telframe.dec.set('{:f}'.format(icrs[0][1]))
-                else :
-                    ra = stat.mount.ra_j2000_hours
-                    dec = stat.mount.dec_j2000_degs
-                    telframe.port.set('{:d}'.format(stat.m3.port))
-                c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
-                radec=c.to_string('hmsdms',sep=':',precision=1) 
-                ras=radec.split()[0]
-                decs=radec.split()[1]
-                telframe.ra.set('{:s}'.format(ras))
-                telframe.dec.set('{:s}'.format(decs))
-                ha = (t.sidereal_time('mean')-ra*u.hourangle) 
-                ha = (ha+12*u.hourangle)%(24*u.hourangle)-(12*u.hourangle)
-                h,m,s=ha.hms
-                telframe.ha.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
+            telframe.port.set('{:d}'.format(stat.m3.port))
+            ra = stat.mount.ra_j2000_hours
+            dec = stat.mount.dec_j2000_degs
+            c = SkyCoord(ra=ra*u.h, dec=dec*u.degree)
+            radec=c.to_string('hmsdms',sep=':',precision=1) 
+            ras=radec.split()[0]
+            decs=radec.split()[1]
+            telframe.ra.set('{:s}'.format(ras))
+            telframe.dec.set('{:s}'.format(decs))
+            ha = (t.sidereal_time('mean')-ra*u.hourangle) 
+            ha = (ha+12*u.hourangle)%(24*u.hourangle)-(12*u.hourangle)
+            h,m,s=ha.hms
+            telframe.ha.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
 
-            if T is not None :
-                telframe.az.set('{:.2f}'.format(T.Azimuth))
-                telframe.alt.set('{:.2f}'.format(T.Altitude))
-            else :
-                telframe.az.set('N/A')
-                telframe.alt.set('N/A')
+            telframe.az.set('{:.2f}'.format(stat.Azimuth))
+            telframe.alt.set('{:.2f}'.format(stat.Altitude))
 
-            if pwi is not None :
-                telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
-                telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
-            else :
-                telframe.rot.set('missing')
-                telframe.pa.set('missing')
+            telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
+            telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
 
-            if pwi is not None :
-                port = stat.m3.port
-                if port == 1 :
-                    telframe.focus.set('{:d}'.format(F.Position))
-                else :
-                    foc = int(1000*float(remote.client(remote_srv,'zaber position')))
-                    telframe.focus.set('{:d}'.format(foc))
-            elif F is not None :
-                telframe.focus.set('{:d}'.format(F.Position))
-            else :
-                telframe.focus.set('N/A')
+            telframe.focus.set('{:d}'.format(aposong.getfoc()))
 
-            if Covers is not None :
-                domeframe.coverstate.set('{:s}'.format(coverstate[Covers.CoverState]))
+            state = aposong.mirror_covers_state()
+            domeframe.coverstate.set('{:s}'.format(coverstate[state]))
 
-            if D is not None :
-                domeframe.az.set('{:.1f}'.format(D.Azimuth))
-                domeframe.shutter.set('{:s}'.format(shutter[D.ShutterStatus]))
-                if D.Slewing : domeframe.slewing.set('SLEWING')
-                else : domeframe.slewing.set(' ')
-            else :
-                domeframe.az.set('N/A')
-                domeframe.shutter.set('N/A')
-                domeframe.slewing.set('N/A')
+            az, shutterstatus, slewing = aposong.domestatus()
+            domeframe.az.set('{:.1f}'.format(az))
+            domeframe.shutter.set('{:s}'.format(shutter[shutterstatus]))
+            if slewing : domeframe.slewing.set('SLEWING')
+            else : domeframe.slewing.set(' ')
 
-            #domeframe.stat35m.set(safety.stat()[0]+'/'+safety.encl25Open())
-            domeframe.stat35m.set(Safety.Action('stat35m')+'/'+Safety.Action('stat25m'))
+            stat35m, stat25m = aposong.get_safety()
+            domeframe.stat35m.set(stat35m+'/'+stat25m)
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
 
-            if Filt is not None :
-                camframe.filter.set('{:s}'.format(Filt.Names[Filt.Position]))
-            else :
-                camframe.filter.set('None')
+            camframe.filter.set('{:s}'.format(aposong.filtname()))
 
-            if C is not None :
-                camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-                camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
-                camframe.temperature.set('{:.1f}/{:.1f}'.format(
-                         C.CCDTemperature,C.SetCCDTemperature))
-                camframe.cooler.set('{:.1f}'.format( C.CoolerPower))
-            else :
-                camframe.filter.set('N/A')
-                camframe.binning.set('N/A')
-                camframe.state.set('N/A')
-                camframe.temperature.set('N/A')
-                camframe.cooler.set('N/A')
+            BinX, BinY, CameraState, CCDTemperature, SetCCDTemperature, CoolerPower = aposong.camera_status(0)
+            camframe.binning.set('{:d}x{:d}'.format(BinX,BinY))
+            camframe.state.set('{:s}'.format(camerastate[CameraState]))
+            camframe.temperature.set('{:.1f}/{:.1f}'.format(
+                         CCDTemperature,SetCCDTemperature))
+            camframe.cooler.set('{:.1f}'.format( CoolerPower))
 
-            pos = remote.client(remote_srv,'lts position')
+            pos = aposong.iodine_position()
             iodineframe.position.set(pos)
-            temp = remote.client(remote_srv,'tc300 tact')
-            tset = remote.client(remote_srv,'tc300 tset')
-            volt = remote.client(remote_srv,'tc300 volt')
-            curr = remote.client(remote_srv,'tc300 curr')
+            temp = aposong.iodine_tget()
+            tset = aposong.iodine_tset()
+            volt = aposong.iodine_get('voltage')
+            curr = aposong.iodine_get('current')
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
-            if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
-                remote.client(remote_srv,'tc300 en 0')
+            #if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
+            #    aposong.iodine_set('enable',0)
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("volt1", float(volt1)),
@@ -416,59 +296,3 @@ def status(pwi=None, T=None, D=None, Filt=None, F=None, C=None, Covers=None) :
     signal.signal(signal.SIGINT,handler)
     update()
     root.mainloop()
-
-
-def init() :
-    """ Start ascom and pwi connections 
-    """
-    global pwi_srv, remote_srv
-    try :
-        with open('aposong.yml','r') as config_file :
-            config = yaml.safe_load(config_file)
-    except:
-        print('no configuration file found')
-        config={}
-        config['devices']={}
-        config['devices']['ascom_search'] = False
-        config['devices']['ascom_srvs'] = []
-        config['devices']['pwi_srv'] = None
-        config['dataroot'] = './'
-
-    if config['devices']['ascom_search'] :
-        svrs=discovery.search_ipv4(timeout=30,numquery=3)
-    else :
-        svrs=config['devices']['ascom_srvs']
-    try : updatecamera=config['updatecamera']
-    except : updatecamera=True
-    ascom_init(svrs)
-    print('pwi_init...')
-    pwi_srv = config['devices']['pwi_srv']
-    pwi_init(pwi_srv)
-    print('start_status...')
-    try: remote_srv = config['devices']['remote_srv']
-    except: remote_srv = None
-    if updatecamera :
-        status(T=T,F=F,D=D,pwi=pwi,C=C[getcam(0)],Covers=Covers)
-    else :
-        status(T=T,F=F,D=D,pwi=pwi,Covers=Covers)
-
-
-def getcam(camera) :
-    """ Get correct list index for specified camera (ASCOM doesn't always deliver them in order!)
-    """
-    for index,c in enumerate(C) :
-        if c.device_number == camera :
-            return index
-    print('no such camera!')
-    return -1
-
-def pwi_init(pwi_srv) :
-    global pwi
-    print('Starting PWI4 client...')
-    if pwi_srv is not None :
-        pwi=pwi4_client.PWI4(host=pwi_srv)
-        for axis in [0,1] : pwi.mount_enable(axis)
-    else :
-        pwi = None
-
-

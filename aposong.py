@@ -14,7 +14,6 @@ from datetime import datetime
 import multiprocessing as mp
 import threading
 import yaml
-import remote
 import subprocess
 
 import logging
@@ -74,8 +73,8 @@ disp = None
 
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
-    global D, S, T, F, Filt, C, Covers, Stage
-    D, S, T, F, Filt, C, Covers,Stage  = (None, None, None, None, None, [], None, [])
+    global D, S, T, F, Filt, C, Covers, SW
+    D, S, T, F, Filt, C, Covers,SW  = (None, None, None, [], None, [], None, [])
     print("Alpaca devices: ")
     if svrs is None : return
     for svr in svrs:
@@ -102,7 +101,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'CoverCalibrator' :
                 Covers = isconnected(CoverCalibrator(svr,dev['DeviceNumber']),Covers)
             elif dev['DeviceType'] == 'Focuser' :
-                F = isconnected(Focuser(svr,dev['DeviceNumber']),F)
+                F = isconnected(Focuser(svr,dev['DeviceNumber']),F,append=True)
             elif dev['DeviceType'] == 'FilterWheel' :
                 Filt = isconnected(FilterWheel(svr,dev['DeviceNumber']),Filt)
             elif dev['DeviceType'] == 'Camera' :
@@ -110,8 +109,7 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'Safetymonitor' :
                 S = isconnected(SafetyMonitor(svr,dev['DeviceNumber']),S)
             elif dev['DeviceType'] == 'Switch' :
-                Stage = isconnected(Switch(svr,dev['DeviceNumber']),Stage,append=True)
-                #Stage = Switch(svr,dev['DeviceNumber'])
+                SW = isconnected(Switch(svr,dev['DeviceNumber']),SW,append=True)
 
     try: C[getcam(0)].Magnification=1.33
     except : print("can't access C[getcam(0)]")
@@ -125,6 +123,9 @@ def ascom_init(svrs) :
 
 def getcam(camera) :
     """ Get correct list index for specified camera (ASCOM doesn't always deliver them in order!)
+         camera=0 : Port 2 camera
+         camera=1 : Port 2 spectrograph
+         camera=2 : Port 1 camera
     """
     for index,c in enumerate(C) :
         if c.device_number == camera : 
@@ -132,7 +133,35 @@ def getcam(camera) :
     print('no such camera!')
     return -1
 
+def getfocuser(focuser) :
+    """ Get correct list index for specified focuser (ASCOM doesn't always deliver them in order!)
+         focuser='PWI' : Port 1 focuser (PWI)
+         focuser='Zaber' : Port 2 focuser (Zaber)
+         focuser='LTS' : Port 2 iodine stage (LTS150)
+    """
+    for index,c in enumerate(F) :
+        if focuser in c.Name :
+            return index
+    print('no such focuser!')
+
+def getswitch(switch) :
+    """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
+         switch=0 : TC300
+         switch=1 : LTS250
+    """
+    for index,sw in enumerate(SW) :
+        if sw.device_number == switch : 
+            return index 
+    print('no such switch!')
+    return -1
+
 # Camera commands
+def camera_status(cam=0) :
+    """ Return some camera parameters for status
+    """
+    icam = getcam(cam)
+    return C[icam].BinX, C[icam].BinY, C[icam].CameraState.value, C[icam].CCDTemperature, C[icam].SetCCDTemperature, C[icam].CoolerPower
+
 def qck(exptime,filt='current') :
     """ (shorthand) Take exposure without saving to disk, current filter by default
     """
@@ -164,15 +193,19 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
            HDU of image [,output file name if name!=None]
     """
     exposure = Exposure(None,None,None,None)
-    if filt is not None and filt != 'current': 
-        pos = np.where(np.array(Filt.Names) == filt)
-        if len(pos) == 0 :
-            logger.warning('no such filter')
-            logger.warning('available filters: ', Filt.Names)
-            return exposure
-        Filt.Position=pos[0]
-    elif filt == 'current' :
-        filt = Filt.Names[Filt.Position]
+    stat = pwi.status()
+    if stat.m3.port == 1 :
+        if filt is not None and filt != 'current': 
+            pos = np.where(np.array(Filt.Names) == filt)
+            if len(pos) == 0 :
+                logger.warning('no such filter')
+                logger.warning('available filters: ', Filt.Names)
+                return exposure
+            Filt.Position=pos[0]
+        elif filt == 'current' :
+            filt = Filt.Names[Filt.Position]
+    else :
+        filt = 'None'
 
     try :
         icam = getcam(cam) 
@@ -278,6 +311,11 @@ def cooler(state=True,cam=0) :
     icam=getcam(cam)
     C[icam].CoolerOn = state
 
+def filtname() :
+    """ Return current filter name
+    """
+    return Filt.Names[Filt.Position]
+
 def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            max=30000, thresh=25,cam=0,plot=False) :
     """ Obtain a focus run
@@ -380,6 +418,16 @@ def pixscale(cam=0,bin=1) :
     try: scale /= C[icam].Magnification
     except: pass
     return scale
+
+def telescope_status() :
+    """ Return telescope status
+    """
+    stat = pwi.status()
+    stat.RightAscension = T.RightAscension
+    stat.Declination = T.Declination
+    stat.Azimuth = T.Azimuth
+    stat.Altitude = T.Altitude
+    return stat
 
 def slew(ra, dec,dome=True) :
     """ Slew to RA/DEC and wait for telescope/dome
@@ -734,59 +782,50 @@ def foc(val, relative=False) :
     """
     stat = pwi.status()
     if stat.m3.port == 1 :
-        return pfoc(val, relative=relative)
+        index = getfocuser('PWI')
     else :
-        return zfoc(val, relative=relative)
+        index = getfocuser('Zaber')
+    if relative :
+        val += F[index].Position
+    F[index].Move(val)
+    return F[index].Position
 
 def getfoc() :
     """ Get focus, depending on port
     """
     stat = pwi.status()
     if stat.m3.port == 1 :
-        return F.Position
+        return F[getfocuser('PWI')].Position
     else :
-        return zfoc()
-
-def pfoc(val, relative=False) :
-    """ Change Planewave port 1 focus, absolute (default) or relative
-
-    Parameters
-    ----------
-    val : int
-          new focus value, absolute value unless relative=True
-    relative : bool, default=False
-          if True, then move amount relative to current position
-    """
-    if relative :
-        val += F.Position
-    F.Move(val)
-    return val
-
-def zfoc(val=None, relative=False) :
-    """ Change camera focus, absolute (default) or relative
-    """
-    if val is None :
-        val= remote.client(remote_srv,'zaber position') 
-        return int(float(val)*1000)
-    if relative :
-        val += int(float(remote.client(remote_srv,'zaber position') )*1000)
-    val = remote.client(remote_srv,'zaber position {:f}'.format(val/1000.)) 
-    return int(float(val)*1000)
+        return F[getfocuser('Zaber')].Position
 
 def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
     """
     if val is not None :
-        tset = remote.client(remote_srv,'tc300 tset {:d}'.format(val*10))
+        tset1 = SW[0].SetSwitchValue(0,val)
+        tset2 = SW[0].SetSwitchValue(1,val)
     else :
-        tset = remote.client(remote_srv,'tc300 tset')
-    return tset
+        tset1 = SW[0].Action('get_tset',0)
+        tset2 = SW[0].Action('get_tset',1)
+    return f'{tset1} {tset2}'
 
 def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
-    tact = remote.client(remote_srv,'tc300 tact')
-    return tact
+    tact1 = SW[0].GetSwitchValue(0)
+    tact2 = SW[0].GetSwitchValue(1)
+    return f'{tact1} {tact2}'
+
+def iodine_get(quantity) :
+    """ Get iodine cell quantity
+    """
+    if quantity in ['tset','voltage','current'] :
+        q1 = SW[0].Action('get_{:s}'.format(quantity),0)
+        q2 = SW[0].Action('get_{:s}'.format(quantity),1)
+        return f'{q1} {q2}'
+    else :
+        print('unknown quantity')
 
 def iodine_in(val=21.,focoffset=-4625) :
     """ Move iodine cell into beam
@@ -803,16 +842,10 @@ def iodine_out(val=141.,focoffset=4625) :
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
+    index=getfocuser('LTS')
     if val is not None :
-        pos = remote.client(remote_srv,'lts position {:f}'.format(val))
-    else :
-        pos = remote.client(remote_srv,'lts position')
-    return pos
-
-def domehome() :
-    """ Home dome
-    """
-    D.FindHome()
+        F[index].Move(val)
+    return F[index].Position
 
 def fans_on(roles=None):
     """
@@ -837,6 +870,9 @@ def port(port) :
     """ Change PWI M3 port
     """
     pwi.m3_goto(port)
+
+def mirror_covers_state() :
+    return Covers.CoverState.value
 
 def mirror_covers(open=False) :
     """ Open/close mirror covers
@@ -867,10 +903,25 @@ def louvers(open=False) :
 def coverstate() :
     print(Covers.CoverState.value)
 
+def get_safety() :
+    """ Return 3.5m and 2.5m dome status
+    """
+    return S.Action('stat35m'),S.Action('stat25m')
+
 def issafe() :
     """ Query SafetyMonitor for safe to open
     """
     return S.IsSafe
+
+def domestatus() :
+    """ Return dome azimuth and shutter status
+    """
+    return D.Azimuth, D.ShutterStatus, D.Slewing
+
+def domehome() :
+    """ Home dome
+    """
+    D.FindHome()
 
 def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     """ Open dome and mirror covers
@@ -999,7 +1050,7 @@ def commands() :
 def init() :
     """ Start ascom and pwi connections and pyvista display
     """
-    global disp, dataroot, pwi_srv, remote_srv
+    global disp, dataroot, pwi_srv
     try :
         with open('aposong.yml','r') as config_file :
             config = yaml.safe_load(config_file) 
@@ -1023,12 +1074,8 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-    try : remote_srv = config['devices']['remote_srv']
-    except : remote_srv = None
-    #print('start_status...')
-    #start_status(updatecamera)
-    try : disp=tv.TV(figsize=(9.5,6))
-    except : print("Can't open display")
+#    try : disp=tv.TV(figsize=(9.5,6))
+#    except : print("Can't open display")
     commands()
 
 def pwi_init(pwi_srv) :
