@@ -242,8 +242,7 @@ def status() :
 
             telframe.focus.set('{:d}'.format(aposong.getfoc()))
 
-            state = aposong.mirror_covers_state()
-            domeframe.coverstate.set('{:s}'.format(coverstate[state]))
+            domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
 
             az, shutterstatus, slewing = aposong.domestatus()
             domeframe.az.set('{:.1f}'.format(az))
@@ -251,19 +250,19 @@ def status() :
             if slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
 
-            stat35m, stat25m = aposong.get_safety()
-            domeframe.stat35m.set(stat35m+'/'+stat25m)
+            domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
 
             camframe.filter.set('{:s}'.format(aposong.filtname()))
 
-            BinX, BinY, CameraState, CCDTemperature, SetCCDTemperature, CoolerPower = aposong.camera_status(0)
-            camframe.binning.set('{:d}x{:d}'.format(BinX,BinY))
-            camframe.state.set('{:s}'.format(camerastate[CameraState]))
+            icam = aposong.getcam(0)
+            C = aposong.C[icam]
+            camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
+            camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
-                         CCDTemperature,SetCCDTemperature))
-            camframe.cooler.set('{:.1f}'.format( CoolerPower))
+                         C.CCDTemperature,C.SetCCDTemperature))
+            camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
 
             pos = aposong.iodine_position()
             iodineframe.position.set(pos)

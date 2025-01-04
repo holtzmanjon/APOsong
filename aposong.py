@@ -156,12 +156,6 @@ def getswitch(switch) :
     return -1
 
 # Camera commands
-def camera_status(cam=0) :
-    """ Return some camera parameters for status
-    """
-    icam = getcam(cam)
-    return C[icam].BinX, C[icam].BinY, C[icam].CameraState.value, C[icam].CCDTemperature, C[icam].SetCCDTemperature, C[icam].CoolerPower
-
 def qck(exptime,filt='current') :
     """ (shorthand) Take exposure without saving to disk, current filter by default
     """
@@ -871,8 +865,6 @@ def port(port) :
     """
     pwi.m3_goto(port)
 
-def mirror_covers_state() :
-    return Covers.CoverState.value
 
 def mirror_covers(open=False) :
     """ Open/close mirror covers
@@ -902,11 +894,6 @@ def louvers(open=False) :
 
 def coverstate() :
     print(Covers.CoverState.value)
-
-def get_safety() :
-    """ Return 3.5m and 2.5m dome status
-    """
-    return S.Action('stat35m'),S.Action('stat25m')
 
 def issafe() :
     """ Query SafetyMonitor for safe to open
