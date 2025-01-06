@@ -1,9 +1,6 @@
 aposong module
 **************
 
-Introduction
-++++++++++++
-
 aposong provides a Python interface to the observing system for the SONG node at Apache
 Point Observatory. It communicates with devices attached to other computers on the
 internal APO network: the Planewave 1m telescope, the Planewave mirror covers,
