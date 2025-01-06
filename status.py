@@ -17,6 +17,7 @@ import astropy.units as u
 import pwi4_client
 
 import aposong
+import eshel
 
 class TelescopeWgt(ttk.Frame) :
 
@@ -141,6 +142,36 @@ class IodineWgt(ttk.Frame) :
         self.temp = StringVar()
         ttk.Label(self, textvariable=self.temp).grid(column=4,row=1,sticky=(W,E),padx=10)
 
+        ttk.Label(self,text="IODINE VOLTAGE",width=16).grid(column=1,row=2,sticky=(W))
+        self.voltage = StringVar()
+        ttk.Label(self, textvariable=self.voltage).grid(column=2,row=2,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="IODINE CURRENT",width=16).grid(column=3,row=2,sticky=(W))
+        self.current = StringVar()
+        ttk.Label(self, textvariable=self.current).grid(column=4,row=2,sticky=(W,E),padx=10)
+
+class eShelWgt(ttk.Frame) :
+
+    def __init__(self,container) :
+        super().__init__(container) 
+
+        ttk.Label(self,text="ESHEL CALIBRATION",width=24).grid(column=1,row=1,sticky=(W))
+
+        ttk.Label(self,text="MIRROR",width=8).grid(column=1,row=2,sticky=(W))
+        self.mirror = StringVar()
+        ttk.Label(self, textvariable=self.mirror).grid(column=2,row=2,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="QUARTZ",width=8).grid(column=3,row=2,sticky=(W))
+        self.quartz = StringVar()
+        ttk.Label(self, textvariable=self.quartz).grid(column=4,row=2,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="LED",width=8).grid(column=5,row=2,sticky=(W))
+        self.led = StringVar()
+        ttk.Label(self, textvariable=self.led).grid(column=6,row=2,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="ThAr",width=8).grid(column=7,row=2,sticky=(W))
+        self.thar = StringVar()
+        ttk.Label(self, textvariable=self.thar).grid(column=8,row=2,sticky=(W,E),padx=10)
 
 def status() :
     """ Start status window and updater
@@ -182,6 +213,12 @@ def status() :
 
     iodineframe=IodineWgt(mainframe)
     iodineframe.grid(column=1,row=7,stick=(W))
+
+    line=ttk.Separator(mainframe,orient='horizontal')
+    line.grid(column=1,row=8,stick=(E,W))
+
+    eShelframe=eShelWgt(mainframe)
+    eShelframe.grid(column=1,row=9,stick=(W))
 
     for child in mainframe.winfo_children(): 
         child.grid_configure(padx=5, pady=5)
@@ -264,17 +301,26 @@ def status() :
                          C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
 
+            # Get iodine cell related data
             pos = aposong.iodine_position()
-            iodineframe.position.set(pos)
             temp = aposong.iodine_tget()
             tset = aposong.iodine_tset()
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
+            iodineframe.position.set(pos)
+            iodineframe.temp.set(temp+' / '+tset)
+            iodineframe.voltage.set(volt)
+            iodineframe.current.set(curr)
+
+            # load into influx database
+            tset1,tset2=tset.split() 
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
-            #if float(temp1)>float(tset)+20 or float(temp2)>float(tset)+20 :
-            #    aposong.iodine_set('enable',0)
+            if float(temp1)>float(tset1)+20 or float(temp2)>float(tset2)+20 :
+                # if temp is more than 20 degrees above set temp, disable heaters!
+                aposong.iodine_set('enable',0,0)
+                aposong.iodine_set('enable',1,0)
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("volt1", float(volt1)),
@@ -282,7 +328,13 @@ def status() :
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("curr1", float(curr1)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("curr2", float(curr2))]
             write_api.write(bucket=bucket, org=org, record=p)
-            iodineframe.temp.set(temp+' / '+tset)
+
+            # get eShel calibration status
+            state = ['Off','On']
+            eShelframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
+            eShelframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
+            eShelframe.led.set(state[aposong.SW[1].GetSwitch(2)])
+            eShelframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
 
         except : 
             telframe.ut.set('ERROR')

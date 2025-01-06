@@ -811,10 +811,18 @@ def iodine_tget() :
     tact2 = SW[0].GetSwitchValue(1)
     return f'{tact1} {tact2}'
 
+def iodine_set(quantity,val) :
+    if quantity in ['enable'] :
+        q1 = SW[0].Action('set_{:s}'.format(quantity),0,val)
+        q2 = SW[0].Action('set_{:s}'.format(quantity),1,val)
+        return f'{q1} {q2}'
+    else :
+        print('unknown quantity')
+
 def iodine_get(quantity) :
     """ Get iodine cell quantity
     """
-    if quantity in ['tset','voltage','current'] :
+    if quantity in ['tset','voltage','current','enable'] :
         q1 = SW[0].Action('get_{:s}'.format(quantity),0)
         q2 = SW[0].Action('get_{:s}'.format(quantity),1)
         return f'{q1} {q2}'
