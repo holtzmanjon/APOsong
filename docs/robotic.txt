@@ -2,8 +2,34 @@ robotic module
 **************
 
 robotic module provides a client for robotic operation of the APO SONG telescope.
+It uses the routine and Alpyca devices of the aposong module to execute observatory,
+telescope and camera control.
 
+The main function is observe(). This will wait until a specified time relative
+to sunset to open the dome, and then wait until a specified time relative to nautical
+twilight to start observing. Observing continues in a loop until a specified time
+relative to morning twilight. Safety status is checked in between each object to
+determine whether to suspend operations until it becomes safe again; note that
+the dome closes independently immediately on unsafe conditions through the
+Dome server.
 
+Observations are drawn from a Postgres database table (requests)
+that gives a target (defined in target table), observing schedule
+constraints (defined in schedule table) , and observing sequence
+(defined in squence table). The getbest() routine selects the best
+object to observed given the constraints and lenght of boserving
+sequence based on either a criterion to observe objects before they
+set (default), or to observe objects that will be available for the
+longest amount of time.
+
+Once an object is select, it is acquired, guiding started, and then the
+exposure sequence executed. Completed sequences are logged back into the Postgres
+database.
+
+Calibration sequences can also be obtained automatically.
+
+At the end of the night, web pages, focus curves, and guider movies for the
+night are constructed.
 
 
 

@@ -14,20 +14,20 @@ ASCOM driver).
 
 Several modules are included:
 
-- aposong contains a function to connect to the Alpaca servers and
+* aposong contains a function to connect to the Alpaca servers and
 return Alypca devices. It also contains a number of routines for doing
 observatory/observing tasks that use these devices. aposong can be
 used for an interactive Python client to observe. It is also imported
 by the other clients to provide access to the Alpyca devices and the
 observatory routines
 
-- robotic contains functions for robotic observing. It imports the
+* robotic contains functions for robotic observing. It imports the
 aposong routines but also provides logic for determining when to
 open/close dome, selects objects and observing sequences from a Postgres
 database, and performs acquisition and starts guiding before executing
 the observing sequences
 
-- status is a routine to display a Tk status window. It imports the
+* status is a routine to display a Tk status window. It imports the
 aposong routines to use the Alpyca drivers to get status of various
 devices. It also loads some of the status information into an InfluxDB
 for longterm monitoring.
