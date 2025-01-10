@@ -5,6 +5,12 @@ robotic module provides a client for robotic operation of the APO SONG telescope
 It uses the routine and Alpyca devices of the aposong module to execute observatory,
 telescope and camera control.
 
+Once SONG operation starts, robotic observing will be driven by the conductor at
+Aarhus University, but this has not yet been implemented.
+
+In the meantime, an independent robotic observer has been developer; it seems likely
+that some of the pieces will be of use with the SONG operations.
+
 The main function is observe(). This will wait until a specified time relative
 to sunset to open the dome, and then wait until a specified time relative to nautical
 twilight to start observing. Observing continues in a loop until a specified time
