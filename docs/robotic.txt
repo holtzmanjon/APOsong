@@ -1,6 +1,9 @@
 robotic module
 **************
 
+robotic module provides a client for robotic operation of the APO SONG telescope.
+
+
 
 
 

@@ -9,9 +9,8 @@ status of other telescopes on site, and, eventually, a spectrograph camera.
 
 Communication with these devices is achieved, for the most part, using the
 ASCOM/Alpaca protocol, although a few more specialized commands are communicated
-through non-standard interfaces. Control of the iodine cell, both the stage
-position and the temperature control are achieved through a simple socket
-interface.
+through non-standard interfaces (Planewave has an API that provides more functionality
+than their ACSCOM driver). 
 
 The main module, aposong, opens up an Alpaca device for each of the devices. It
 provides routines for many basic observatory tasks, e.g., opening and closing,
@@ -20,16 +19,19 @@ as needed. Individual devices can also be addressed using the Alpaca device
 instantiations and the standard ASCOM command sets for more experienced users
 if needed.
 
-To run the software, start an ipython session on the song1m
+It can be used to run an interactive Python client. To run the software, start 
+an ipython session on the song1m
 
 .. code-block:: 
 
     from aposong import *
 
-This should open a status window that reports information from telescope, dome,
-and camera(s), and also open a pyvista display window into which images can
-be automatically displayed as they are obtained. Otherwise, you get a normal
-python interface, but with a set of observatory commands now defined.
+Several functions/commands have a disp= keyword for image display. To use these
+you should instantiate a pyvista TV tool, e.g.
+
+.. code-block::
+
+    disp=tv.TV(figsize=(9.5,6))
 
 Commands
 ++++++++
@@ -44,10 +46,12 @@ Observatory commands:
 
 Dome commands:
   - domehome(): move dome to home position
+  - domesync() : starts/stops thread to sync dome to telescope position
 
 Telescope commands :
   - slew(ra,dec): slew to coordinates
-  - offset(ra,dec): offset telescope
+  - offset(dra,ddec): offset telescope in ra/dec
+  - offsetxy(dx,dy): offset telescope in detector coordinates
   - usno([ra,dec]) : find/slew to USNO A2.0 star
   - altaz(az,alt): slew to az/alt coordinates
   - foc(focus) : set focus to specified value
@@ -56,7 +60,7 @@ Telescope commands :
   - park(): park telescope and dome
 
 Camera commands :
-  - expose(exptime,filt,**kwargs: take an exposure
+  - expose(exptime,filt,**kwargs: take an exposure, returns named Exposure tuple with data, hdu, etc.
   - focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
@@ -66,14 +70,24 @@ Focal plane unit commands :
   - iodine_tset(val) : set iodine temperature (both channels)
   - iodine_tget(): get actual iodine temperatures
 
+Alpyca devices
+++++++++++++++
+
+Importing aposong exposes several Alpyca devices as Python objects:
+
+- T : Telescope device
+- F[] : Focuser devices : Planewave focuser (ASCOM) , Zaber focuser (Alpaca) , iodine stage (Alpaca)
+- C[] : Camera devices : Port 1 QSI camera (ASCOM), Port 2 acquisition camera (ASCOM), Port 2 Shelyak camera (ASCOM)
+- Covers : Covercalibrator device :Planewave mirror covers (ASCOM)
+- D : Dome device : APOAshDome Alpaca device
+- S : Safetymonitor device : APOSafety  Alpaca device
+- SW[] : Switch devices : Thorlabs TC300 temperature controller (Alpaca), Shelyak calibration unit (Alpaca)
 
 Configuration
 +++++++++++++
 
 Some basic configuration is done using the aposong.yml file. This file configures
-the IP addresses for the ASCOM Remote servers, the PWI4 server, and the APOSong
-remote server that passes commands through a simple socket interface to some
-of the custom devices.
+the IP addresses for the ASCOM Remote servers, the PWI4 server.
 
 Module functions
 ++++++++++++++++

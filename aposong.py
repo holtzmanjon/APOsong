@@ -184,7 +184,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     Returns
     -------
-           HDU of image [,output file name if name!=None]
+           named tuple: Exposure = namedtuple('Exposure', ['hdu', 'name', 'exptime', 'filter'])
     """
     exposure = Exposure(None,None,None,None)
     stat = pwi.status()
