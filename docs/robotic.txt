@@ -32,8 +32,10 @@ Once an object is select, it is acquired, guiding started, and then the
 exposure sequence executed. Completed sequences are logged back into the Postgres
 database in the observed table.
 
+The contents of the database tables is shown below:
+
 .. image:: robotic_schema.png
-  :width: 400
+  :width: 600
   :alt: robotic schema
 
 Calibration sequences can also be obtained automatically.
