@@ -19,8 +19,8 @@ determine whether to suspend operations until it becomes safe again; note that
 the dome closes independently immediately on unsafe conditions through the
 Dome server.
 
-Observations are drawn from a Postgres database table (requests)
-that gives a target (defined in target table), observing schedule
+Observations are drawn from a Postgres robotic schema that includes a 
+database table (requests) that gives a target (defined in target table), observing schedule
 constraints (defined in schedule table) , and observing sequence
 (defined in squence table). The getbest() routine selects the best
 object to observed given the constraints and lenght of boserving
@@ -30,13 +30,16 @@ longest amount of time.
 
 Once an object is select, it is acquired, guiding started, and then the
 exposure sequence executed. Completed sequences are logged back into the Postgres
-database.
+database in the observed table.
+
+.. image:: robotic_schema.png
+  :width: 400
+  :alt: robotic schema
 
 Calibration sequences can also be obtained automatically.
 
 At the end of the night, web pages, focus curves, and guider movies for the
 night are constructed.
-
 
 
 Module functions
