@@ -17,7 +17,7 @@ import yaml
 import subprocess
 
 import logging
-import guiding
+#import guiding
 import yaml
 import logging.config
 try :
@@ -143,6 +143,18 @@ def getfocuser(focuser) :
         if focuser in c.Name :
             return index
     print('no such focuser!')
+
+def wait_moving(Foc) :
+    """ Check if input Focuser is stil moving
+    """ 
+    while True :
+        try :
+            if not Foc.IsMoving : break
+        except : 
+            logger.exception('error with F.IsMoving')
+            break
+        time.sleep(1)
+    return
 
 def getswitch(switch) :
     """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
@@ -345,16 +357,8 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     focvals= np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))
     for i,focval in enumerate(focvals) :
         foc(int(focval))
-        if i==0 : time.sleep(5)
-        while True :
-            try :
-                moving=F.IsMoving
-                if not moving : break
-            except : 
-                logger.exception('error with F.IsMoving')
-            time.sleep(2)
         
-        logger.info('position: {:d} {}'.format(getfoc(),moving))
+        logger.info('position: {:d}'.format(getfoc()))
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
@@ -363,13 +367,6 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         names.append(name)
         files.append(exp.name)
         images.append(hdu)
-        #if i == 0 :
-        #    nr,nc=hdu.data.shape
-        #    mosaic = np.zeros([nr,n*nc])
-        #mosaic[:,i*nc:(i+1)*nc] = hdu.data
-    #plt.figure()
-    #plt.imshow(mosaic,vmin=0,vmax=max,cmap='gray')
-    #plt.axis('off')
     try :
         bestfitfoc, bestfithf,  bestfoc, besthf = focus.focus(files,pixscale=pixscale(cam,bin=bin),
                                                 display=display,max=max,thresh=thresh,plot=plot)
@@ -532,6 +529,17 @@ def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     if y0 is None : y0=C[icam].NumY//2
     offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
     time.sleep(settle)
+
+def newguider(start=True) :
+    s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('127.0.0.1',5000))
+    if start :
+        s.send(b'start')
+    else :
+        s.send(b'stop')
+    out=s.recv(1024)
+    print('received {:s}'.format(out))
+    s.close()
 
 def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
@@ -782,6 +790,7 @@ def foc(val, relative=False) :
     if relative :
         val += F[index].Position
     F[index].Move(val)
+    wait_moving(F[index]) 
     return F[index].Position
 
 def getfoc() :
@@ -846,8 +855,9 @@ def iodine_position(val=None) :
     """
     index=getfocuser('LTS')
     if val is not None :
-        F[index].Move(val)
-    return F[index].Position
+        F[index].Move(int(val*1000.))
+        wait_moving(F[index])
+    return F[index].Position/1000.
 
 def fans_on(roles=None):
     """
