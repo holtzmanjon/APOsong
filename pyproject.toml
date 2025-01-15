@@ -1,0 +1,21 @@
+[project]
+name = "aposong"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alpyca>=3.0.0",
+    "astroplan>=0.10.1",
+    "astropy>=7.0.0",
+    "astroquery>=0.4.7",
+    "bokeh>=3.6.2",
+    "importlib-resources>=6.4.5",
+    "influxdb-client>=1.48.0",
+    "matplotlib>=3.10.0",
+    "photutils>=2.0.2",
+    "pyqt5>=5.15.11",
+    "scikit-image>=0.25.0",
+    "scikit-learn>=1.6.0",
+    "tkthread>=0.5.2",
+]
