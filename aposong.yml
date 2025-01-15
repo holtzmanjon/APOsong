@@ -12,7 +12,7 @@ devices :
 #  pwi_srv : 
   remote_srv : 10.75.0.220
 
-dataroot : /data/1m
+dataroot : /song1m/data/1m
 updatecamera : True
 
 
