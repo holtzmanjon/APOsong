@@ -1,6 +1,7 @@
 import tkthread
 
 import os
+import influx
 import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
 import pdb
@@ -231,19 +232,10 @@ def status() :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
-    url="http://localhost:8086"
-    os.environ['INFLUX_TOKEN'] = 'v-RuHY6T1pyOIL1SU9lrWYKYEU_SDZ0VWkPHOIU9hMECF7axu2wiFzY1u8N7J6s9KCbOreQKI43mJUi9pj5BbA=='
+    # setup for ingesting into influx DB
     bucket = "iodinetemp"
     org = "NMSU"
-    token = os.environ['INFLUX_TOKEN']
-    # Store the URL of your InfluxDB instance
-    url="http://localhost:8086"
-    client = influxdb_client.InfluxDBClient(
-       url=url,
-       token=token,
-       org=org
-    )
-    write_api = client.write_api(write_options=SYNCHRONOUS)
+    write_api = influx.setup()
 
     def update() :
         try :
@@ -312,7 +304,7 @@ def status() :
             iodineframe.voltage.set(volt)
             iodineframe.current.set(curr)
 
-            # load into influx database
+            # parse temperature channels
             tset1,tset2=tset.split() 
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
@@ -321,6 +313,8 @@ def status() :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0,0)
                 aposong.iodine_set('enable',1,0)
+
+            # load into influx database
             p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2)),
                  influxdb_client.Point("my_measurement").tag("location", "APO").field("volt1", float(volt1)),
