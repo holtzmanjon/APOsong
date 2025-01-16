@@ -1,9 +1,6 @@
 import tkthread
 
 import os
-import influx
-import influxdb_client
-from influxdb_client.client.write_api import SYNCHRONOUS
 import pdb
 from tkinter import *
 from tkinter import ttk
@@ -17,6 +14,8 @@ from astropy.coordinates import EarthLocation, SkyCoord
 import astropy.units as u
 import pwi4_client
 
+import weather
+import influx
 import aposong
 import eshel
 
@@ -232,13 +231,13 @@ def status() :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
-    # setup for ingesting into influx DB
-    bucket = "iodinetemp"
-    org = "NMSU"
-    write_api = influx.setup()
-
     def update() :
         try :
+
+            # weather status to influxDB
+            wdict=weather.getapo()
+            weather.influx_write(wdict)
+
             t=Time.now()
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
@@ -315,13 +314,11 @@ def status() :
                 aposong.iodine_set('enable',1,0)
 
             # load into influx database
-            p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("temp1", float(temp1)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("temp2", float(temp2)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("volt1", float(volt1)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("volt2", float(volt2)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("curr1", float(curr1)),
-                 influxdb_client.Point("my_measurement").tag("location", "APO").field("curr2", float(curr2))]
-            write_api.write(bucket=bucket, org=org, record=p)
+            iodine_dict={}
+            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
+                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
+                iodine_dict[k] = v
+            influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
 
             # get eShel calibration status
             state = ['Off','On']
