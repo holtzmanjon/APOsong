@@ -1,0 +1,37 @@
+guider module
+*************
+
+The guider module is a client that handles guiding the telescope
+based on continually taking images with a guide camera, and keeping
+the position of an object at the same location on the detector.
+
+Currently, it is designed to acquire and guide on the brightest
+object in the (small) guider field of view. The exposure time
+is automatically adjusted to provide desired count level.
+
+The centering algorithm is designed to work even if the object
+is positioned over an aperture where light is lost, e.g., down
+a fiber. This is accomplished using an algorithm developed for
+SDSS, where the center of an object is defined as the location
+at which the variance of counts in a series of circular annulie
+is minimized, where pixels in the aperture are masked out and
+not included in the variance calculation.
+
+Guiding is implemented with a PI loop, with adjustible proportional
+and integral constants. The guiding corrections are measured
+from each exposure, but are averaged over series of shorter
+exposures before a correction is applied.
+
+A minimum number of counts is required to determine a correction.
+
+Module functions
+++++++++++++++++
+.. autoclass:: guider
+   :members:
+   :member-order: bysource
+
+.. automodule:: guider
+   :members:
+   :member-order: bysource
+
+

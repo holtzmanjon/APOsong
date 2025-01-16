@@ -14,29 +14,13 @@ ASCOM driver).
 
 Several modules are included:
 
-* aposong contains a function to connect to the Alpaca servers and
-return Alypca devices. It also contains a number of routines for doing
-observatory/observing tasks that use these devices. aposong can be
-used for an interactive Python client to observe. It is also imported
-by the other clients to provide access to the Alpyca devices and the
-observatory routines
+* aposong contains a function to connect to the Alpaca servers and return Alypca devices. It also contains a number of routines for doing observatory/observing tasks that use these devices. aposong can be used for an interactive Python client to observe. It is also imported by the other clients to provide access to the Alpyca devices and the observatory routines
 
-* guider contains functions for guiding the telescope on an object,
-even if it is centered on an aperture. It imports the
-aposong routines for communication with devicees. It accepts 
-commands and sends responses via a socket to allow communication
-with other clients, e.g., interactive or robotic.
+* guider contains functions for guiding the telescope on an object, even if it is centered on an aperture. It imports the aposong routines for communication with devicees. It accepts commands and sends responses via a socket to allow communication with other clients, e.g., interactive or robotic.
 
-* robotic contains functions for robotic observing. It imports the
-aposong routines but also provides logic for determining when to
-open/close dome, selects objects and observing sequences from a Postgres
-database, and performs acquisition and starts guiding before executing
-the observing sequences
+* robotic contains functions for robotic observing. It imports the aposong routines but also provides logic for determining when to open/close dome, selects objects and observing sequences from a Postgres database, and performs acquisition and starts guiding before executing the observing sequences
 
-* status is a routine to display a Tk status window. It imports the
-aposong routines to use the Alpyca drivers to get status of various
-devices. It also loads some of the status information into an InfluxDB
-for longterm monitoring.
+* status is a routine to display a Tk status window. It imports the aposong routines to use the Alpyca drivers to get status of various devices. It also loads some of the status information into an InfluxDB for longterm monitoring.
 
 .. toctree::
    :maxdepth: 2
