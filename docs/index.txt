@@ -21,6 +21,12 @@ used for an interactive Python client to observe. It is also imported
 by the other clients to provide access to the Alpyca devices and the
 observatory routines
 
+* guider contains functions for guiding the telescope on an object,
+even if it is centered on an aperture. It imports the
+aposong routines for communication with devicees. It accepts 
+commands and sends responses via a socket to allow communication
+with other clients, e.g., interactive or robotic.
+
 * robotic contains functions for robotic observing. It imports the
 aposong routines but also provides logic for determining when to
 open/close dome, selects objects and observing sequences from a Postgres
@@ -37,6 +43,7 @@ for longterm monitoring.
    :caption: Contents:
 
    aposong
+   guider
    robotic
    status
 
