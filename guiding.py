@@ -14,14 +14,8 @@ import select
 import sys
 import socket
 
-import influxdb_client
-from influxdb_client.client.write_api import SYNCHRONOUS
-
 import aposong
 import eshel
-
-org = "NMSU"
-bucket = "guider"
 import influx
 
 display=None
@@ -243,26 +237,24 @@ class Guider :
     def ingest_offset(self,dx,dy) :
         """ Ingest single image offset into InfluxDB
         """
-        p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("dx", float(dx*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("dy", float(dy*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("nseq", self.nseq)]
-        write_api = influx.setup()
-        write_api.write(bucket=bucket, org=org, record=p)
+        idict={}
+        for k,v in zip(['dx','dy','nseq'],
+                       [float(dx*self.pixscale),float(dy*self.pixscale),self.nseq]) :
+            idict[k] = v
+        influx.write(idict,bucket='guider',measurement='my_measurement')
 
     def ingest_correction(self,x,y,dx,dy,xoff,yoff) :
         """ Ingest correction offset into InfluxDB
         """
-        p = [influxdb_client.Point("my_measurement").tag("location", "APO").field("x0", float(self.x0+self.box.xmin)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("y0", float(self.y0+self.box.ymin)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("x", float(x)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("y", float(y)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("dx", float(dx*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("dy", float(dy*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("xoff", float(xoff*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("yoff", float(yoff*self.pixscale)),
-             influxdb_client.Point("my_measurement").tag("location", "APO").field("nseq", self.nseq)]
-        write_api = influx.setup()
-        write_api.write(bucket=bucket, org=org, record=p)
+        idict={}
+        for k,v in zip(['x0','y0','x','y','dx','dy','xoff','yoff','nseq'],
+                       [float(self.x0+self.box.xmin),float(self.y0+self.box.ymin),
+                        float(x),float(y),
+                        float(dx*self.pixscale), float(dy*self.pixscale),
+                        float(xoff*self.pixscale), float(yoff*self.pixscale),
+                        self.nseq]) :
+            idict[k] = v
+        influx.write(idict,bucket='guider',measurement='my_measurement')
     
 def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=None,name='guide/guide',
             prop=0.7, ki=0.2, maxint=10,rasym=True,settle=3,vmax=10000,box=None,date='UT240503',weight=False) :
