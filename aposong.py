@@ -16,16 +16,14 @@ import threading
 import yaml
 import subprocess
 
+# set up logger
 import logging
-#import guiding
 import yaml
 import logging.config
-try :
-    with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
-except:
-    print("can't open logging.yml")
+with open('logging.yml', 'rt') as f:
+    config = yaml.safe_load(f.read())
+logging.config.dictConfig(config)
+logger=logging.getLogger('aposong')
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
@@ -38,6 +36,7 @@ from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
+#import guiding
 import eshel
 
 # alpaca imports, put in try/except for readthedocs
@@ -1092,6 +1091,5 @@ def pwi_init(pwi_srv) :
     else :
         pwi = None
 
-logger=logging.getLogger(__name__)
 init()
 

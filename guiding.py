@@ -27,17 +27,14 @@ import influx
 display=None
 run_guide = True
 
+# set up logger
 import logging
 import yaml
 import logging.config
-try:
-    with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
-except:
-    print("can't open logging.yml")
-
-logger=logging.getLogger(__name__)
+with open('logging.yml', 'rt') as f:
+    config = yaml.safe_load(f.read())
+logging.config.dictConfig(config)
+logger=logging.getLogger('aposong')
 
 class Guider :
 
@@ -169,21 +166,21 @@ class Guider :
         if center.x<0 or center.tot<10000:
             try :
                 # if rasync_centroid fails, try marginal_gfit
-                logger.info('marginal: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
+                logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
                 center=centroid.marginal_gfit(exp.hdu.data,x,y,self.rad)
                 logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(center.x,center.y,center.tot))
                 if center.tot < 10000 : 
                     bad=True
             except    :
                 # if marginal_gfit fails, use peak
-                logger.info('peak: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
+                logger.debug('peak: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
                 try: 
                     center=centroid.peak(exp.hdu.data,x,y,self.rad)
                 except:
                     logger.debug('error in peak')
                     bad=True
                 if center.tot < 1000 :
-                    logger.info('peak<1000, no offset')
+                    logger.debug('peak<1000, no offset')
                     bad=True
         else :
             bad=True
@@ -205,14 +202,14 @@ class Guider :
             x0=self.x0-self.box.xmin
             y0=self.y0-self.box.ymin
             if self.nseq < self.navg :
-                logger.info('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(self.nseq,self.center.x-x0,self.center.y-y0,self.center.tot))
-                logger.info('  accumulated offset:   {:.1f} {:.1f}'.format(self.xtot/self.nseq-x0,self.ytot/self.nseq-y0))
+                logger.debug('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(self.nseq,self.center.x-x0,self.center.y-y0,self.center.tot))
+                logger.debug('  accumulated offset:   {:.1f} {:.1f}'.format(self.xtot/self.nseq-x0,self.ytot/self.nseq-y0))
                 dx=self.center.x-x0
                 dy=self.center.y-y0
                 self.nseq+=1
                 self.ingest_offset(dx,dy)
             else :
-                logger.info('  AVERAGE OFFSET: {:.1f} {:.1f} {:.1f}'.format(self.xtot/self.nseq-x0,self.ytot/self.nseq-y0,self.center.tot))
+                logger.debug('  AVERAGE OFFSET: {:.1f} {:.1f} {:.1f}'.format(self.xtot/self.nseq-x0,self.ytot/self.nseq-y0,self.center.tot))
                 # average offsets over navg points
                 x=self.xtot/self.navg
                 dx=x-x0
@@ -227,12 +224,12 @@ class Guider :
                 if abs(dx)*self.pixscale > 2 : xoff=dx-dx/abs(dx)
                 elif abs(dx)*self.pixscale > 0.1 : xoff=self.prop*dx + self.ki*self.integral[:,0].mean()
                 else : xoff=0
-                logger.info('   APPLIED X: {:.1f} {:.1f} {:.1f}'.format(xoff,self.prop*dx,self.ki*self.integral[:,0].mean()))
+                logger.debug('   APPLIED X: {:.1f} {:.1f} {:.1f}'.format(xoff,self.prop*dx,self.ki*self.integral[:,0].mean()))
                 
                 if abs(dy)*self.pixscale > 2 : yoff=dy-dy/abs(dy)
                 elif abs(dy)*self.pixscale > 0.1 : yoff=self.prop*dy + self.ki*self.integral[:,1].mean()
                 else : yoff=0.
-                logger.info('   APPLIED Y: {:.1f} {:.1f} {:.1f}'.format(yoff,self.prop*dy,self.ki*self.integral[:,1].mean()))
+                logger.debug('   APPLIED Y: {:.1f} {:.1f} {:.1f}'.format(yoff,self.prop*dy,self.ki*self.integral[:,1].mean()))
                 aposong.offsetxy(xoff,yoff,scale=self.pixscale)
                 time.sleep(self.settle)
                 self.ingest_correction(x,y,dx,dy,xoff,yoff)
@@ -308,20 +305,20 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
             if center.x<0 or center.tot < 10000:
                 try :
                     # if rasync_centroid fails, try marginal_gfit
-                    logger.info('marginal: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
+                    logger.debug('marginal: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
                     center=centroid.marginal_gfit(hdu.data,x,y,rad)
                     logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(center.x,center.y,center.tot))
                     if center.tot < 10000 : continue
                 except:
                     # if marginal_gfit fails, use peak
-                    logger.info('peak: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
+                    logger.debug('peak: {:.2f} {:.2f} {:.2f} {:d}'.format(x,y,rad,n))
                     try: 
                         center=centroid.peak(hdu.data,x,y,rad)
                     except:
                         logger.debug('error in peak')
                         continue
                     if center.tot < 1000 :
-                        logger.info('peak<1000, no offset')
+                        logger.debug('peak<1000, no offset')
                         continue
         else :
             center==centroid.marginal_gfit(hdu.data,x,y,rad)

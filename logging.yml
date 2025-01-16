@@ -3,15 +3,16 @@ disable_existing_loggers: no
 
 formatters :
   simple:
-    format: '%(asctime)s [%(levelname)s] %(message)s'
+    format: '%(asctime)s [%(levelname)s]  %(funcName)s() : %(message)s'
     datefmt: "%Y-%m-%d %H:%M:%S"
 
 handlers:
   console:
     class: logging.StreamHandler
-    level: INFO
+    level: DEBUG
     formatter: simple
     stream: ext://sys.stdout
+
   hourly :
     class: logging.handlers.TimedRotatingFileHandler
     level: INFO
@@ -32,12 +33,12 @@ handlers:
 
 root:
     level: INFO
-    handlers: [console,daily]
+    handlers: [console,daily,hourly]
 
 loggers:
-  <module>:
-    level: INFO
-    handlers: [console,hourly,daily]
+  aposong :
+    level: DEBUG
+    handlers: [console,daily]
     propagate: no
 
     
