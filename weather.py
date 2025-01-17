@@ -46,6 +46,6 @@ def influx_write(wdict) :
     """
     influx_dict={}
     for key in ['airtemp','humidity','pressure','dewpoint','winds','windd'] :
-        influx_dict[key] = wdict[key]
+        influx_dict[key] = float(wdict[key])
     influx.write(influx_dict,bucket='weather',measurement='my_measurement')
 
