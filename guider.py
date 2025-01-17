@@ -25,10 +25,15 @@ run_guide = True
 import logging
 import yaml
 import logging.config
-with open('logging.yml', 'rt') as f:
-    config = yaml.safe_load(f.read())
-logging.config.dictConfig(config)
-logger=logging.getLogger('aposong')
+try: 
+    with open('logging.yml', 'rt') as f:
+        config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
+    logger=logging.getLogger('aposong')
+except FileNotFoundError :
+    #trap for readthedocs
+    print('logging.yml not found')
+
 
 class Guider :
 

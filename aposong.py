@@ -20,10 +20,14 @@ import subprocess
 import logging
 import yaml
 import logging.config
-with open('logging.yml', 'rt') as f:
-    config = yaml.safe_load(f.read())
-logging.config.dictConfig(config)
-logger=logging.getLogger('aposong')
+try :
+    with open('logging.yml', 'rt') as f:
+        config = yaml.safe_load(f.read())
+    logging.config.dictConfig(config)
+    logger=logging.getLogger('aposong')
+except FileNotFoundError :
+    #trap for readthedocs
+    print('logging.yml not found')
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
@@ -36,7 +40,7 @@ from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
-#import guiding
+import guider
 import eshel
 
 # alpaca imports, put in try/except for readthedocs
