@@ -291,6 +291,12 @@ def status() :
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                          C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
+            ccd_dict={}
+            for i in range(3) :
+                icam = aposong.getcam(i)
+                ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
+                ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
+                influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
 
             # Get iodine cell related data
             pos = aposong.iodine_position()
@@ -317,7 +323,7 @@ def status() :
             iodine_dict={}
             for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
                            [temp1,temp2,volt1,volt2,curr1,curr2]) :
-                iodine_dict[k] = v
+                iodine_dict[k] = float(v)
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
 
             # get eShel calibration status
