@@ -26,12 +26,13 @@ A minimum number of counts is required to determine a correction.
 
 Module functions
 ++++++++++++++++
-.. autoclass:: guider
-   :members:
-   :member-order: bysource
-
 .. automodule:: guider
    :members:
    :member-order: bysource
+
+.. autoclass:: Guider
+   :members:
+   :member-order: bysource
+
 
 
