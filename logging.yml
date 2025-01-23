@@ -20,7 +20,7 @@ handlers:
     when: H
     interval: 1
     utc: True
-    filename: /home/song/logs/hourly.log
+    filename: /song1m/song/logs/hourly.log
 
   daily :
     class: logging.handlers.TimedRotatingFileHandler
@@ -29,7 +29,7 @@ handlers:
     when: midnight
     interval: 1
     utc: True
-    filename: /home/song/logs/daily.log
+    filename: /song1m/song/logs/daily.log
 
 root:
     level: INFO
