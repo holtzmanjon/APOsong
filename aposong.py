@@ -853,6 +853,12 @@ def iodine_out(val=141.,focoffset=4625) :
     iodine_position(val)
     foc(focoffset,relative=True)
 
+def iodine_home() :
+    """ Send iodine stage to home
+    """
+    index=getfocuser('LTS')
+    F[index].Action('home')
+
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
@@ -1046,6 +1052,7 @@ def commands() :
     print("  iodine_in : move iodine cell into beam")
     print("  iodine_out : move iodine cell out of beam")
     print("  iodine_position([val]) : get or set (with val) iodine stage position")
+    print("  iodine_home : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
     print()
