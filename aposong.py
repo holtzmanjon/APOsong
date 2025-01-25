@@ -202,17 +202,20 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
            named tuple: Exposure = namedtuple('Exposure', ['hdu', 'name', 'exptime', 'filter'])
     """
     exposure = Exposure(None,None,None,None)
-    stat = pwi.status()
-    if stat.m3.port == 1 :
-        if filt is not None and filt != 'current': 
-            pos = np.where(np.array(Filt.Names) == filt)
-            if len(pos) == 0 :
-                logger.warning('no such filter')
-                logger.warning('available filters: ', Filt.Names)
-                return exposure
-            Filt.Position=pos[0]
-        elif filt == 'current' :
-            filt = Filt.Names[Filt.Position]
+    if pwi is not None :
+        stat = pwi.status()
+        if stat.m3.port == 1 :
+            if filt is not None and filt != 'current': 
+                pos = np.where(np.array(Filt.Names) == filt)
+                if len(pos) == 0 :
+                    logger.warning('no such filter')
+                    logger.warning('available filters: ', Filt.Names)
+                    return exposure
+                Filt.Position=pos[0]
+            elif filt == 'current' :
+                filt = Filt.Names[Filt.Position]
+        else :
+            filt = 'None'
     else :
         filt = 'None'
 
@@ -276,7 +279,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] 
     cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp','xbin','ybin','ra','dec','az','alt','rot'] 
     for card,col in zip(cards,cols) :
-        tab[col] = [hdu.header[card]]
+        try : tab[col] = [hdu.header[card]]
+        except KeyError: print('no {:s} card found'.format(card))
     tab['camera'] = [cam]
 
     if name is not None :
@@ -301,9 +305,12 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         tab['file'] = ''
 
     if insert :
-        d=database.DBSession()
-        d.ingest('obs.exposure',tab,onconflict='update')
-        d.close()
+        try :
+            d=database.DBSession()
+            d.ingest('obs.exposure',tab,onconflict='update')
+            d.close()
+        except :
+            print('error loading exposure into database')
 
     return exposure
 
