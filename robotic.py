@@ -330,7 +330,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
     #aposong.fans_off()
 
     # focus star on meridian 
-    foc=focus(foc0=foc0,delta=75,n=15,display=aposong.disp)
+    foc=focus(foc0=foc0,delta=75,n=15,display=display)
     foctime=Time.now()
 
     oldtarg=''
