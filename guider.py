@@ -10,6 +10,7 @@ import pdb
 from astropy.io import fits
 import numpy as np
 from holtztools import html
+import re
 import select
 import sys
 import socket
@@ -38,20 +39,20 @@ except FileNotFoundError :
 class Guider :
 
     def __init__(self,x0=774,y0=462,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,
-          disp=None,nintegral=10, prop=0.7,ki=0.2,nint=10,settle=1,pixscale=1.) :
+          display=None,nintegral=10, prop=0.7,ki=0.2,nint=10,settle=1,pixscale=1.) :
         self.x0 = x0
         self.y0 = y0
         self.box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
         self.target = [x0-self.box.xmin,y0-self.box.ymin]
         self.guess = [x0-self.box.xmin,y0-self.box.ymin]
-        self.exptime = exptime
+        self.exptime = float(exptime)
         self.filt = filt
         self.bin = bin
         self.rad = rad
         self.skyrad = skyrad
         self.mask = mask
         self.maskrad = maskrad
-        self.disp = disp
+        self.disp = display
         self.prop = prop
         self.ki = ki
         self.navg = np.min([5,np.max([1,int(5/exptime)])])
@@ -85,7 +86,7 @@ class Guider :
         y0 = stats['peaky']
    
         # get center from image and return
-        center=centroid.rasym_centroid(im.hdu.data,x0,y0,rad=12,plot=self.disp)
+        center=centroid.rasym_centroid(im.hdu.data,x0,y0,rad=12,plot=self.disp,mask=self.mask)
         logger.info('hole center : {:.2f} {:.2f}'.format(center.x,center.y))
 
         if self.disp is not None :
@@ -100,11 +101,13 @@ class Guider :
     def mkmask(self,data,x0,y0) :
         """ Create a mask around desired position
         """
-        self.mask=np.zeros_like(data)
+        mask=np.zeros_like(data)
         yg,xg=np.mgrid[0:data.shape[0],0:data.shape[1]]
         r2=(xg-x0)**2+(yg-y0)**2
         bd=np.where(r2<self.maskrad**2)
-        self.mask[bd]=1
+        mask[bd]=1
+        self.mask=image.window(mask,box=self.box)
+
 
     def acquire(self,thresh=100,fwhm=1.5,data=None,inter=False) :
         """ Find brightest object, optimize exposure time, move object to desired position
@@ -153,20 +156,24 @@ class Guider :
         logging.info('offsetting {:.1f} {:.1f}'.format(x-self.x0,y-self.y0))
         aposong.offsetxy((x-self.x0),(y-self.y0),scale=self.pixscale)
         time.sleep(self.settle)
-        return self.get_offset()
+        return self.get_offset(name='guide/acquire')
 
-    def get_offset(self) :
+    def get_offset(self,data=None,name=None) :
         """ Take exposure and get offset from star to desired center
         """
-        exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name='guide/acquire',max=50000)
+        if data is None :
+            exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=5000)
+            data = exp.hdu.data
+        else :
+            self.disp.tv(data,max=5000)
         x,y=self.guess
-        center=centroid.rasym_centroid(exp.hdu.data,x,y,self.rad,mask=self.mask,skyrad=self.skyrad,plot=self.disp)
+        center=centroid.rasym_centroid(data,x,y,self.rad,mask=self.mask,skyrad=self.skyrad,plot=self.disp)
         bad=False
         if center.x<0 or center.tot<10000:
             try :
                 # if rasync_centroid fails, try marginal_gfit
                 logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
-                center=centroid.marginal_gfit(exp.hdu.data,x,y,self.rad)
+                center=centroid.marginal_gfit(data,x,y,self.rad)
                 logger.debug('marginal: {:.2f} {:.2f} {:.2f}'.format(center.x,center.y,center.tot))
                 if center.tot < 10000 : 
                     bad=True
@@ -174,7 +181,7 @@ class Guider :
                 # if marginal_gfit fails, use peak
                 logger.debug('peak: {:.2f} {:.2f} {:.2f}'.format(x,y,self.rad))
                 try: 
-                    center=centroid.peak(exp.hdu.data,x,y,self.rad)
+                    center=centroid.peak(data,x,y,self.rad)
                 except:
                     logger.debug('error in peak')
                     bad=True
@@ -189,12 +196,15 @@ class Guider :
             self.guess = [center.x,center.y]
 
         self.center = center
+        x0=self.x0-self.box.xmin
+        y0=self.y0-self.box.ymin
+        logger.debug('  instantaneous offset: {:d} {:.1f} {:.1f} {:.1f}'.format(self.nseq,self.center.x-x0,self.center.y-y0,self.center.tot))
         return self.center[0], self.center[1]
 
     def guide(self) :
         """ Take image and accumulate offset, make correction if accumulated
         """
-        x,y = self.get_offset()
+        x,y = self.get_offset(name='guide/guide')
         if self.center.x>0 :
             self.xtot+=self.center.x
             self.ytot+=self.center.y
@@ -459,6 +469,18 @@ def show(n,date='UT240503',sleep=0.5,max=30000,pause=False,weight=False,rad=25,m
       except: pass
       time.sleep(sleep)
 
+
+def parse_string_to_kwargs(string):
+  kwargs= {}
+  for word in string.split() :
+    pattern = r"(.*)=(.*)"  # Matches key=value pairs
+    matches = re.findall(pattern, word)
+
+    for key, value in matches:
+        kwargs[key] = value
+
+  return kwargs
+
 def main() :
 
     #fp = os.open('pipe',os.O_RDONLY | os.O_NONBLOCK)
@@ -468,45 +490,56 @@ def main() :
     server_socket.bind(('localhost', 5000))
     server_socket.listen()
     conn = None
+    disp=tv.TV()
 
     inputs=[sys.stdin,server_socket]
     outputs=[]
 
     guiding = False
     while True :
-        print('loop')
+      try:
         readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
  
         for s in readable : 
             #if s is fp:
-            #   txt = os.read(fp,80).decode().strip('/n')
+            #   txt = os.read(fp,80).decode().strip('\n')
             txt=''
             if s is sys.stdin :
-               txt = sys.stdin.readline()
+                txt = sys.stdin.readline().strip('\n')
+                print('stdin: ',txt)
             if s is server_socket :
-               conn, addr = server_socket.accept()
-               inputs.append(conn)
-               print('adding client')
+                conn, addr = server_socket.accept()
+                inputs.append(conn)
+                print('adding client')
             if s is conn :
-               txt = conn.recv(1024).decode()
-               print('socket: ', txt)
+                txt = conn.recv(1024).decode()
+                print('socket: ', txt)
             if txt == 'start' :
-               g = Guider(pixscale=aposong.pixscale())
-               g.get_hole_position()
-               try : 
-                   cent=g.acquire()
-                   guiding = True
-                   conn.send('acquired {:f} {:f}'.format(cent[0],cent[1]))
-               except :
-                   conn.send('failed acquire')
+                print('starting...')
+                kwargs=parse_string_to_kwargs(txt)
+                g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
+                g.get_hole_position()
+                try : 
+                    cent=g.acquire()
+                    guiding = True
+                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}'.encode())
+                    else : print(f'acquired {cent[0]} {cent[1]}')
+                except :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : print('failed acquire')
             elif txt == 'stop' or txt == 'pause' :
-               guiding = False
+                guiding = False
             elif txt == 'resume ' :
-               guiding = True
+                guiding = True
+            else :
+                print('unknown command: ', txt, len(txt))
  
         if guiding :
               g.guide()
 
         time.sleep(0.25)
+      except KeyboardInterrupt :
+        server_socket.close()
+        break
 
 #main()
