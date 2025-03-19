@@ -142,6 +142,7 @@ def getfocuser(focuser) :
          focuser='PWI' : Port 1 focuser (PWI)
          focuser='Zaber' : Port 2 focuser (Zaber)
          focuser='LTS' : Port 2 iodine stage (LTS150)
+         focuser='PLL' : Spectrograph focus (PrimaLuceLab Esatto 3.5")
     """
     for index,c in enumerate(F) :
         if focuser in c.Name :
@@ -800,6 +801,14 @@ def foc(val, relative=False) :
         index = getfocuser('Zaber')
     if relative :
         val += F[index].Position
+    F[index].Move(val)
+    wait_moving(F[index]) 
+    return F[index].Position
+
+def specfoc(val) :
+    """ Change spectrograph focus
+    """
+    index=getfocuser('PLL')
     F[index].Move(val)
     wait_moving(F[index]) 
     return F[index].Position
