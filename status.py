@@ -233,11 +233,12 @@ def status() :
 
     def update() :
         try :
-
             # weather status to influxDB
             wdict=weather.getapo()
             weather.influx_write(wdict)
+        except : pass
 
+        try :
             t=Time.now()
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
