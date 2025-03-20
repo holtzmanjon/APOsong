@@ -1,0 +1,50 @@
+Installation
+============
+
+Normally the aposong software will be run on the song1m machine at APO, where it is installed
+under the song account.
+
+Under some circumstances, users may wish to have a local installation on their computer. To
+access devices at APO, the computer must be on the APO internal network (either physically or
+via VPN). To access devices in the lab at NMSU, the computer must be on the NMSU network (either
+physically or via VPN). 
+
+The most reliable method of installation is to create a Python virtual environment specifically
+for aposong and install the aposong software into it through an editable installation.
+
+To achieve this, first create a new environment.
+If you are using Anaconda, you can create a new virtual environment with:
+
+.. code-block:: csh
+
+   conda env create --name pyvista python=3.12   (anything above 3.9 should work)
+   conda activate pyvista
+
+Alternatively, you can use Python venv if you are running a python>=3.9:
+
+.. code-block:: csh
+
+   python -m venv pyvista
+   source pyvista/bin/activate  (in bash)
+
+Editable installation into Python distribution
+----------------------------------------------
+
+You can download aposong from github, and do an editable install:
+
+.. code-block:: csh
+
+   git clone https://github.com/holtzmanjon/aposong
+   cd pyvista
+   pip install -e .
+
+Configuration
+-------------
+
+The file aposong/aposong.yml contains IP addresses of ASCOM servers, e.g.
+on the telescope computer, the dome computer, and the spectrograph computer.
+If any of these are not available, the code will take some time to time out,
+which can be avoided by commenting out (with a leading #) the servers that
+are not available.
+
+

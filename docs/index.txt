@@ -26,6 +26,7 @@ Several modules are included:
    :maxdepth: 2
    :caption: Contents:
 
+   installation
    aposong
    guider
    robotic
