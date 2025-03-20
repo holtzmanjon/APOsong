@@ -125,17 +125,26 @@ def ascom_init(svrs) :
     print('    Filt : filter wheel commands')
     print('    D : dome commands')
 
-def getcam(camera) :
+def getcam(camera=None) :
     """ Get correct list index for specified camera (ASCOM doesn't always deliver them in order!)
          camera=0 : Port 2 camera
-         camera=1 : Port 2 spectrograph
-         camera=2 : Port 1 camera
+         camera=1 : Port 2 spectrograph camera (eShel)
+         camera=2 : Port 1 camera (QSI)
+         camera=3 : SONG spectrograph camera
     """
+    if camera is None :
+        print('Cameras: ')
+        print('  0: Port 2 guide camera (Atik w/ICX285 detector)')
+        print('  1: Port 2 spectrograph camera eShel (Atik w/ICX694 detector)')
+        print('  2: Port 1 camera (QSI w/KAF_800 detector)')
+        print('  3: SONG spectrograph camera (QHY 600)')
+        return
+
+    cams = ['ICX285','ICX694','KAF_8300','QHY']
     for index,c in enumerate(C) :
-        if c.device_number == camera : 
-            return index 
-    print('no such camera!')
-    return -1
+        if cams[camera] in c.SensorName :
+            return index
+    print('no such camer!')
 
 def getfocuser(focuser) :
     """ Get correct list index for specified focuser (ASCOM doesn't always deliver them in order!)
@@ -178,6 +187,38 @@ def qck(exptime,filt='current') :
     """
     expose(exptime,filt)
 
+def gexp(*args, **kwargs) :
+    """ Expose with guide camera, see expose() for keywords
+
+    Parameters
+    ----------
+    exptime : float
+           Exposure time in seconds
+    bin : int, default=3
+           binning factor (both x and y)
+    display : pyvista tv, default=None
+           pyvista display tool to display into if specified
+    name  : str, default=None
+           root file to save image to 
+    """
+    expose(*args, cam=0, filt=None, **kwargs)
+
+def sexp(*args,**kwargs) :
+    """ Expose with spectrograph camera, see expose() for keywords
+
+    Parameters
+    ----------
+    exptime : float
+           Exposure time in seconds
+    bin : int, default=3
+           binning factor (both x and y)
+    display : pyvista tv, default=None
+           pyvista display tool to display into if specified
+    name  : str, default=None
+           root file to save image to 
+    """
+    expose(*args, cam=3, filt=None, **kwargs)
+
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
            min=None, max=None, cam=0, insert=True) :
     """ Take an exposure with camera
@@ -193,7 +234,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     box : pyvista BOX, default=None
            if specified, window to box parameters 
     light : bool, default=True
-           open shuter for exposure?
+           open shutter for exposure?
     display : pyvista tv, default=None
            pyvista display tool to display into if specified
     name  : str, default=None
