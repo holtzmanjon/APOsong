@@ -201,7 +201,7 @@ def gexp(*args, **kwargs) :
     name  : str, default=None
            root file to save image to 
     """
-    expose(*args, cam=0, filt=None, **kwargs)
+    return expose(*args, cam=0, filt=None, **kwargs)
 
 def sexp(*args,**kwargs) :
     """ Expose with spectrograph camera, see expose() for keywords
@@ -217,7 +217,7 @@ def sexp(*args,**kwargs) :
     name  : str, default=None
            root file to save image to 
     """
-    expose(*args, cam=3, filt=None, **kwargs)
+    return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
            min=None, max=None, cam=0, insert=True) :
@@ -292,7 +292,6 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     if display is not None :
         display.tv(data,min=min,max=max)
-        display.fig.canvas.flush_events()
 
     hdu=fits.PrimaryHDU(data)
     hdu.header['DATE-OBS'] = t.fits
@@ -301,7 +300,10 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['EXPTIME'] = exptime 
     hdu.header['FILTER'] = filt 
     try : 
-        hdu.header['FOCUS'] = getfoc()
+        hdu.header['FOCUS'] = foc()
+    except : pass
+    try : 
+        hdu.header['SPECFOC'] = specfoc()
     except : pass
     try :
         stat = pwi.status()
@@ -403,7 +405,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
            List of file names taken for focus run
     """
 
-    foc0=getfoc()
+    foc0=foc()
     files=[]
     names=[]
     images=[]
@@ -411,7 +413,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     for i,focval in enumerate(focvals) :
         foc(int(focval))
         
-        logger.info('position: {:d}'.format(getfoc()))
+        logger.info('position: {:d}'.format(foc()))
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
                           max=max,name='focus_{:d}'.format(focval),cam=cam)
         hdu=exp.hdu
@@ -832,7 +834,7 @@ def park() :
     try: T.Park()
     except: logger.error('telescope.Park raised an exception')
 
-def foc(val, relative=False) :
+def foc(val=None, relative=False) :
     """ Change focus, depending on port
     """
     stat = pwi.status()
@@ -840,28 +842,21 @@ def foc(val, relative=False) :
         index = getfocuser('PWI')
     else :
         index = getfocuser('Zaber')
-    if relative :
-        val += F[index].Position
-    F[index].Move(val)
-    wait_moving(F[index]) 
+    if val is not None :
+        if relative :
+            val += F[index].Position
+        F[index].Move(val)
+        wait_moving(F[index]) 
     return F[index].Position
 
-def specfoc(val) :
+def specfoc(val=None) :
     """ Change spectrograph focus
     """
     index=getfocuser('PLL')
-    F[index].Move(val)
-    wait_moving(F[index]) 
+    if val is not None :
+        F[index].Move(val)
+        wait_moving(F[index]) 
     return F[index].Position
-
-def getfoc() :
-    """ Get focus, depending on port
-    """
-    stat = pwi.status()
-    if stat.m3.port == 1 :
-        return F[getfocuser('PWI')].Position
-    else :
-        return F[getfocuser('Zaber')].Position
 
 def iodine_tset(val=None) :
     """ Get/set iodine cell set temperature
