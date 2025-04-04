@@ -60,7 +60,9 @@ Telescope commands :
   - park(): park telescope and dome
 
 Camera commands :
-  - expose(exptime,filt,**kwargs: take an exposure, returns named Exposure tuple with data, hdu, etc.
+  - expose(exptime,filt,**kwargs): take an exposure, returns named Exposure tuple with data, hdu, etc.
+  - gexp(exptime,**kwargs): take an exposure with guide camera (frontend to expose())
+  - sexp(exptime,**kwargs): take an exposure with spectrograph camera (frontend to expose())
   - focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
