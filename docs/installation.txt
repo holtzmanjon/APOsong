@@ -17,15 +17,15 @@ If you are using Anaconda, you can create a new virtual environment with:
 
 .. code-block:: csh
 
-   conda env create --name pyvista python=3.12   (anything above 3.9 should work)
-   conda activate pyvista
+   conda env create --name aposong python=3.12   (anything above 3.9 should work)
+   conda activate aposong
 
 Alternatively, you can use Python venv if you are running a python>=3.9:
 
 .. code-block:: csh
 
-   python -m venv pyvista
-   source pyvista/bin/activate  (in bash)
+   python -m venv aposong
+   source aposong/bin/activate  (in bash)
 
 Editable installation into Python distribution
 ----------------------------------------------
@@ -35,7 +35,7 @@ You can download aposong from github, and do an editable install:
 .. code-block:: csh
 
    git clone https://github.com/holtzmanjon/aposong
-   cd pyvista
+   cd aposong
    pip install -e .
 
 Configuration
