@@ -239,6 +239,17 @@ def status() :
         except : pass
 
         try :
+            ccd_dict={}
+            for i in range(3) :
+                try :
+                    icam = aposong.getcam(i)
+                    ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
+                    ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
+                    influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
+                except : continue
+        except : pass
+
+        try :
             t=Time.now()
             t.location=apo
             y,m,d,h,m,s=t.ymdhms
@@ -292,12 +303,6 @@ def status() :
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                          C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
-            ccd_dict={}
-            for i in range(3) :
-                icam = aposong.getcam(i)
-                ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
-                ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
-                influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
 
             # Get iodine cell related data
             pos = aposong.iodine_position()
