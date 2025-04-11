@@ -144,7 +144,7 @@ def getcam(camera=None) :
     for index,c in enumerate(C) :
         if cams[camera] in c.SensorName :
             return index
-    print('no such camer!')
+    print('no such camera!')
 
 def getfocuser(focuser) :
     """ Get correct list index for specified focuser (ASCOM doesn't always deliver them in order!)
