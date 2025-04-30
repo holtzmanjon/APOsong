@@ -150,7 +150,8 @@ def getfocuser(focuser) :
     """ Get correct list index for specified focuser (ASCOM doesn't always deliver them in order!)
          focuser='PWI' : Port 1 focuser (PWI)
          focuser='Zaber' : Port 2 focuser (Zaber)
-         focuser='LTS' : Port 2 iodine stage (LTS150)
+         focuser='Iodine' : Port 2 iodine stage (LTS150)
+         focuser='Calibration' : Port 2 calibration stage (LTS150)
          focuser='PLL' : Spectrograph focus (PrimaLuceLab Esatto 3.5")
     """
     for index,c in enumerate(F) :
@@ -909,13 +910,28 @@ def iodine_out(val=141.,focoffset=4625) :
 def iodine_home() :
     """ Send iodine stage to home
     """
-    index=getfocuser('LTS')
+    index=getfocuser('Iodine')
     F[index].Action('home')
 
 def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
-    index=getfocuser('LTS')
+    index=getfocuser('Iodine')
+    if val is not None :
+        F[index].Move(int(val*1000.))
+        wait_moving(F[index])
+    return F[index].Position/1000.
+
+def calstage_home() :
+    """ Send calibration stage to home
+    """
+    index=getfocuser('Calibration')
+    F[index].Action('home')
+
+def calstage_position(val=None) :
+    """ Get/set calibration stage position
+    """
+    index=getfocuser('Calibration')
     if val is not None :
         F[index].Move(int(val*1000.))
         wait_moving(F[index])
