@@ -4,11 +4,14 @@ devices :
   ascom_srvs : 
     - 10.75.0.21:5555   # dome Alpyca server
     - 10.75.0.220:11111 # pwi1m ASCOM remote
-      #   - 10.75.0.220:5555  # pwi1m Alpyca server
+    - 10.75.0.220:5555  # pwi1m Alpyca server
+    - 10.75.0.251:5555  # spec1m Alpyca server
+    - 10.75.0.251:11111  # spec1m ASCOM server
       #    - 172.24.4.202:11111 # spec1m ASCOM remote
       #    - 172.24.4.202:5555  # spec1m Alpyca server
 
-  pwi_srv : 10.75.0.220  # PWI API, set to blank if not available
+      #pwi_srv : 10.75.0.220  # PWI API, set to blank if not available
+  pwi_srv : 
 
 dataroot : /data/1m
 updatecamera : True
