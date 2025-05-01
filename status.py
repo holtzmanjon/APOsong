@@ -240,7 +240,7 @@ def status() :
 
         try :
             ccd_dict={}
-            for i in range(3) :
+            for i in range(4) :
                 try :
                     icam = aposong.getcam(i)
                     ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
@@ -248,6 +248,43 @@ def status() :
                     influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
                 except : continue
         except : pass
+
+        try :
+            dict={}
+            dict['qhy_thermocouple_1'] = aposong.SW[2].GetSwitchValue(0)
+            dict['qhy_thermocouple_2'] = aposong.SW[2].GetSwitchValue(1)
+            influx.write(dict,bucket='ccdtemp',measurement='qhy_thermocouple')
+        except  : pass
+
+        try :
+            # Get iodine cell related data
+            pos = aposong.iodine_position()
+            temp = aposong.iodine_tget()
+            tset = aposong.iodine_tset()
+            volt = aposong.iodine_get('voltage')
+            curr = aposong.iodine_get('current')
+            iodineframe.position.set(pos)
+            iodineframe.temp.set(temp+' / '+tset)
+            iodineframe.voltage.set(volt)
+            iodineframe.current.set(curr)
+
+            # parse temperature channels
+            tset1,tset2=tset.split() 
+            temp1,temp2=temp.split()
+            volt1,volt2=volt.split()
+            curr1,curr2=curr.split()
+            if float(temp1)>float(tset1)+20 or float(temp2)>float(tset2)+20 :
+                # if temp is more than 20 degrees above set temp, disable heaters!
+                aposong.iodine_set('enable',0)
+
+            # load into influx database
+            iodine_dict={}
+            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
+                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
+                iodine_dict[k] = float(v)
+            influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
+        except : pass
+
 
         try :
             t=Time.now()
@@ -303,34 +340,6 @@ def status() :
             camframe.temperature.set('{:.1f}/{:.1f}'.format(
                          C.CCDTemperature,C.SetCCDTemperature))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
-
-            # Get iodine cell related data
-            pos = aposong.iodine_position()
-            temp = aposong.iodine_tget()
-            tset = aposong.iodine_tset()
-            volt = aposong.iodine_get('voltage')
-            curr = aposong.iodine_get('current')
-            iodineframe.position.set(pos)
-            iodineframe.temp.set(temp+' / '+tset)
-            iodineframe.voltage.set(volt)
-            iodineframe.current.set(curr)
-
-            # parse temperature channels
-            tset1,tset2=tset.split() 
-            temp1,temp2=temp.split()
-            volt1,volt2=volt.split()
-            curr1,curr2=curr.split()
-            if float(temp1)>float(tset1)+20 or float(temp2)>float(tset2)+20 :
-                # if temp is more than 20 degrees above set temp, disable heaters!
-                aposong.iodine_set('enable',0,0)
-                aposong.iodine_set('enable',1,0)
-
-            # load into influx database
-            iodine_dict={}
-            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
-                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
-                iodine_dict[k] = float(v)
-            influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
 
             # get eShel calibration status
             state = ['Off','On']
