@@ -835,11 +835,13 @@ def park() :
     try: T.Park()
     except: logger.error('telescope.Park raised an exception')
 
-def foc(val=None, relative=False) :
+def foc(val=None, relative=False, port=None) :
     """ Change focus, depending on port
     """
-    stat = pwi.status()
-    if stat.m3.port == 1 :
+    if port is None :
+        stat = pwi.status()
+        port = stat.m3.port
+    if port == 1 :
         index = getfocuser('PWI')
     else :
         index = getfocuser('Zaber')
@@ -895,17 +897,17 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=21.,focoffset=-4625) :
+def iodine_in(val=65.,focoffset=-4625) :
     """ Move iodine cell into beam
     """
     iodine_position(val)
-    foc(focoffset,relative=True)
+    foc(focoffset,relative=True,port=2)
 
 def iodine_out(val=141.,focoffset=4625) :
     """ Move iodine cell out of beam
     """
     iodine_position(val)
-    foc(focoffset,relative=True)
+    foc(focoffset,relative=True,port=2)
 
 def iodine_home() :
     """ Send iodine stage to home
@@ -1126,6 +1128,12 @@ def commands() :
     print("  iodine_home : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
+    print()
+    print("Calibration commands")
+    print("  calstage_position([val]) : get or set (with val) iodine stage position")
+    print("  calstage_home : home iodine stage")
+    print("  eshel.getlamps() : get eShel lamp status")
+    print("  eshel.lamps() : control eShel lamps")
     print()
     print("Status commands")
     print("  start_status(): start status window")
