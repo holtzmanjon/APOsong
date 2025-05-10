@@ -333,12 +333,9 @@ def status() :
 
             camframe.filter.set('{:s}'.format(aposong.filtname()))
 
-            icam = aposong.getcam(0)
-            C = aposong.C[icam]
-            camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-            camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
-            camframe.temperature.set('{:.1f}/{:.1f}'.format(
-                         C.CCDTemperature,C.SetCCDTemperature))
+            #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
+            #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
+            camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
 
             # get eShel calibration status
