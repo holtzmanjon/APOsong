@@ -78,6 +78,8 @@ disp = None
 # discovery seems to fail on 10.75.0.0, so hardcode servers
 def ascom_init(svrs) :
     global D, S, T, F, Filt, C, Covers, SW
+    global camindex 
+    camindex = np.zeros(4,dtype=int)-1
     D, S, T, F, Filt, C, Covers,SW  = (None, None, None, [], None, [], None, [])
     print("Alpaca devices: ")
     if svrs is None : return
@@ -115,6 +117,12 @@ def ascom_init(svrs) :
             elif dev['DeviceType'] == 'Switch' :
                 SW = isconnected(Switch(svr,dev['DeviceNumber']),SW,append=True)
 
+    cams = ['ICX285','ICX694','KAF_8300','QHY']
+    for i in range(4) :
+        for index,c in enumerate(C) :
+            if cams[i] in c.SensorName :
+                camindex[i] = index
+
     try: C[getcam(0)].Magnification=1.33
     except : print("can't access C[getcam(0)]")
     print()
@@ -140,10 +148,11 @@ def getcam(camera=None) :
         print('  3: SONG spectrograph camera (QHY 600)')
         return
 
-    cams = ['ICX285','ICX694','KAF_8300','QHY']
-    for index,c in enumerate(C) :
-        if cams[camera] in c.SensorName :
-            return index
+    if camindex[camera]>=0 : return camindex[camera]
+
+    #for index,c in enumerate(C) :
+    #    if cams[camera] in c.SensorName :
+    #        return index
     print('no such camera!')
 
 def getfocuser(focuser) :
@@ -202,6 +211,8 @@ def gexp(*args, **kwargs) :
     name  : str, default=None
            root file to save image to 
     """
+    if 'bin' not in kwargs :
+        kwargs['bin'] = 1
     return expose(*args, cam=0, filt=None, **kwargs)
 
 def sexp(*args,**kwargs) :
@@ -218,6 +229,8 @@ def sexp(*args,**kwargs) :
     name  : str, default=None
            root file to save image to 
     """
+    if 'bin' not in kwargs :
+        kwargs['bin'] = 2
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
@@ -847,6 +860,7 @@ def foc(val=None, relative=False, port=None) :
         index = getfocuser('Zaber')
     if val is not None :
         if relative :
+            if val == 0 : return F[index].Position
             val += F[index].Position
         F[index].Move(val)
         wait_moving(F[index]) 
@@ -900,14 +914,18 @@ def iodine_get(quantity) :
 def iodine_in(val=65.,focoffset=-4625) :
     """ Move iodine cell into beam
     """
-    iodine_position(val)
-    foc(focoffset,relative=True,port=2)
+    # don't move if already there, to avoid extra focus change`
+    if abs(iodine_position()-val) > 0.1 :
+        iodine_position(val)
+        foc(focoffset,relative=True,port=2)
 
 def iodine_out(val=141.,focoffset=4625) :
     """ Move iodine cell out of beam
     """
-    iodine_position(val)
-    foc(focoffset,relative=True,port=2)
+    # don't move if already there, to avoid extra focus change`
+    if abs(iodine_position()-val) > 0.1 :
+        iodine_position(val)
+        foc(focoffset,relative=True,port=2)
 
 def iodine_home() :
     """ Send iodine stage to home
@@ -938,6 +956,22 @@ def calstage_position(val=None) :
         F[index].Move(int(val*1000.))
         wait_moving(F[index])
     return F[index].Position/1000.
+
+def calstage_in(val=50.,focoffset=0) :
+    """ Move calibration stage into beam
+    """
+    # don't move if already there, to avoid extra focus change`
+    if abs(calstage_position()-val) > 0.1 :
+        calstage_position(val)
+        foc(focoffset,relative=True,port=2)
+
+def calstage_out(val=150.,focoffset=0) :
+    """ Move calibration stage out of beam
+    """
+    # don't move if already there, to avoid extra focus change`
+    if abs(calstage_position()-val) > 0.1 :
+        calstage_position(val)
+        foc(focoffset,relative=True,port=2)
 
 def fans_on(roles=None):
     """
@@ -1122,14 +1156,16 @@ def commands() :
     print("  cooler(state): set camera cooler state on (True) or off (False)")
     print()
     print("Iodine commands")
-    print("  iodine_in : move iodine cell into beam")
-    print("  iodine_out : move iodine cell out of beam")
+    print("  iodine_in : move iodine cell into beam, and adjust focus")
+    print("  iodine_out : move iodine cell out of beam, and adjust focus")
     print("  iodine_position([val]) : get or set (with val) iodine stage position")
     print("  iodine_home : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
     print()
     print("Calibration commands")
+    print("  calstage_in() : move calibration stage into beam, and adjust focus (if needed)")
+    print("  calstage_out() : move calibration stage out of beam, and adjust focus (if needed)")
     print("  calstage_position([val]) : get or set (with val) iodine stage position")
     print("  calstage_home : home iodine stage")
     print("  eshel.getlamps() : get eShel lamp status")
@@ -1140,6 +1176,32 @@ def commands() :
     print("  stop_status(): stop status window ")
     print()
     print("Use help(command) for more details")
+
+def devices() :
+    """ List connected ASCOM devices
+    """
+    global D, S, T, F, Filt, C, Covers, SW
+    print('Dome: ')
+    print(D.Name, D.Description)
+    print('Telescope (T): ')
+    print('  {:s},    {:s}'.format(T.Name, T.Description))
+    print('Mirror Covers (Covers) : ')
+    try : print('  {:s},    {:s}'.format(Covers.Name, Covers.Description))
+    except : print(' NOT FOUND')
+    print('FilterWheel (Filt) : ')
+    try: print('  {:s},    {:s}'.format(Filt.Name, Filt.Description))
+    except : print(' NOT FOUND')
+    print('SafetyMonitor (S) : ')
+    print('  {:s}    {:s}'.format(S.Name, S.Description))
+    print('Focusers (F[]): ')
+    for i,dev in enumerate(F) :
+        print('  {:d}   {:s},   {:s}'.format(i,dev.Name, dev.Description))
+    print('Cameras (C[]): ')
+    for i,dev in enumerate(C) :
+        print('  {:d}   {:s},   {:s}'.format(i,dev.Name, dev.Description))
+    print('Switches (SW[]): ')
+    for i,dev in enumerate(SW) :
+        print('  {:d}   {:s},   {:s}'.format(i,dev.Name, dev.Description))
 
 def init() :
     """ Start ascom and pwi connections and pyvista display
