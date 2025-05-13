@@ -1170,6 +1170,7 @@ def commands() :
     print("  calstage_home : home iodine stage")
     print("  eshel.getlamps() : get eShel lamp status")
     print("  eshel.lamps() : control eShel lamps")
+    print("  eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
     print()
     print("Status commands")
     print("  start_status(): start status window")
