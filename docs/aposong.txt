@@ -43,10 +43,12 @@ Python interface, but a summary of commands is:
 Observatory commands:
   - domeopen(): open dome, mirror covers
   - domeclose(): close mirror covers, dome, and park
+  - issafe(): check safety moniotor for status
 
 Dome commands:
   - domehome(): move dome to home position
-  - domesync() : starts/stops thread to sync dome to telescope position
+  - domesync(True|False) : starts/stops thread to sync dome to telescope position
+  - louvers(True|False) : open/close louvers
 
 Telescope commands :
   - slew(ra,dec): slew to coordinates
@@ -57,12 +59,14 @@ Telescope commands :
   - foc(focus) : set focus to specified value
   - tracking(True|False): turn tracking on/off
   - mirror_covers(True|False): control mirror covers
+  - fans(True|False): control telescope fans
+  - port(port): move tertiary to requested port
   - park(): park telescope and dome
 
 Camera commands :
   - expose(exptime,filt,**kwargs): take an exposure, returns named Exposure tuple with data, hdu, etc.
-  - gexp(exptime,**kwargs): take an exposure with guide camera (frontend to expose())
-  - sexp(exptime,**kwargs): take an exposure with spectrograph camera (frontend to expose())
+  - gexp(exptime,**kwargs): take an exposure with guide camera binned 1x1 (frontend to expose())
+  - sexp(exptime,**kwargs): take an exposure with spectrograph camera binned 2x2 (frontend to expose())
   - focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
@@ -71,6 +75,18 @@ Focal plane unit commands :
   - iodine_position([val]) : get or set (with val) iodine stage position
   - iodine_tset(val) : set iodine temperature (both channels)
   - iodine_tget(): get actual iodine temperatures
+  - iodine_home : home iodine stage
+  - iodine_tset(val) : set iodine temperature (both channels)
+  - iodine_tget(): get actual iodine temperatures
+
+Calibration commands :
+  - calstage_in() : move calibration stage into beam, and adjust focus (if needed)"
+  - calstage_out() : move calibration stage out of beam, and adjust focus (if needed)
+  - calstage_position([val]) : get or set (with val) iodine stage position
+  - calstage_home : home iodine stage
+  - eshel.getlamps() : get eShel lamp status
+  - eshel.lamps() : control eShel lamps
+  - eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off
 
 Alpyca devices
 ++++++++++++++
