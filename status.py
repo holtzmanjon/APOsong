@@ -178,7 +178,7 @@ def status() :
     """
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
-    default_font.configure(size=12,weight=tkinter.font.BOLD)
+    default_font.configure(size=16,weight=tkinter.font.BOLD,family='Arial')
 
     root.rowconfigure(0, weight=1)
     root.columnconfigure(0, weight=1,minsize=200)
@@ -285,6 +285,14 @@ def status() :
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
         except : pass
 
+        try :
+            # get eShel calibration status
+            state = ['Off','On']
+            eShelframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
+            eShelframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
+            eShelframe.led.set(state[aposong.SW[1].GetSwitch(2)])
+            eShelframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
+        except : pass
 
         try :
             t=Time.now()
@@ -318,7 +326,10 @@ def status() :
             telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
 
             telframe.focus.set('{:d}'.format(aposong.getfoc()))
+        except : 
+            telframe.ut.set('ERROR')
 
+        try :
             domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
 
             az, shutterstatus, slewing = aposong.domestatus()
@@ -330,23 +341,17 @@ def status() :
             domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
+        except : pass
 
+        try :
             camframe.filter.set('{:s}'.format(aposong.filtname()))
-
             #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
             #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
             camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
             camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
+        except : pass
 
-            # get eShel calibration status
-            state = ['Off','On']
-            eShelframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
-            eShelframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
-            eShelframe.led.set(state[aposong.SW[1].GetSwitch(2)])
-            eShelframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
 
-        except : 
-            telframe.ut.set('ERROR')
 
         root.after(5000,update)
 
