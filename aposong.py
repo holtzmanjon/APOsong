@@ -61,7 +61,7 @@ except:
 # pwi4 HTTP interface
 import pwi4_client
 
-from pyvista import tv, skycalc, centroid, stars, image
+from pyvista import tv, skycalc, centroid, stars, image, spectra, imred
 import focus
 import status
 import database
@@ -204,7 +204,7 @@ def gexp(*args, **kwargs) :
     ----------
     exptime : float
            Exposure time in seconds
-    bin : int, default=3
+    bin : int, default=1
            binning factor (both x and y)
     display : pyvista tv, default=None
            pyvista display tool to display into if specified
@@ -222,7 +222,7 @@ def sexp(*args,**kwargs) :
     ----------
     exptime : float
            Exposure time in seconds
-    bin : int, default=3
+    bin : int, default=2
            binning factor (both x and y)
     display : pyvista tv, default=None
            pyvista display tool to display into if specified
