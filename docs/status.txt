@@ -1,12 +1,14 @@
 status module
 **************
 
-status provide a Tk window that gives observatory, telescope, camera, etc. status.
+status is a module that provide a Tk window that gives observatory, telescope, camera, etc. status.
 It works by importing the aposong module that gives it access to the Alpyca devices
 that are queried for their state.
 
-status also ingests some of the information into an Influx database for long term
+status is critical in that it also ingests some of the information into an Influx database for long term
 monitoring.
+
+status is designed to be run standalone via the status command
 
 Module functions
 ++++++++++++++++
