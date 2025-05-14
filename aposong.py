@@ -333,6 +333,13 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['YBINNING'] = C[icam].BinY
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
+    pos = iodine_position()
+    temp1,temp2 = iodine_tget().split()
+    hdu.header['I_POS'] = float(pos)
+    hdu.header['I_TEMP1'] = float(temp1)
+    hdu.header['I_TEMP2'] = float(temp2)
+
+
 
     tab=Table()
     cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] 
@@ -1171,10 +1178,6 @@ def commands() :
     print("  eshel.getlamps() : get eShel lamp status")
     print("  eshel.lamps() : control eShel lamps")
     print("  eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
-    print()
-    print("Status commands")
-    print("  start_status(): start status window")
-    print("  stop_status(): stop status window ")
     print()
     print("Use help(command) for more details")
 
