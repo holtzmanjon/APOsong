@@ -882,23 +882,27 @@ def specfoc(val=None) :
         wait_moving(F[index]) 
     return F[index].Position
 
-def iodine_tset(val=None) :
-    """ Get/set iodine cell set temperature
+def iodine_tset(val=None,tmax=65) :
+    """ Get/set iodine cell set temperature and (re)enable heaters
     """
     if val is not None :
-        tset1 = SW[0].SetSwitchValue(0,val)
-        tset2 = SW[0].SetSwitchValue(1,val)
-    else :
-        tset1 = SW[0].Action('get_tset',0)
-        tset2 = SW[0].Action('get_tset',1)
-    return f'{tset1} {tset2}'
+        if val > tmax :
+            print('values > {:d} must be explicitly allowed with tmax= keyword'.format(tmax))
+            return
+        SW[0].SetSwitchValue(0,val)
+        SW[0].SetSwitchValue(1,val)
+        iodine_set('enable',1)
+
+    tset1 = SW[0].Action('get_tset',0)
+    tset2 = SW[0].Action('get_tset',1)
+    return f'set temperature: {tset1} {tset2}'
 
 def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
     tact1 = SW[0].GetSwitchValue(0)
     tact2 = SW[0].GetSwitchValue(1)
-    return f'{tact1} {tact2}'
+    return f'actual temperature: {tact1} {tact2}'
 
 def iodine_set(quantity,val) :
     if quantity in ['enable'] :
