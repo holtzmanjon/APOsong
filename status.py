@@ -275,8 +275,8 @@ def status() :
         try :
             # Get iodine cell related data
             pos = aposong.iodine_position()
-            temp = aposong.iodine_tget()
-            tset = aposong.iodine_tset()
+            temp = aposong.iodine_tget().replace('actual temperature: ','')
+            tset = aposong.iodine_tset().replace('set temperature: ','')
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
             iodineframe.position.set(pos)
@@ -285,7 +285,7 @@ def status() :
             iodineframe.current.set(curr)
 
             # parse temperature channels
-            tset1,tset2=tset.split() 
+            tset1,tset2=tset.split()
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
