@@ -125,7 +125,7 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self,text="TEMP",width=8).grid(column=1,row=2,sticky=(W))
         self.temperature = StringVar()
         ttk.Label(self, textvariable=self.temperature).grid(column=2,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=8).grid(column=3,row=2,sticky=(W))
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=2,sticky=(W))
         self.cooler = StringVar()
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
@@ -163,15 +163,20 @@ class eShelWgt(ttk.Frame) :
 
         ttk.Label(self,text="QUARTZ",width=8).grid(column=3,row=2,sticky=(W))
         self.quartz = StringVar()
-        ttk.Label(self, textvariable=self.quartz).grid(column=4,row=2,sticky=(W,E),padx=10)
+        self.quartz_label = ttk.Label(self, textvariable=self.quartz)
+        self.quartz_label.grid(column=4,row=2,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="LED",width=8).grid(column=5,row=2,sticky=(W))
         self.led = StringVar()
-        ttk.Label(self, textvariable=self.led).grid(column=6,row=2,sticky=(W,E),padx=10)
+        self.led_label = ttk.Label(self, textvariable=self.led)
+        self.led_label.grid(column=6,row=2,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="ThAr",width=8).grid(column=7,row=2,sticky=(W))
         self.thar = StringVar()
-        ttk.Label(self, textvariable=self.thar).grid(column=8,row=2,sticky=(W,E),padx=10)
+        self.thar_label = ttk.Label(self, textvariable=self.thar)
+        self.thar_label.grid(column=8,row=2,sticky=(W,E),padx=10)
+
+niter=0
 
 def status() :
     """ Start status window and updater
@@ -231,23 +236,34 @@ def status() :
     apo=EarthLocation.of_site('APO')
     #aposite=site.Site('APO')
 
+
     def update() :
+        global niter
+        niter=(niter+1)%60
         try :
             # weather status to influxDB
             wdict=weather.getapo()
             weather.influx_write(wdict)
-        except : pass
+        except : print('error with weather')
 
         try :
-            ccd_dict={}
-            for i in range(4) :
-                try :
-                    icam = aposong.getcam(i)
-                    ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
-                    ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
-                    influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
-                except : continue
-        except : pass
+            if niter%60 == 1 :
+                ccd_dict={}
+                for i in range(4) :
+                    try :
+                        icam = aposong.getcam(i)
+                        ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
+                        ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
+                        influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
+                    except : 
+                        print('error with camera: ',i)
+                        continue
+                #camframe.filter.set('{:s}'.format(aposong.filtname()))
+                #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
+                #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
+                camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
+                camframe.cooler.set('{:.1f}'.format(ccd_dict['camera_0_power']))
+        except : print('Error with camera')
 
         try :
             dict={}
@@ -283,16 +299,22 @@ def status() :
                            [temp1,temp2,volt1,volt2,curr1,curr2]) :
                 iodine_dict[k] = float(v)
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
-        except : pass
+        except : print('error with iodine')
 
         try :
             # get eShel calibration status
             state = ['Off','On']
             eShelframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
             eShelframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
+            if state[aposong.SW[1].GetSwitch(0)] == 'On' : eShelframe.quartz_label.config(foreground='red')
+            else :eShelframe.quartz_label.config(foreground='black')
             eShelframe.led.set(state[aposong.SW[1].GetSwitch(2)])
+            if state[aposong.SW[1].GetSwitch(2)] == 'On' : eShelframe.led_label.config(foreground='red')
+            else :eShelframe.led_label.config(foreground='black')
             eShelframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
-        except : pass
+            if state[aposong.SW[1].GetSwitch(1)] == 'On' : eShelframe.thar_label.config(foreground='red')
+            else :eShelframe.thar_label.config(foreground='black')
+        except : print('error with eShel')
 
         try :
             t=Time.now()
@@ -341,17 +363,7 @@ def status() :
             domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
-        except : pass
-
-        try :
-            camframe.filter.set('{:s}'.format(aposong.filtname()))
-            #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-            #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
-            camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
-            camframe.cooler.set('{:.1f}'.format(C.CoolerPower))
-        except : pass
-
-
+        except : print('error with dome')
 
         root.after(5000,update)
 
