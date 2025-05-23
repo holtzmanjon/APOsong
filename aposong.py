@@ -334,16 +334,20 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
     else: hdu.header['IMAGTYP'] = 'DARK'
     pos = iodine_position()
-    temp1,temp2 = iodine_tget().split()
+    temp1,temp2 = iodine_tget().split()[2:]
     hdu.header['I_POS'] = float(pos)
     hdu.header['I_TEMP1'] = float(temp1)
     hdu.header['I_TEMP2'] = float(temp2)
-
-
+    hdu.header['CAL_POS'] = calstage_position()
+    hdu.header['TUNGSTEN'] = int(SW[1].GetSwitch(0))
+    hdu.header['LED'] = int(SW[1].GetSwitch(2))
+    hdu.header['THAR'] = int(SW[1].GetSwitch(1))
 
     tab=Table()
-    cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT'] 
-    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp','xbin','ybin','ra','dec','az','alt','rot'] 
+    cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT',
+             'SPECFOC','I_POS','I_TEMP1','I_TEMP2','CAL_POS','TUNGSTEN','LED','THAR'] 
+    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp','xbin','ybin','ra','dec','az','alt','rot',
+             'specfoc','iodine_position','iodine_temp1','iodine_temp2','calstage_position','tungsten','led','thar'] 
     for card,col in zip(cards,cols) :
         try : tab[col] = [hdu.header[card]]
         except KeyError: print('no {:s} card found'.format(card))
@@ -1167,10 +1171,10 @@ def commands() :
     print("  cooler(state): set camera cooler state on (True) or off (False)")
     print()
     print("Iodine commands")
-    print("  iodine_in : move iodine cell into beam, and adjust focus")
-    print("  iodine_out : move iodine cell out of beam, and adjust focus")
+    print("  iodine_in() : move iodine cell into beam, and adjust focus")
+    print("  iodine_out() : move iodine cell out of beam, and adjust focus")
     print("  iodine_position([val]) : get or set (with val) iodine stage position")
-    print("  iodine_home : home iodine stage")
+    print("  iodine_home() : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
     print()
@@ -1178,7 +1182,7 @@ def commands() :
     print("  calstage_in() : move calibration stage into beam, and adjust focus (if needed)")
     print("  calstage_out() : move calibration stage out of beam, and adjust focus (if needed)")
     print("  calstage_position([val]) : get or set (with val) iodine stage position")
-    print("  calstage_home : home iodine stage")
+    print("  calstage_home() : home iodine stage")
     print("  eshel.getlamps() : get eShel lamp status")
     print("  eshel.lamps() : control eShel lamps")
     print("  eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
