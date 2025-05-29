@@ -365,11 +365,13 @@ def status() :
             else : domeframe.statcolor.set('green')
         except : print('error with dome')
 
+        print('setting root.after')
         root.after(5000,update)
 
     import signal
     def handler(signum,frame):
         return
     signal.signal(signal.SIGINT,handler)
-    update()
+    root.after(1000,update)
+    #update()
     root.mainloop()
