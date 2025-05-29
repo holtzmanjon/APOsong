@@ -933,6 +933,8 @@ def iodine_in(val=65.,focoffset=-4625) :
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
+    else :
+        print('iodine stage already at desired postion, no motion or focus offset done')
 
 def iodine_out(val=141.,focoffset=4625) :
     """ Move iodine cell out of beam
@@ -941,6 +943,8 @@ def iodine_out(val=141.,focoffset=4625) :
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
+    else :
+        print('iodine stage already at desired postion, no motion or focus offset done')
 
 def iodine_home() :
     """ Send iodine stage to home
