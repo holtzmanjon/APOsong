@@ -859,6 +859,19 @@ def park() :
     try: T.Park()
     except: logger.error('telescope.Park raised an exception')
 
+def foc_home(port=None) :
+    """ Send focus to home
+    """
+    if port is None :
+        stat = pwi.status()
+        port = stat.m3.port
+    if port == 1 :
+        index = getfocuser('PWI')
+    else :
+        index = getfocuser('Zaber')
+    F[index].Action('home')
+    wait_moving(F[index]) 
+
 def foc(val=None, relative=False, port=None) :
     """ Change focus, depending on port
     """
@@ -1160,6 +1173,7 @@ def commands() :
     print("  usno([ra,dec]) : find/slew to USNO A2.0 star")
     print("  altaz(az,alt): slew to az/alt coordinates")
     print("  foc(focus) : set focus to specified value")
+    print("  foc_home() : home focus (port=2 only)")
     print("  tracking(True|False): turn tracking on/off")
     print("  mirror_covers(True|False): control mirror covers")
     print("  fans(True|False): control telescope fans")
