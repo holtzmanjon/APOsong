@@ -244,6 +244,7 @@ def status() :
             # weather status to influxDB
             wdict=weather.getapo()
             weather.influx_write(wdict)
+            weather.postgres_write(wdict)
         except : print('error with weather')
 
         try :
@@ -317,13 +318,13 @@ def status() :
         except : print('error with eShel')
 
         try :
-            t=Time.now()
-            t.location=apo
+            t=Time(Time.now(),location=apo)
             y,m,d,h,m,s=t.ymdhms
             telframe.ut.set('{:02d}:{:02d}:{:04.1f}'.format(h,m,s))
             h,m,s=t.sidereal_time('mean').hms
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
+
 
             stat = aposong.telescope_status()
 
@@ -347,13 +348,18 @@ def status() :
             telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
             telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
 
-            telframe.focus.set('{:d}'.format(aposong.getfoc()))
         except : 
-            telframe.ut.set('ERROR')
+            telframe.ra.set('ERROR')
+            telframe.dec.set('ERROR')
+            telframe.pa.set('ERROR')
+            telframe.ha.set('ERROR')
+            telframe.az.set('ERROR')
+            telframe.alt.set('ERROR')
+            telframe.rot.set('ERROR')
+            telframe.port.set('ERROR')
+            telframe.focus.set('{:d}'.format(aposong.foc(port=2)))
 
         try :
-            domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
-
             az, shutterstatus, slewing = aposong.domestatus()
             domeframe.az.set('{:.1f}'.format(az))
             domeframe.shutter.set('{:s}'.format(shutter[shutterstatus]))
@@ -363,6 +369,8 @@ def status() :
             domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
             if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
             else : domeframe.statcolor.set('green')
+
+            domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
 
         print('setting root.after')
