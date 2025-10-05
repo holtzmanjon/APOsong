@@ -14,19 +14,25 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
         if aposong.SW[1].GetSwitch(dev) != state :
             aposong.SW[1].SetSwitch(dev,state)
   
-def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=60,cam=3,bin=2) :
+def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=60,cam=3,bin=2,root='') :
     """ Take series of eShel cals
     """
+
+    foc=aposong.foc()
+    aposong.calstage_in()
+    lamps(mirror=True,quartz=True,led=True)
+    time.sleep(3)
+    aposong.gexp(0.001,display=display,name=root+'guide',max=20000)
     if flats>0 :
-        lamps(mirror=True,quartz=True,led=True)
-        time.sleep(3)
         for i in range(flats) :
-            aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,name='flat')
+            aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'flat')
     if thar>0 :
         lamps(mirror=True,thar=True)
         time.sleep(3)
         for i in range(thar) :
-            aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,name='thar')
+            aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'thar')
     lamps()
     time.sleep(3)
+    aposong.calstage_out()
+    aposong.foc(foc)
 
