@@ -13,6 +13,8 @@ import database
 import logging
 import yaml
 import logging.config
+import aposong
+import eshel
 try :
     with open('logging.yml', 'rt') as f:
         config = yaml.safe_load(f.read())
@@ -206,4 +208,26 @@ def mkplots(mjd,display=None,root='/data/1m/') :
         except : continue
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
+
+def calfocus(foc0=34700,display=None) :
+    """ Focus run for calibration channel
+    """
+    foc=aposong.foc()
+    aposong.calstage_in()
+    eshel.lamps(quartz=True,led=True)
+    time.sleep(3)
+    if foc0 == None : foc0=aposong.foc()
+    plt.figure()
+    figno=plt.gcf().number
+    for df in range(-1000,1001,200) :
+        print(df)
+        aposong.foc(foc0+df)
+        out=aposong.gexp(0.001,max=30000,display=display)
+        plt.figure(figno)
+        plt.plot(out.hdu.data[510],label='{:d}'.format(foc0+df))
+    plt.legend()
+    aposong.foc(foc0)
+    eshel.lamps()
+    aposong.calstage_out()
+    aposong.foc(foc)
 
