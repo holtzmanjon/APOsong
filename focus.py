@@ -231,3 +231,35 @@ def calfocus(foc0=34700,display=None) :
     aposong.calstage_out()
     aposong.foc(foc)
 
+
+def specfocus(foc0=425000) :
+    red=imred.Reducer('SONG',dir='/data/1m/UT251002')
+    trace=spectra.Trace('./UT2509xx_Trace.fits')
+    wav=spectra.WaveCal('./UT2509xx_WaveCal.fits')
+
+    aposong.specfoc(foc0)
+
+    aposong.calstage_in()
+    eshel.lamps(quartz=True,led=True)
+    s=aposong.sexp(50,name='flat',display=disp,max=65535)
+    t=red.reduce(s.name)
+    trace.retrace(t)
+
+    eshel.lamps(thar=True)
+    fiber='specfoc'
+    for i,df in enumerate(range(-2500,2501,500)) :
+        aposong.specfoc(foc0+df)
+        s=aposong.sexp(50,name='{:s}_{:d}'.format(fiber,foc0+df),display=disp,max=65535)
+        t=red.reduce(s.name)
+        tec=trace.extract(t)
+        wav=spectra.WaveCal('./UT2509xx_WaveCal.fits')
+        wav.identify(tec)
+        fig,ax=plots.multi(1,2)
+        ax[0].scatter(wav.waves,wav.fwhm,c=wav.pix)
+        ax[0].set_ylim(0,10)
+        ax[1].scatter(wav.waves,wav.waves/(wav.fwhm*(wav.wave(pixels=[wav.pix,wav.y])-wav.wave(pixels=[wav.pix+1,wav.y]))),c=wav.pix)
+        ax[1].set_ylim(0,120000)
+        fig.savefig('{:s}_{:d}.png'.format(fiber,foc0+df))
+    eshel.lamps()
+    aposong.calstage_out()
+
