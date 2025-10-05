@@ -38,8 +38,8 @@ except FileNotFoundError :
 
 class Guider :
 
-    def __init__(self,x0=774,y0=462,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,
-          display=None,nintegral=10, prop=0.7,ki=0.2,nint=10,settle=1,pixscale=1.) :
+    def __init__(self,x0=777,y0=509,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
+          display=None,nintegral=10, prop=0.9,ki=0.2,nint=10,settle=1,pixscale=1.) :
         self.x0 = x0
         self.y0 = y0
         self.box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
@@ -52,6 +52,7 @@ class Guider :
         self.skyrad = skyrad
         self.mask = mask
         self.maskrad = maskrad
+        self.sat = sat
         self.disp = display
         self.prop = prop
         self.ki = ki
@@ -66,11 +67,15 @@ class Guider :
         self.pixscale = pixscale
         self.mask = mask
         if mask is not None : mask=image.window(mask,box=box)
+        self.display_max = 60000
+        self.exptime_min = 0.5
 
     def get_hole_position(self) :
         """ Refine position of target hole in pickoff mirror, return position and mask
         """
         # illuminate the aperture
+        foc=aposong.foc()
+        aposong.calstage_in()
         eshel.lamps(mirror=True,quartz=True)
         time.sleep(3)
         # expose
@@ -78,9 +83,11 @@ class Guider :
         time.sleep(3)
         eshel.lamps(close=False)
         time.sleep(3)
+        aposong.calstage_out()
+        aposong.foc(foc)
 
         # find minimum pixel (maximum of negative image)
-        box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=25)
+        box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=15)
         stats=image.abx(-im.hdu.data,box)
         x0 = stats['peakx']
         y0 = stats['peaky']
@@ -113,13 +120,13 @@ class Guider :
         """ Find brightest object, optimize exposure time, move object to desired position
         """
         if data is None :
-            exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp,name='guide/acquire')
+            exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp,name='guide/acquire',max=self.display_max)
             hdu=exp.hdu
         else :
             hdu = data
 
         if inter :
-            self.disp.tv(hdu,max=vmax)
+            self.disp.tv(hdu,max=self.display_max)
             print('mark star on display: ')
             k,x,y=self.disp.tvmark()
         else :
@@ -127,17 +134,20 @@ class Guider :
             # adjust exposure time to get good counts
             niter=0
             while True :
+                oldexptime=self.exptime
                 mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
                 objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/self.pixscale,brightest=1)
                 if objs is None : 
                     raise RuntimeError('no objects found')
                     return
                 peak=objs[0]['peak']
+                logger.info('niter: {:d}'.format(niter))
                 # if peak between 20000 and 60000 DN, or exptime>=10s, accept exposure time
                 if (peak < 60000 and peak>20000 ) or niter>10 or self.exptime>9.99: break
-                if peak>60000 : self.exptime*=0.1
-                else: self.exptime = np.max([0.01,np.min([self.exptime*50000/peak,10])])
-                logger.info('new exptime: {:.2f}'.format(self.exptime))
+                if peak>60000 : self.exptime = np.max([self.exptime*0.1,self.exptime_min])
+                else: self.exptime = np.max([self.exptime_min,np.min([self.exptime*50000/peak,10])])
+                logger.info('new exptime: {:.3f}'.format(self.exptime))
+                if self.exptime == oldexptime : break
                 exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp)
                 hdu=exp.hdu
                 niter+=1
@@ -162,12 +172,13 @@ class Guider :
         """ Take exposure and get offset from star to desired center
         """
         if data is None :
-            exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=5000)
+            exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=self.display_max)
             data = exp.hdu.data
         else :
-            self.disp.tv(data,max=5000)
+            self.disp.tv(data,max=self.display_max)
         x,y=self.guess
-        center=centroid.rasym_centroid(data,x,y,self.rad,mask=self.mask,skyrad=self.skyrad,plot=self.disp)
+        print('rasym_centroid: ',self.sat)
+        center=centroid.rasym_centroid(data,x,y,self.rad,mask=self.mask,skyrad=self.skyrad,sat=self.sat)
         bad=False
         if center.x<0 or center.tot<10000:
             try :
@@ -188,11 +199,12 @@ class Guider :
                 if center.tot < 1000 :
                     logger.debug('peak<1000, no offset')
                     bad=True
-        else :
-            bad=True
+
         if self.disp is not None and not bad :
-            self.disp.tvcirc(center.x,center.y,rad=2)
-            self.disp.tvcirc(self.x0,self.y0,rad=1,color='g')
+            self.disp.tvclear()
+            self.disp.tvcirc(center.x,center.y,rad=self.rad)
+            self.disp.tvcirc(center.x,center.y,rad=2,color='r')
+            self.disp.tvcirc(self.x0-self.box.xmin,self.y0-self.box.ymin,rad=self.maskrad,color='g')
             self.guess = [center.x,center.y]
 
         self.center = center
@@ -336,7 +348,7 @@ def doguide(x0,y0,rad=25,exptime=5,filt=None,bin=1,n=1,navg=1,mask=None,disp=Non
         nint=0
         if center.x>0 and center.y>0 :
             if disp is not None: 
-                disp.tvcirc(center.x,center.y,rad=2)
+                disp.tvcirc(center.x,center.y,rad=2,color='r')
                 disp.tvcirc(x0,y0,rad=1,color='g')
             xtot+=center.x
             ytot+=center.y
@@ -490,7 +502,8 @@ def main() :
     server_socket.bind(('localhost', 5000))
     server_socket.listen()
     conn = None
-    disp=tv.TV()
+    disp=tv.TV(figsize=(8,4))
+    disp.fig.canvas.manager.window.wm_geometry('-0-0')
 
     inputs=[sys.stdin,server_socket]
     outputs=[]
@@ -514,7 +527,8 @@ def main() :
             if s is conn :
                 txt = conn.recv(1024).decode()
                 print('socket: ', txt)
-            if txt == 'start' :
+            cmd = txt.split()[0]
+            if cmd == 'start' :
                 print('starting...')
                 kwargs=parse_string_to_kwargs(txt)
                 g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
@@ -527,12 +541,18 @@ def main() :
                 except :
                     if s is conn : conn.send(b'failed acquire')
                     else : print('failed acquire')
-            elif txt == 'stop' or txt == 'pause' :
+            elif cmd == 'stop' or cmd == 'pause' :
                 guiding = False
-            elif txt == 'resume ' :
+                if s is conn : conn.send(b'guiding stopped')
+                else : print('failed')
+            elif cmd == 'resume ' :
                 guiding = True
-            else :
-                print('unknown command: ', txt, len(txt))
+            elif len(txt) > 0 :
+                if s is conn : 
+                    conn.send(b'unknown command: {:s} {d}'.format(txt, len(txt)))
+                else : 
+                    print('unknown command: ', txt, len(txt))
+                    print(parse_string_to_kwargs(txt))
  
         if guiding :
               g.guide()
