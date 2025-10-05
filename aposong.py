@@ -120,8 +120,10 @@ def ascom_init(svrs) :
     cams = ['ICX285','ICX694','KAF_8300','QHY']
     for i in range(4) :
         for index,c in enumerate(C) :
-            if cams[i] in c.SensorName :
-                camindex[i] = index
+            try :
+                if cams[i] in c.SensorName :
+                    camindex[i] = index
+            except : pass
 
     try: C[getcam(0)].Magnification=1.33
     except : print("can't access C[getcam(0)]")
@@ -262,7 +264,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if pwi is not None :
         stat = pwi.status()
         if stat.m3.port == 1 :
-            if filt is not None and filt != 'current': 
+            if filt is not None and filt != 'current' and filt != 'iodine' : 
                 pos = np.where(np.array(Filt.Names) == filt)
                 if len(pos) == 0 :
                     logger.warning('no such filter')
@@ -272,7 +274,13 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             elif filt == 'current' :
                 filt = Filt.Names[Filt.Position]
         else :
-            filt = 'None'
+            if filt == 'iodine' :
+                iodine_in()
+                sleep(5)
+            else :
+                filt = 'None'
+                iodine_out()
+                sleep(5)
     else :
         filt = 'None'
 
@@ -342,6 +350,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['TUNGSTEN'] = int(SW[1].GetSwitch(0))
     hdu.header['LED'] = int(SW[1].GetSwitch(2))
     hdu.header['THAR'] = int(SW[1].GetSwitch(1))
+    if cam == 3 :
+        hdu.header['INSTRUME'] = 'APO SONG'
 
     tab=Table()
     cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT',
@@ -597,31 +607,34 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
         except : 
             slew(result['RA_ICRS'][best]/15., result['DE_ICRS'][best])
 
-def center(x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
+def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     """ Center star
     """
     exp=expose(exptime,filt=filt,bin=bin)
-    disp.tv(exp.hdu)
+    display.tv(exp.hdu)
     print('mark star on display: ')
-    k,x,y=disp.tvmark()
+    k,x,y=display.tvmark()
     icam=getcam(cam)
     if x0 is None : x0=C[icam].NumX//2
     if y0 is None : y0=C[icam].NumY//2
     offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
     time.sleep(settle)
 
-def newguider(start=True) :
+def newguider(start=True,**kwargs) :
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('127.0.0.1',5000))
     if start :
-        s.send(b'start')
+        cmd='start'
+        for key,value in zip(kwargs.keys(),kwargs.values()) :
+            cmd+=(' {:s}={:d}'.format(key,value))
+        s.send(cmd.encode())
     else :
         s.send(b'stop')
     out=s.recv(1024)
-    print('received {:s}'.format(out))
+    print('received {:s}'.format(out.decode()))
     s.close()
 
-def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
+def guide(start=True,x0=777,y0=509,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
           thresh=100,fwhm=1.5,
           display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
     """ Start guiding
@@ -658,11 +671,13 @@ def guide(start=True,x0=774,y0=466,rad=25,exptime=5,bin=1,filt=None,data=None,ma
 
     if start and guide_process is None :
         # refine position of hole
+        calstage_in()
         eshel.lamps(mirror=True,quartz=True)
         time.sleep(3)
         a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp,name='guide/hole')
         time.sleep(3)
         eshel.lamps(close=False)
+        calstage_out()
         time.sleep(3)
         # find minimum pixel
         box=image.BOX(cr=int(y0),cc=int(x0),n=25)
@@ -939,7 +954,7 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=65.,focoffset=-4625) :
+def iodine_in(val=61.,focoffset=-4625) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -989,21 +1004,18 @@ def calstage_position(val=None) :
         wait_moving(F[index])
     return F[index].Position/1000.
 
-def calstage_in(val=50.,focoffset=0) :
+def calstage_in(val=45.125,calfoc=34700) :
     """ Move calibration stage into beam
     """
-    # don't move if already there, to avoid extra focus change`
-    if abs(calstage_position()-val) > 0.1 :
-        calstage_position(val)
-        foc(focoffset,relative=True,port=2)
+    # don't move if already there, to avoid extra focus change
+    foc(calfoc)
+    calstage_position(val)
 
-def calstage_out(val=150.,focoffset=0) :
+def calstage_out(val=150.) :
     """ Move calibration stage out of beam
     """
-    # don't move if already there, to avoid extra focus change`
-    if abs(calstage_position()-val) > 0.1 :
-        calstage_position(val)
-        foc(focoffset,relative=True,port=2)
+    # don't move if already there, to avoid extra focus change
+    calstage_position(val)
 
 def fans_on(roles=None):
     """
@@ -1260,8 +1272,11 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-#    try : disp=tv.TV(figsize=(9.5,6))
-#    except : print("Can't open display")
+#    try : 
+#        disp=tv.TV(figsize=(9.5,6))
+#        disp.fig.canvas.manager.window.wm_geometry('-0-0')
+#    except : 
+#        print("Can't open display")
     commands()
 
 def pwi_init(pwi_srv) :
@@ -1273,5 +1288,36 @@ def pwi_init(pwi_srv) :
     else :
         pwi = None
 
-init()
+def disp_init() :
+    """ Start display with good geometry
+    """
+    try : 
+       disp=tv.TV(figsize=(9.5,6))
+       disp.fig.canvas.manager.window.wm_geometry('-0+0')
+    except : 
+       print("Can't open display")
+    return disp
 
+
+def reduce(n, red=None, trace=None, wav=None, retrace=True, cr=True, scat=True) :
+    """ Quick reduction
+    """
+
+    if red == None :
+        red=imred.Reducer('SONG',dir='/data/1m/UT251003')
+    if trace == None :
+        trace=spectra.Trace('./UT2509xx_Trace.fits')
+    if wav == None :
+        wav=spectra.WaveCal('./UT2509xx_WaveCal.fits')
+    if cr : crbox=red.crbox
+    else : crbox=None
+    if scat : doscat=red.scat
+    else : doscat=None
+    im=red.reduce(n,crbox=crbox,scat=doscat)
+    if retrace : trace.retrace(im)
+    imec=trace.extract(im)
+    wav.add_wave(imec)
+    return imec
+
+
+init()
