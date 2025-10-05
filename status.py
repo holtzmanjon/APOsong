@@ -129,6 +129,13 @@ class CameraWgt(ttk.Frame) :
         self.cooler = StringVar()
         ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
 
+        ttk.Label(self,text="TEMP",width=8).grid(column=5,row=2,sticky=(W))
+        self.spec_temp = StringVar()
+        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=2,sticky=(W))
+        self.spec_cooler = StringVar()
+        ttk.Label(self, textvariable=self.spec_cooler).grid(column=8,row=2,sticky=(W,E),padx=10)
+
 class IodineWgt(ttk.Frame) :
 
     def __init__(self,container) :
@@ -150,12 +157,14 @@ class IodineWgt(ttk.Frame) :
         self.current = StringVar()
         ttk.Label(self, textvariable=self.current).grid(column=4,row=2,sticky=(W,E),padx=10)
 
-class eShelWgt(ttk.Frame) :
+class calWgt(ttk.Frame) :
 
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="ESHEL CALIBRATION",width=24).grid(column=1,row=1,sticky=(W))
+        ttk.Label(self,text="CALSTAGE",width=8).grid(column=1,row=1,sticky=(W))
+        self.calstage = StringVar()
+        ttk.Label(self, textvariable=self.calstage).grid(column=2,row=1,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="MIRROR",width=8).grid(column=1,row=2,sticky=(W))
         self.mirror = StringVar()
@@ -222,8 +231,11 @@ def status() :
     line=ttk.Separator(mainframe,orient='horizontal')
     line.grid(column=1,row=8,stick=(E,W))
 
-    eShelframe=eShelWgt(mainframe)
-    eShelframe.grid(column=1,row=9,stick=(W))
+    calframe=calWgt(mainframe)
+    calframe.grid(column=1,row=9,stick=(W))
+
+    line=ttk.Separator(mainframe,orient='horizontal')
+    line.grid(column=1,row=10,stick=(E,W))
 
     for child in mainframe.winfo_children(): 
         child.grid_configure(padx=5, pady=5)
@@ -264,6 +276,8 @@ def status() :
                 #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
                 camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
                 camframe.cooler.set('{:.1f}'.format(ccd_dict['camera_0_power']))
+                camframe.spec_temp.set('{:.1f}'.format(ccd_dict['camera_3_temp']))
+                camframe.spec_cooler.set('{:.1f}'.format(ccd_dict['camera_3_power']))
         except : print('Error with camera')
 
         try :
@@ -303,18 +317,19 @@ def status() :
         except : print('error with iodine')
 
         try :
+            calframe.calstage.set(aposong.calstage_position())
             # get eShel calibration status
             state = ['Off','On']
-            eShelframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
-            eShelframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
-            if state[aposong.SW[1].GetSwitch(0)] == 'On' : eShelframe.quartz_label.config(foreground='red')
-            else :eShelframe.quartz_label.config(foreground='black')
-            eShelframe.led.set(state[aposong.SW[1].GetSwitch(2)])
-            if state[aposong.SW[1].GetSwitch(2)] == 'On' : eShelframe.led_label.config(foreground='red')
-            else :eShelframe.led_label.config(foreground='black')
-            eShelframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
-            if state[aposong.SW[1].GetSwitch(1)] == 'On' : eShelframe.thar_label.config(foreground='red')
-            else :eShelframe.thar_label.config(foreground='black')
+            calframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
+            calframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
+            if state[aposong.SW[1].GetSwitch(0)] == 'On' : calframe.quartz_label.config(foreground='red')
+            else :calframe.quartz_label.config(foreground='black')
+            calframe.led.set(state[aposong.SW[1].GetSwitch(2)])
+            if state[aposong.SW[1].GetSwitch(2)] == 'On' : calframe.led_label.config(foreground='red')
+            else :calframe.led_label.config(foreground='black')
+            calframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
+            if state[aposong.SW[1].GetSwitch(1)] == 'On' : calframe.thar_label.config(foreground='red')
+            else :calframe.thar_label.config(foreground='black')
         except : print('error with eShel')
 
         try :
@@ -347,6 +362,8 @@ def status() :
 
             telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
             telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
+            
+            telframe.focus.set('{:d}'.format(aposong.foc()))
 
         except : 
             telframe.ra.set('ERROR')
