@@ -419,10 +419,11 @@ def loadtarg(file,schedule='rv',sequence='UBVRI',insert=False) :
         targ=Target(name,ra,dec)
         targs.append(targ.table())
         c=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
+        priority=20
         if iline == 0 :
-            rtab = Table( [[name], [schedule],[sequence]], names = ('targname','schedulename','sequencename') )
+            rtab = Table( [[name], [schedule],[sequence]], names = ('targname','schedulename','sequencename','priority') )
         else :
-            rtab.add_row([name,'rv','UBVRI'])
+            rtab.add_row([name,'rv','UBVRI',priority])
     tab=vstack(targs)
     if insert :
         tab.rename_column('name','targname')
@@ -437,9 +438,9 @@ def loadsched(name,min_airmass=1.0,max_airmass=2,nvisits=1,dt_visit=0) :
     d.ingest('robotic.schedule',schedule.table(),onconflict='update')
     d.close()
 
-def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0]) :
+def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=1) :
     d=database.DBSession()
-    sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera)
+    sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera,bin=bin)
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
