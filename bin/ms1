@@ -14,7 +14,7 @@ commands. This program wraps the SNMP control.
     1;
 
 # The hostname of the APC server. 192.41.211.22
-$SNMP_HOSTNAME = 'spare1m.apo.nmsu.edu';
+$SNMP_HOSTNAME = 'powerb1m.apo.nmsu.edu';
 
 # The SNMP Community name serves as the access control. It really 
 # should not be here in plain text... - CPL
