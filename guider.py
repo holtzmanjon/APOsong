@@ -39,7 +39,7 @@ except FileNotFoundError :
 class Guider :
 
     def __init__(self,x0=777,y0=509,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
-          display=None,nintegral=10, prop=0.9,ki=0.2,nint=10,settle=1,pixscale=1.) :
+          display=None,nintegral=10, prop=0.9,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=1) :
         self.x0 = x0
         self.y0 = y0
         self.box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
@@ -67,8 +67,8 @@ class Guider :
         self.pixscale = pixscale
         self.mask = mask
         if mask is not None : mask=image.window(mask,box=box)
-        self.display_max = 60000
-        self.exptime_min = 0.5
+        self.display_max = 30000
+        self.exptime_min = exptime_min
 
     def get_hole_position(self) :
         """ Refine position of target hole in pickoff mirror, return position and mask
@@ -524,10 +524,12 @@ def main() :
                 conn, addr = server_socket.accept()
                 inputs.append(conn)
                 print('adding client')
+                txt='adding'
             if s is conn :
                 txt = conn.recv(1024).decode()
                 print('socket: ', txt)
-            cmd = txt.split()[0]
+            try : cmd = txt.split()[0]
+            except : cmd=''
             if cmd == 'start' :
                 print('starting...')
                 kwargs=parse_string_to_kwargs(txt)
