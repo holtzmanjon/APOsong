@@ -14,7 +14,8 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
         if aposong.SW[1].GetSwitch(dev) != state :
             aposong.SW[1].SetSwitch(dev,state)
   
-def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=60,cam=3,bin=2,root='') :
+#def cals(display=None,flats=15,thar=15,flat_exptime=8,thar_exptime=60,cam=3,bin=2,root='') :
+def cals(display=None,flats=2,thar=2,flat_exptime=50,thar_exptime=120,cam=3,bin=2,root='') :
     """ Take series of eShel cals
     """
 
