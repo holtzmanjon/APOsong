@@ -142,8 +142,9 @@ class IodineWgt(ttk.Frame) :
         super().__init__(container) 
 
         ttk.Label(self,text="IODINE STAGE",width=16).grid(column=1,row=1,sticky=(W))
-        self.position = StringVar()
-        ttk.Label(self, textvariable=self.position).grid(column=2,row=1,sticky=(W,E),padx=10)
+        self.iodinestage = StringVar()
+        self.iodinestage_label = ttk.Label(self, textvariable=self.iodinestage)
+        self.iodinestage_label.grid(column=2,row=1,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="IODINE TEMP",width=16).grid(column=3,row=1,sticky=(W))
         self.temp = StringVar()
@@ -164,7 +165,8 @@ class calWgt(ttk.Frame) :
 
         ttk.Label(self,text="CALSTAGE",width=8).grid(column=1,row=1,sticky=(W))
         self.calstage = StringVar()
-        ttk.Label(self, textvariable=self.calstage).grid(column=2,row=1,sticky=(W,E),padx=10)
+        self.calstage_label = ttk.Label(self, textvariable=self.calstage)
+        self.calstage_label.grid(column=2,row=1,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="MIRROR",width=8).grid(column=1,row=2,sticky=(W))
         self.mirror = StringVar()
@@ -294,7 +296,10 @@ def status() :
             tset = aposong.iodine_tset().replace('set temperature: ','')
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
-            iodineframe.position.set(pos)
+            iodineframe.iodinestage.set(pos)
+            if abs(pos-aposong.iodinestage_in_pos) < 0.2 : iodineframe.iodinestage_label.config(foreground='green')
+            elif abs(pos-aposong.iodinestage_out_pos) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
+            else : iodineframe.iodinestage_label.config(foreground='yellow')
             iodineframe.temp.set(temp+' / '+tset)
             iodineframe.voltage.set(volt)
             iodineframe.current.set(curr)
@@ -317,7 +322,11 @@ def status() :
         except : print('error with iodine')
 
         try :
-            calframe.calstage.set(aposong.calstage_position())
+            pos =aposong.calstage_position()
+            calframe.calstage.set(pos)
+            if abs(pos-aposong.calstage_in_pos) < 0.2 : calframe.calstage_label.config(foreground='green')
+            elif abs(pos-aposong.calstage_out_pos) < 0.2 : calframe.calstage_label.config(foreground='blue')
+            else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
             state = ['Off','On']
             calframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
