@@ -37,11 +37,12 @@ import eshel
 import database
 
 class Target() :
-    def __init__(self,name,ra,dec,epoch=2000.) :
+    def __init__(self,name,ra,dec,mag=99.999,epoch=2000.) :
         self.name=name
         self.ra=ra
         self.dec=dec
         self.epoch=epoch
+        self.mag=mag
 
     def table(self) :
         tab =Table()
@@ -49,12 +50,15 @@ class Target() :
         tab['ra'] = [self.ra]
         tab['dec'] = [self.dec]
         tab['epoch'] = [self.epoch]
+        tab['mag'] = [self.mag]
         return tab
 
-    def acquire(self,display=None,prop=0.7) :
-        aposong.guide(False)
+    def acquire(self,display=None) :
+        aposong.iodine_out()
+        aposong.newguider(False)
         aposong.slew(self.ra,self.dec)
-        aposong.guide(True,exptime=0.5,name='guide/{:s}'.format(self.name),display=None,vmax=30000,prop=prop)
+        aposong.newguider(True)
+        time.sleep(30)
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -95,7 +99,7 @@ class Sequence() :
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp) :
                 logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
-                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam,bin=bin)
+                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
                 names.append(exp.name)
         return names
 
@@ -242,7 +246,7 @@ def observe_object(request,display=None,acquire=True) :
 
     try :
         # observe requested sequence
-        seq = Sequence(request['targname'],filt=request['filter'],
+        seq = Sequence(request['targname'],filt=request['filter'],bin=request['bin'],
                        n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
         t=Time.now()
         names=seq.observe(targ.name,display=display)
@@ -302,7 +306,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
 
     # open dome when safe after desired time relative to sunset
     aposong.settemp(ccdtemp,cam=0)
-    aposong.settemp(ccdtemp,cam=1)
+    aposong.settemp(ccdtemp,cam=3)
     obsopen(sunset+dt_sunset*u.hour)
 
     # cals
@@ -348,7 +352,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
-            aposong.guide(False)
+            aposong.newguider(False)
             foc0=focus(foc0=foc0,display=display)
             foctime=tnow
             oldtarg=''
@@ -485,17 +489,17 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         try: plt.close('all')
         except: pass
         t=tv.TV()
-        out='{:s}/{:d}.gif'.format(dir,seq[0])
+        out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
             red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
         if i>0 and i%5 == 0 :
             grid.append(row)
             row=[]
-        row.append('guide/{:d}.gif'.format(seq[0]))
+        row.append('guide/{:d}.mp4'.format(seq[0]))
     for ii in range(i%5+1,5) :
         row.append('')
     grid.append(row)
-    html.htmltab(grid,file=root+ut+'/guide.html',size=200)
+    html.htmltab(grid,file=root+ut+'/guide.html',movie=True)
 
 def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     """ Make focus plot from focus sequences from database for specified MJD
