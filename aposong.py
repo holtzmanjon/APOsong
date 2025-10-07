@@ -236,7 +236,7 @@ def sexp(*args,**kwargs) :
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0, insert=True) :
+           min=None, max=None, cam=0, insert=True, targ=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -276,11 +276,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         else :
             if filt == 'iodine' :
                 iodine_in()
-                sleep(5)
-            else :
+            elif filt == 'open' :
                 filt = 'None'
                 iodine_out()
-                sleep(5)
+            else :
+                filt = 'None'
     else :
         filt = 'None'
 
@@ -327,6 +327,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     try : 
         hdu.header['SPECFOC'] = specfoc()
     except : pass
+    if targ is not None : hdu.header['OBJECT'] = targ
     try :
         stat = pwi.status()
         hdu.header['RA'] = stat.mount.ra_j2000_hours
@@ -617,7 +618,7 @@ def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     icam=getcam(cam)
     if x0 is None : x0=C[icam].NumX//2
     if y0 is None : y0=C[icam].NumY//2
-    offsetxy((x-x0),(y-y0),scale=pixscale(),pa=rotator()-T.Altitude+100)
+    offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
 def newguider(start=True,**kwargs) :
@@ -783,8 +784,8 @@ def offsetxy(dx,dy,sign=-1,scale=0.16,pa=None) :
     pa = sign*rotator()*np.pi/180.
     dra =  -dx*np.cos(pa) - dy*np.sin(pa)
     ddec = -dx*np.sin(pa) + dy*np.cos(pa) 
+    #offset(dra*scale,ddec*scale)
     offset(dra*scale,ddec*scale)
-    #offset(dra*scale/np.cos(T.Declination*np.pi/180.),ddec*scale)
 
 def offset(dra, ddec) :
     """
@@ -814,7 +815,7 @@ def offset(dra, ddec) :
     path: Offset along the direction of travel for a moving target
     transverse: Offset perpendicular to the direction of travel for a moving target
     """
-    pwi.mount_offset(ra_add_arcsec=dra)
+    pwi.mount_offset(ra_add_arcsec=dra/np.cos(T.Declination*np.pi/180.))
     pwi.mount_offset(dec_add_arcsec=ddec)
 
 def j2000totopocentric(ra,dec) :
@@ -836,7 +837,7 @@ def j2000totopocentric(ra,dec) :
     #v6 = convert.cat2v6(ra*np.pi/180,dec*np.pi/180)
     #v6_app = convert.convertv6(s1=6,s2=16,lon=apo.lon.value,lat=apo.lat.value,alt=apo.height.value)
 
-def rotator(offset=100.) :
+def rotator(offset=90.) :
     """ Get current rotator position angle, from parallactic angle and altitude for port 2  and telescope status for port 1
 
     Parameters
@@ -961,6 +962,7 @@ def iodine_in(val=61.,focoffset=-4625) :
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
+        time.sleep(5)
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
@@ -971,6 +973,7 @@ def iodine_out(val=141.,focoffset=4625) :
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
+        time.sleep(5)
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
@@ -1248,7 +1251,7 @@ def devices() :
 def init() :
     """ Start ascom and pwi connections and pyvista display
     """
-    global disp, dataroot, pwi_srv
+    global dataroot, pwi_srv, calstage_in_pos, iodinestage_in_pos, calstage_out_pos, iodinestage_out_pos
     try :
         with open('aposong.yml','r') as config_file :
             config = yaml.safe_load(config_file) 
@@ -1272,11 +1275,10 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-#    try : 
-#        disp=tv.TV(figsize=(9.5,6))
-#        disp.fig.canvas.manager.window.wm_geometry('-0-0')
-#    except : 
-#        print("Can't open display")
+    calstage_in_pos = config['calstage_in_pos']
+    calstage_out_pos = config['calstage_out_pos']
+    iodinestage_in_pos = config['iodinestage_in_pos']
+    iodinestage_out_pos = config['iodinestage_out_pos']
     commands()
 
 def pwi_init(pwi_srv) :
@@ -1297,27 +1299,5 @@ def disp_init() :
     except : 
        print("Can't open display")
     return disp
-
-
-def reduce(n, red=None, trace=None, wav=None, retrace=True, cr=True, scat=True) :
-    """ Quick reduction
-    """
-
-    if red == None :
-        red=imred.Reducer('SONG',dir='/data/1m/UT251003')
-    if trace == None :
-        trace=spectra.Trace('./UT2509xx_Trace.fits')
-    if wav == None :
-        wav=spectra.WaveCal('./UT2509xx_WaveCal.fits')
-    if cr : crbox=red.crbox
-    else : crbox=None
-    if scat : doscat=red.scat
-    else : doscat=None
-    im=red.reduce(n,crbox=crbox,scat=doscat)
-    if retrace : trace.retrace(im)
-    imec=trace.extract(im)
-    wav.add_wave(imec)
-    return imec
-
 
 init()
