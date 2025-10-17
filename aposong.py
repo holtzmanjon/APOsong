@@ -337,7 +337,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         hdu.header['ROT'] = stat.rotator.mech_position_degs
         hdu.header['TELESCOP'] = 'APO SONG 1m'
     except : pass
-    hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
+    try : hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
+    except : hdu.header['CCD-TEMP'] = 99.999
     hdu.header['XBINNING'] = C[icam].BinX
     hdu.header['YBINNING'] = C[icam].BinY
     if light: hdu.header['IMAGTYP'] = 'LIGHT'
@@ -345,6 +346,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     pos = iodine_position()
     temp1,temp2 = iodine_tget().split()[2:]
     hdu.header['I_POS'] = float(pos)
+    if abs(float(pos)-iodinestage_in_pos) < 1. : hdu.header['I2POS'] = 4
+    else : hdu.header['I2POS'] = 0
     hdu.header['I_TEMP1'] = float(temp1)
     hdu.header['I_TEMP2'] = float(temp2)
     hdu.header['CAL_POS'] = calstage_position()
@@ -489,6 +492,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     d=database.DBSession()
     d.ingest('obs.focus',tab,onconflict='update')
     d.close()
+    if display is not None : display.tvclear()
 
     return f
 
@@ -955,7 +959,7 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=61.,focoffset=-4625) :
+def iodine_in(val=83.,focoffset=-4625) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -966,7 +970,7 @@ def iodine_in(val=61.,focoffset=-4625) :
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
-def iodine_out(val=141.,focoffset=4625) :
+def iodine_out(val=150.,focoffset=4625) :
     """ Move iodine cell out of beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -1007,7 +1011,7 @@ def calstage_position(val=None) :
         wait_moving(F[index])
     return F[index].Position/1000.
 
-def calstage_in(val=45.125,calfoc=34700) :
+def calstage_in(val=45.2,calfoc=34700) :
     """ Move calibration stage into beam
     """
     # don't move if already there, to avoid extra focus change
