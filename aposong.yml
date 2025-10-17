@@ -15,8 +15,8 @@ devices :
 
 dataroot : /data/1m
 updatecamera : True
-calstage_in_pos : 45.125
+calstage_in_pos : 45.2
 calstage_out_pos : 150.
-iodinestage_in_pos : 61.
-iodinestage_out_pos : 141.
+iodinestage_in_pos : 83.
+iodinestage_out_pos : 150.
 
