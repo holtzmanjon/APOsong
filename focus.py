@@ -1,8 +1,10 @@
 import glob
 import os
+import copy
 import numpy as np
 from astropy.io import fits
-from pyvista import centroid, stars, tv
+from astropy.time import Time
+from pyvista import centroid, stars, tv, imred, image
 import matplotlib
 import matplotlib.pyplot as plt
 import pdb
@@ -263,3 +265,42 @@ def specfocus(foc0=425000) :
     eshel.lamps()
     aposong.calstage_out()
 
+
+def montage(display) :
+    red=imred.Reducer('SONG',dir='/data/1m/UT251016')
+    files=glob.glob('/data/1m/UT251016/focus*')
+    dates=[]
+    for file in files :
+        a=red.rd(file)
+        dates.append(Time(a.header['DATE-OBS']).mjd)
+    dates
+    j=np.argsort(dates)
+
+    focold=1000000
+    run=[]
+    runs=[]
+    for file in np.array(files)[j] :
+        foc=int(file.split('.')[0].split('_')[1])
+        print(foc)
+        if foc < focold :
+            runs.append(run)
+            run=[]
+        run.append(file)
+        focold=copy.copy(foc)
+    box=image.BOX(n=512,cc=580,cr=620)
+    montage=[]
+    mfiles=[]
+    for run in runs[1:] :
+        f,s,m=image.seq(run,red=red,box=box)
+        montage.append(m)
+        mfiles.append(f)
+
+    for f,m in zip(mfiles,montage) :
+        n=f[0].split('.')[1]+'-'+f[-1].split('.')[1]
+        tit=f[0].split('.')[0].split('_')[1]+'-'+f[-1].split('.')[0].split('_')[1]+' '+n
+        display.clear()
+        display.tv(m,max=3000)
+        display.tvtext(0,0,tit,ha='left')
+        plt.draw()
+        #display.imexam()
+    return mfiles,montage
