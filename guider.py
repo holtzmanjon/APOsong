@@ -38,7 +38,7 @@ except FileNotFoundError :
 
 class Guider :
 
-    def __init__(self,x0=777,y0=509,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
+    def __init__(self,x0=780,y0=509,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
           display=None,nintegral=10, prop=0.9,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=1) :
         self.x0 = x0
         self.y0 = y0
