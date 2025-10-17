@@ -101,6 +101,7 @@ class Sequence() :
                 logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
                 exp=aposong.expose(texp,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
                 names.append(exp.name)
+        aposong.iodine_out()
         return names
 
     def table(self) :
@@ -294,7 +295,7 @@ def obsopen(opentime) :
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10) :
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=0, initfoc=True) :
   """ Full observing night sequence 
   """
   while True :
@@ -334,7 +335,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
     #aposong.fans_off()
 
     # focus star on meridian 
-    foc=focus(foc0=foc0,delta=75,n=15,display=display)
+    if initfoc : foc=focus(foc0=foc0,delta=75,n=15,display=display)
     foctime=Time.now()
 
     oldtarg=''
@@ -396,8 +397,16 @@ def focus(foc0=28800,delta=75,n=9,display=None) :
     lst=t.sidereal_time('mean').value
     aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
 
+    #foc0_0=copy.copy(foc0)
+    #f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt='iodine',bin=1,thresh=100,display=display,max=5000)
+    #while f<foc0-5*delta or f>foc0+5*delta :
+    #    logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
+    #    foc0=copy.copy(f)
+    #    f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    #foc0=copy.copy(foc0_0)
+
     f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-2*delta or f>foc0+2*delta :
+    while f<foc0-5*delta or f>foc0+5*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
         f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
@@ -471,27 +480,29 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
 #    matplotlib.use('Agg')
     dir=root+ut+'/guide'
     red=imred.Reducer(dir=dir)
-    files=glob.glob(dir+'/acquire*.fits')
+    files=sorted(glob.glob(dir+'/acquire*.fits'))
     ims=[]
     seqs=[]
     for file in files :
         im=int(file.split('.')[-2])
         ims.append(im)
     for i,im in enumerate(ims[1:]) :
-        if ims[i]-ims[i-1] > 1 :
-            seqs.append([ims[i-1]+1,ims[i]])
+        if ims[i+1]-ims[i] > 1 :
+            seqs.append([ims[i]+1,ims[i+1]])
 
-    #print(ims)
-    #print(seqs)
+    print(ims)
+    print(seqs)
     grid=[]
     row=[]
+    pdb.set_trace()
     for i,seq in enumerate(seqs):
         try: plt.close('all')
         except: pass
         t=tv.TV()
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
-            red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+            try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+            except: continue
         if i>0 and i%5 == 0 :
             grid.append(row)
             row=[]
@@ -499,7 +510,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     for ii in range(i%5+1,5) :
         row.append('')
     grid.append(row)
-    html.htmltab(grid,file=root+ut+'/guide.html',movie=True)
+    html.htmltab(grid,file=root+ut+'/guide.html',video=True)
 
 def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     """ Make focus plot from focus sequences from database for specified MJD
@@ -526,7 +537,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
         try : 
             if clobber or not os.path.isfile(root+files[seq][0].replace('.fits','.png')) :
                 dofocus.focus(files[seq],display=display,root=root,plot=True,hard=True,
-                              pixscale=aposong.pixscale(aposong.getcam(0)))
+                              pixscale=aposong.pixscale(0))
             if i>0 and i%5 == 0 :
                 grid.append(row)
                 row=[]
