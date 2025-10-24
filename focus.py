@@ -268,7 +268,7 @@ def specfocus(foc0=425000) :
 
 def montage(display) :
     red=imred.Reducer('SONG',dir='/data/1m/UT251016')
-    files=glob.glob('/data/1m/UT251016/focus*')
+    files=glob.glob('/data/1m/UT251016/focus*.fits')
     dates=[]
     for file in files :
         a=red.rd(file)
