@@ -1,5 +1,5 @@
 from astropy.coordinates import SkyCoord,EarthLocation
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy.table import Table, hstack, vstack
 from astropy.io import fits
 import astropy.units as u
@@ -144,7 +144,7 @@ def getrequests() :
     d.close()
     return tab
 
-def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90,skip=None) :
+def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90,skip=None,verbose=True) :
     """ 
     Get best request given table of requests and time
     """
@@ -188,7 +188,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         dt=ham-haend
         hamid=ha+(length/3600./2.)*u.hourangle
         if am < request['min_airmass'] or am > request['max_airmass'] or dt<0 : 
-            logger.info('{:s} out of airmass range {:.2f}'.format(request['targname'],am))
+            if verbose: logger.info('{:s} out of airmass range {:.2f}'.format(request['targname'],am))
             continue
         #if c.dec<mindec*u.deg or c.dec>maxdec*u.deg : 
         #    logger.info('{:s} out of declination range'.format(request['targname']))
@@ -196,11 +196,11 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
         if len(obs)>0:
             if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
-                logger.info('{:s} observed enough visits {:d}'.format(request['targname'],len(obs)))
+                if verbose: logger.info('{:s} observed enough visits {:d}'.format(request['targname'],len(obs)))
                 continue
             dt_visit = t.mjd - np.max(obs['mjd'])
             if dt_visit < request['dt_visit'] :
-                logger.info('{:s} observed too recently'.format(request['targname']))
+                if verbose: logger.info('{:s} observed too recently'.format(request['targname']))
                 continue
 
         if (criterion == 'setting' and dt< tmin) :
@@ -225,7 +225,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
     if best is None:
         logger.info('No good request available')
     else :
-        logger.info('request selected: {:s}'.format(best['targname']))
+        logger.info('request selected: {:s} {:s}'.format(best['targname'],best['sequencename']))
     return best
 
 def observe_object(request,display=None,acquire=True) :
@@ -295,7 +295,7 @@ def obsopen(opentime) :
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=0, initfoc=True) :
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, simulate=False) :
   """ Full observing night sequence 
   """
   while True :
@@ -406,7 +406,7 @@ def focus(foc0=28800,delta=75,n=9,display=None) :
     #foc0=copy.copy(foc0_0)
 
     f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-5*delta or f>foc0+5*delta :
+    while f<foc0-3.1*delta or f>foc0+3.1*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
         f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
