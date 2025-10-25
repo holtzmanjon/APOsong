@@ -94,12 +94,12 @@ class Sequence() :
             tot+= filtmove+nexp*(texp+read)
         return tot
 
-    def observe(self,name,display=None) :
+    def observe(self,name,display=None,fact=1) :
         names = []
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp) :
                 logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
-                exp=aposong.expose(texp,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
+                exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
                 names.append(exp.name)
         aposong.iodine_out()
         return names
@@ -228,7 +228,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         logger.info('request selected: {:s} {:s}'.format(best['targname'],best['sequencename']))
     return best
 
-def observe_object(request,display=None,acquire=True) :
+def observe_object(request,display=None,acquire=True,fact=1) :
     """ Given request, do the observation and record
     """
 
@@ -250,7 +250,7 @@ def observe_object(request,display=None,acquire=True) :
         seq = Sequence(request['targname'],filt=request['filter'],bin=request['bin'],
                        n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
         t=Time.now()
-        names=seq.observe(targ.name,display=display)
+        names=seq.observe(targ.name,display=display,fact=fact)
         return load_object(request,t.mjd,names)
     except KeyboardInterrupt :
         raise KeyboardInterrupt('CTRL-C')
@@ -295,7 +295,7 @@ def obsopen(opentime) :
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, simulate=False) :
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1) :
   """ Full observing night sequence 
   """
   while True :
@@ -362,7 +362,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
             if best is None :
                 time.sleep(60)
             else :
-                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg))
+                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),fact=fact)
                 # if object failed, skip it for the next selection, but can try again after that
                 if success : 
                     oldtarg=best['targname'] 
@@ -494,7 +494,6 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     print(seqs)
     grid=[]
     row=[]
-    pdb.set_trace()
     for i,seq in enumerate(seqs):
         try: plt.close('all')
         except: pass
