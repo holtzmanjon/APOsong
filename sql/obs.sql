@@ -32,3 +32,10 @@ CREATE TABLE obs.focus (
     bestfithf double precision,
     files text[]
 );
+
+CREATE TABLE obs.reduced (
+    reduced_pk bigserial primary key,
+    exp_pk integer,
+    throughput double precision,
+    sn double precision
+);
