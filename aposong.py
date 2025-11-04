@@ -23,8 +23,8 @@ import yaml
 import logging.config
 try :
     with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
+        logconfig = yaml.safe_load(f.read())
+    logging.config.dictConfig(logconfig)
     logger=logging.getLogger('aposong')
 except FileNotFoundError :
     #trap for readthedocs
@@ -41,7 +41,6 @@ from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
-import guider
 import eshel
 
 # alpaca imports, put in try/except for readthedocs
@@ -236,7 +235,7 @@ def sexp(*args,**kwargs) :
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0, insert=True, targ=None) :
+           min=None, max=None, cam=0, insert=True, targ=None, avg=1) :
     """ Take an exposure with camera
 
     Parameters
@@ -301,13 +300,28 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         C[icam].NumX = nx
         C[icam].NumY = ny
         t = Time.now()
-        C[icam].StartExposure(exptime,light)
-        for i in range(int(exptime),0,-1) :
-            print('{:<4d}'.format(i),end='\r')
-            time.sleep(0.99)
-        while not C[icam].ImageReady or C[icam].CameraState != 0:
-            time.sleep(1.0)
-        data = np.array(C[icam].ImageArray).T
+        # if requested, average avg exposures
+        for iavg in range(avg) :
+            C[icam].StartExposure(exptime,light)
+            if int(exptime) > 5 :
+                #print countdown
+                for i in range(int(exptime),0,-1) :
+                    print('{:<4d}'.format(i),end='\r')
+                    time.sleep(0.99)
+            while not C[icam].ImageReady or C[icam].CameraState != 0:
+                time.sleep(0.1)
+            if iavg == 0 :
+                if avg == 1 :
+                    data = np.array(C[icam].ImageArray)
+                else :
+                    data = np.array(C[icam].ImageArray).astype(float)
+            else :
+                data += np.array(C[icam].ImageArray)
+        if avg == 1 : 
+            data = data.T
+        else :
+            data = data.T/avg
+            data=data.astype(np.uint16)
     except :
         logger.exception('ERROR : exposure failed')
         return exposure
@@ -320,6 +334,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['JD'] = t.jd
     hdu.header['MJD'] = t.mjd
     hdu.header['EXPTIME'] = exptime 
+    hdu.header['EXPAVG'] = avg
     hdu.header['FILTER'] = filt 
     try : 
         hdu.header['FOCUS'] = foc()
@@ -337,6 +352,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         hdu.header['ROT'] = stat.rotator.mech_position_degs
         hdu.header['TELESCOP'] = 'APO SONG 1m'
     except : pass
+    hdu.header['DOMEAZ'] = D.Azimuth
     try : hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
     except : hdu.header['CCD-TEMP'] = 99.999
     hdu.header['XBINNING'] = C[icam].BinX
@@ -346,7 +362,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     pos = iodine_position()
     temp1,temp2 = iodine_tget().split()[2:]
     hdu.header['I_POS'] = float(pos)
-    if abs(float(pos)-iodinestage_in_pos) < 1. : hdu.header['I2POS'] = 4
+    if abs(float(pos)-config['iodinestage_in_pos']) < 1. : hdu.header['I2POS'] = 4
     else : hdu.header['I2POS'] = 0
     hdu.header['I_TEMP1'] = float(temp1)
     hdu.header['I_TEMP2'] = float(temp2)
@@ -451,6 +467,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     focvals= np.arange(int(cent)-n//2*int(step),int(cent)+n//2*int(step)+1,int(step))
     for i,focval in enumerate(focvals) :
         foc(int(focval))
+        if i == 0 : time.sleep(3)
         
         logger.info('position: {:d}'.format(foc()))
         exp = expose(exptime,filt,box=box,bin=bin,display=display,
@@ -625,16 +642,13 @@ def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
-def newguider(start=True,**kwargs) :
+def newguider(cmd,**kwargs) :
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('127.0.0.1',5000))
-    if start :
-        cmd='start'
+    if cmd == 'start' :
         for key,value in zip(kwargs.keys(),kwargs.values()) :
             cmd+=(' {:s}={:d}'.format(key,value))
-        s.send(cmd.encode())
-    else :
-        s.send(b'stop')
+    s.send(cmd.encode())
     out=s.recv(1024)
     print('received {:s}'.format(out.decode()))
     s.close()
@@ -959,10 +973,11 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=83.,focoffset=-4625) :
+def iodine_in(val=None,focoffset=-4625) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
+    if val is None : val = config['iodinestage_in_pos']
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
@@ -970,10 +985,11 @@ def iodine_in(val=83.,focoffset=-4625) :
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
-def iodine_out(val=150.,focoffset=4625) :
+def iodine_out(val=None,focoffset=4625) :
     """ Move iodine cell out of beam
     """
     # don't move if already there, to avoid extra focus change`
+    if val is None : val = config['iodinestage_out_pos']
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
@@ -1011,18 +1027,43 @@ def calstage_position(val=None) :
         wait_moving(F[index])
     return F[index].Position/1000.
 
-def calstage_in(val=45.2,calfoc=34700) :
+def calstage_in(val=None,calfoc=34700) :
     """ Move calibration stage into beam
     """
     # don't move if already there, to avoid extra focus change
+    if val is None : val = config['calstage_in_pos']
+    print('val: ', val)
     foc(calfoc)
     calstage_position(val)
 
-def calstage_out(val=150.) :
+def calstage_out(val=None) :
     """ Move calibration stage out of beam
     """
     # don't move if already there, to avoid extra focus change
+    if val is None : val = config['calstage_out_pos']
     calstage_position(val)
+
+def calstage_find(display=None) :
+    """ Find calibration spot location
+    """
+    calstage_in()
+    eshel.lamps(quartz=True,led=True)
+    im=gexp(0.002,display=display,max=60000).hdu.data
+    y0,x0=np.unravel_index(np.argmax(im),im.shape)
+    mask=np.zeros_like(im)
+    yg,xg=np.mgrid[0:mask.shape[0],0:mask.shape[1]]
+    r2=(xg-x0)**2+(yg-y0)**2
+    bd=np.where(r2<7**2)
+    mask[bd]=1
+    cent=centroid.rasym_centroid(im,x0,y0,rad=35,mask=mask)
+    print(cent.x,cent.y)
+    if display is not None : 
+        display.tvclear()
+        display.tvcirc(cent.x,cent.y,50)
+    config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
+    eshel.lamps()
+    calstage_in()
+    return config['calstage_in_pos']
 
 def fans_on(roles=None):
     """
@@ -1255,7 +1296,7 @@ def devices() :
 def init() :
     """ Start ascom and pwi connections and pyvista display
     """
-    global dataroot, pwi_srv, calstage_in_pos, iodinestage_in_pos, calstage_out_pos, iodinestage_out_pos
+    global config, dataroot, pwi_srv
     try :
         with open('aposong.yml','r') as config_file :
             config = yaml.safe_load(config_file) 
@@ -1279,10 +1320,6 @@ def init() :
     print('pwi_init...')
     pwi_srv = config['devices']['pwi_srv']
     pwi_init(pwi_srv)
-    calstage_in_pos = config['calstage_in_pos']
-    calstage_out_pos = config['calstage_out_pos']
-    iodinestage_in_pos = config['iodinestage_in_pos']
-    iodinestage_out_pos = config['iodinestage_out_pos']
     commands()
 
 def pwi_init(pwi_srv) :
