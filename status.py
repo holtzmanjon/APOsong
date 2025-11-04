@@ -297,8 +297,8 @@ def status() :
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
             iodineframe.iodinestage.set(pos)
-            if abs(pos-aposong.iodinestage_in_pos) < 0.2 : iodineframe.iodinestage_label.config(foreground='green')
-            elif abs(pos-aposong.iodinestage_out_pos) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
+            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green')
+            elif abs(pos-aposong.config['iodinestage_out_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
             else : iodineframe.iodinestage_label.config(foreground='yellow')
             iodineframe.temp.set(temp+' / '+tset)
             iodineframe.voltage.set(volt)
@@ -324,8 +324,8 @@ def status() :
         try :
             pos =aposong.calstage_position()
             calframe.calstage.set(pos)
-            if abs(pos-aposong.calstage_in_pos) < 0.2 : calframe.calstage_label.config(foreground='green')
-            elif abs(pos-aposong.calstage_out_pos) < 0.2 : calframe.calstage_label.config(foreground='blue')
+            if abs(pos-aposong.config['calstage_in_pos']) < 0.2 : calframe.calstage_label.config(foreground='green')
+            elif abs(pos-aposong.config['calstage_out_pos']) < 0.2 : calframe.calstage_label.config(foreground='blue')
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
             state = ['Off','On']
