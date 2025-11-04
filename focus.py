@@ -266,9 +266,13 @@ def specfocus(foc0=425000) :
     aposong.calstage_out()
 
 
-def montage(display) :
-    red=imred.Reducer('SONG',dir='/data/1m/UT251016')
-    files=glob.glob('/data/1m/UT251016/focus*.fits')
+def montage(display,red=None) :
+
+    if red == None :
+        red=imred.Reducer('SONG',dir='/data/1m/UT251016')
+        files=glob.glob('/data/1m/UT251016/focus*.fits')
+    else :
+        files=glob.glob(red.dir+'/focus*.fits')
     dates=[]
     for file in files :
         a=red.rd(file)
@@ -304,3 +308,27 @@ def montage(display) :
         plt.draw()
         #display.imexam()
     return mfiles,montage
+
+def profile(ims,red) :
+    fig,ax=plots.multi(1,2,hspace=0.001)
+    for i,im in enumerate(ims):
+        a=red.rd(im)
+        tab=stars.find(a,brightest=1,thresh=500)
+        cent= centroid.rasym_centroid(a,tab[0]['x'],tab[0]['y'],rad=25,skyrad=[100,150])
+        tab['x'] = cent.x
+        tab['y'] = cent.y
+        ap=stars.photom(a,tab,rad=np.arange(1,80),skyrad=[100,150],mag=False,cum=True)
+        ax[0].plot(ap[1],label='{:d}'.format(im))
+        if i == 0: 
+            cum0 = ap[1]
+        else :
+            ax[1].plot(ap[1]/cum0,label='{:d}/{:d}'.format(im,ims[0]))
+
+    for i in range(2) :
+        ax[i].grid()
+        ax[i].legend()
+    fig.suptitle(red.dir)
+
+    return ap
+
+
