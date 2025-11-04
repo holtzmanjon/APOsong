@@ -1,3 +1,4 @@
+import os
 import pdb
 import matplotlib
 matplotlib.use('TkAgg')
@@ -5,12 +6,12 @@ import matplotlib.pyplot as plt
 plt.ion()
 
 import numpy as np
-from pyvista import imred, spectra, image, utils
+from pyvista import imred, spectra, image, utils, centroid
 from pyvista.dataclass import Data
 import database
 from holtztools import plots
 
-def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, write=False, display=None) :
+def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, write=False, display=None, clobber=False) :
     """ Quick reduction
     """
 
@@ -26,9 +27,17 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     else : crbox=None
     if scat : doscat=red.scat
     else : doscat=None
+
     # get closest dark for exptime (dark subtraction will still scale)
     darktimes=np.array([25,60,120,180,240,300])
     im=red.rd(n)
+    file=im.header['FILE'].split('.')
+    if isinstance(n,str) :
+        out='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/reduced/'),file[0],file[-2])
+    else :
+        out='{:s}{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced'),file[0],file[-2])
+    if os.path.exists(out) and not clobber :
+        return Data.read(out)
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
     dark=Data.read('/data/1m/cal/darks/dark_{:d}_-10_UT251010.fits'.format(dtime))
     im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,display=display)
@@ -40,8 +49,9 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     imec.header['BVC'] = bv.value
     imec.header['BJD-MID'] = bt.jd
     if write :
-        file=im.header['FILE'].split('.')
-        imec.write('{:s}_ec.{:s}.fits'.format(file[0],file[-2]))
+        try : os.makedirs(os.path.dirname(out))
+        except : pass
+        imec.write(out)
     return imec
 
 def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False):
@@ -66,6 +76,11 @@ def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False):
     ax[1].set_ylabel('photons')
     ax[2].set_ylabel('S/N')
     ax[2].set_xlabel('wavelength')
+    j1=np.argmin(np.abs(spec.wave-5570))
+    j2=np.argmin(np.abs(spec.wave-5560))
+    t=np.max(spec.data.flatten()[j1:j2])*red.gain[0]/spec.header['EXPTIME']*10**(0.4*mag)
+    sn=np.max(spec.data.flatten()[j1:j2]/spec.uncertainty.array.flatten()[j1:j2])
+    return t,sn
 
 def mjd(ut='UT251003',rn=None, write=False) :
     red=imred.Reducer('SONG',dir='/data/1m/'+ut)
@@ -126,6 +141,20 @@ def mjd(ut='UT251003',rn=None, write=False) :
               elif i== 2 : ext = '_i_a'
               elif i== 3 : ext = '_i_b'
               plot(ax,num+i,targ+ext,red=red,write=write)
+    elif ut == 'UT251025' :
+        for targ,num in zip(['HD185144','HR264','HR1087','HR2845','HR3494'],[89,126,148,209,222]) :
+            for i in range(4) :
+              if i== 0 : ext = '_a'
+              elif i== 1 : ext = '_b'
+              elif i== 2 : ext = '_i_a'
+              elif i== 3 : ext = '_i_b'
+              plot(ax,num+i,targ+ext,red=red,write=write)
+        for targ,num in zip(['HD23249','HD23249','HD23249','HD23249'],[161,173,185,197]) :
+            for i in range(3) :
+              if i== 0 : ext = '_a'
+              elif i== 1 : ext = '_b'
+              elif i== 2 : ext = '_c'
+              plot(ax,num+i,targ+ext,red=red,write=write)
 
     d=database.DBSession() 
     targs=d.query('robotic.target')
@@ -147,3 +176,48 @@ def mjd(ut='UT251003',rn=None, write=False) :
     fig.savefig(ut+'.png')
     #plt.close()
     return fig,ax
+
+def throughput() :
+
+    d=database.DBSession()
+    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
+    d.close()
+    i=np.where(out['filter'] == 'iodine')
+    o=np.where(out['filter'] != 'iodine')
+    plt.figure()
+    plt.scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i])
+    plt.scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s')
+    plt.ylim(0,6000)
+    plt.colorbar()
+    xlim=plt.xlim()
+    for targ in ['muHer','HD185144','gammaCep'] :
+        if targ == 'muHer' :
+            song = 25000/120
+            mag = 3.42
+        elif targ == 'HD185144' :
+            song = 17500/300
+            mag=4.67
+        elif targ == 'gammaCep' or targ == 'gamCep' :
+            mag=3.22
+            song = 35000/120
+        plt.plot(xlim,[song*10**(0.4*mag),song*10**(0.4*mag)])
+
+def guider(i1,i2,red=None,sat=65000) :
+
+    fig,ax=plots.multi(2,2)
+    for i in range(i1,i2) :
+        a=red.rd(i)
+        c=centroid.maxtot(a,90,93,rad=6)
+        s=centroid.rasym_centroid(a,c.x,c.y,sat=sat)
+        ax[0,0].scatter(i,c.x,c='r')
+        ax[0,0].scatter(i,s.x,c='b')
+        ax[1,0].scatter(i,c.y,c='r')
+        ax[1,0].scatter(i,s.y,c='b')
+        ax[0,1].scatter(c.x,c.y,c='r')
+        ax[0,1].scatter(s.x,s.y,c='b')
+
+    ax[0,1].set_xlim(81.5,91.5)
+    ax[0,1].set_ylim(81.5,91.5)
+    ax[0,1].grid()
+    ax[0,1].scatter([86.5],[86.5],s=200,c='g',marker='+')
+
