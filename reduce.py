@@ -184,9 +184,9 @@ def throughput() :
     d.close()
     i=np.where(out['filter'] == 'iodine')
     o=np.where(out['filter'] != 'iodine')
-    plt.figure()
-    plt.scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i])
-    plt.scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s')
+    plt.figure(figsize=(8,4))
+    plt.scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='no iodine')
+    plt.scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='iodine')
     plt.ylim(0,6000)
     plt.colorbar()
     xlim=plt.xlim()
@@ -200,24 +200,46 @@ def throughput() :
         elif targ == 'gammaCep' or targ == 'gamCep' :
             mag=3.22
             song = 35000/120
-        plt.plot(xlim,[song*10**(0.4*mag),song*10**(0.4*mag)])
+        plt.plot(xlim,[song*10**(0.4*mag),song*10**(0.4*mag)],label='Tenerife {:s}'.format(targ))
 
-def guider(i1,i2,red=None,sat=65000) :
+    plt.legend()
+    plt.xlabel('MJD')
+    plt.ylabel('cnts/s scaled to m=0')
+    plt.title('Throughput (color coded by altitude)')
+
+def guider(i1,i2,red=None,sat=65000,title='') :
 
     fig,ax=plots.multi(2,2)
     for i in range(i1,i2) :
         a=red.rd(i)
         c=centroid.maxtot(a,90,93,rad=6)
         s=centroid.rasym_centroid(a,c.x,c.y,sat=sat)
-        ax[0,0].scatter(i,c.x,c='r')
-        ax[0,0].scatter(i,s.x,c='b')
-        ax[1,0].scatter(i,c.y,c='r')
-        ax[1,0].scatter(i,s.y,c='b')
-        ax[0,1].scatter(c.x,c.y,c='r')
-        ax[0,1].scatter(s.x,s.y,c='b')
+        if i==i1 : label='maxtot position'
+        else : label=None
+        ax[0,0].scatter(i,c.x,c='r',label=label)
+        ax[1,0].scatter(i,c.y,c='r',label=label)
+        ax[0,1].scatter(c.x,c.y,c='r',label=label)
+        if i==i1 : label='asym position'
+        else : label=None
+        ax[0,0].scatter(i,s.x,c='b',label=label)
+        ax[1,0].scatter(i,s.y,c='b',label=label)
+        ax[0,1].scatter(s.x,s.y,c='b',label=label)
 
+    ax[0,0].set_xlabel('image number')
+    ax[0,0].set_ylabel('x position')
+    ax[0,0].legend()
+    ax[1,0].set_xlabel('image number')
+    ax[1,0].set_ylabel('y position')
+    ax[1,0].legend()
     ax[0,1].set_xlim(81.5,91.5)
     ax[0,1].set_ylim(81.5,91.5)
+    ax[0,1].set_xlabel('x position')
+    ax[0,1].set_ylabel('y position')
+    ax[0,1].legend()
     ax[0,1].grid()
     ax[0,1].scatter([86.5],[86.5],s=200,c='g',marker='+')
+    ax[1,1].imshow(a.data,vmin=0,vmax=sat)
+
+    fig.suptitle('Guider positions, sat: {:d} {:s}'.format(sat,title))
+    fig.tight_layout()
 
