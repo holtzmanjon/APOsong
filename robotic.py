@@ -22,6 +22,7 @@ import yaml
 import logging.config
  
 import focus as dofocus
+import reduce
 
 try:
     with open('logging.yml', 'rt') as f:
@@ -55,9 +56,9 @@ class Target() :
 
     def acquire(self,display=None) :
         aposong.iodine_out()
-        aposong.newguider(False)
+        aposong.newguider('stop')
         aposong.slew(self.ra,self.dec)
-        aposong.newguider(True)
+        aposong.newguider('start')
         time.sleep(30)
 
 class Schedule() :
@@ -94,10 +95,10 @@ class Sequence() :
             tot+= filtmove+nexp*(texp+read)
         return tot
 
-    def observe(self,name,display=None,fact=1) :
+    def observe(self,name,display=None,fact=1,nfact=1) :
         names = []
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
-            for iexp in range(nexp) :
+            for iexp in range(nexp*nfact) :
                 logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
                 exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
                 names.append(exp.name)
@@ -228,7 +229,7 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         logger.info('request selected: {:s} {:s}'.format(best['targname'],best['sequencename']))
     return best
 
-def observe_object(request,display=None,acquire=True,fact=1) :
+def observe_object(request,display=None,acquire=True,fact=1,nfact=1) :
     """ Given request, do the observation and record
     """
 
@@ -250,7 +251,7 @@ def observe_object(request,display=None,acquire=True,fact=1) :
         seq = Sequence(request['targname'],filt=request['filter'],bin=request['bin'],
                        n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
         t=Time.now()
-        names=seq.observe(targ.name,display=display,fact=fact)
+        names=seq.observe(targ.name,display=display,fact=fact,nfact=nfact)
         return load_object(request,t.mjd,names)
     except KeyboardInterrupt :
         raise KeyboardInterrupt('CTRL-C')
@@ -295,7 +296,7 @@ def obsopen(opentime) :
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1) :
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
   """ Full observing night sequence 
   """
   while True :
@@ -353,7 +354,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
-            aposong.newguider(False)
+            aposong.newguider('stop')
             foc0=focus(foc0=foc0,display=display)
             foctime=tnow
             oldtarg=''
@@ -362,7 +363,7 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
             if best is None :
                 time.sleep(60)
             else :
-                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),fact=fact)
+                success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),fact=fact,nfact=nfact)
                 # if object failed, skip it for the next selection, but can try again after that
                 if success : 
                     oldtarg=best['targname'] 
@@ -395,17 +396,17 @@ def focus(foc0=28800,delta=75,n=9,display=None) :
     """    
     t=Time(Time.now(), location=EarthLocation.of_site('APO'))
     lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=10.,magmin=9,magmax=10,rad=5*u.degree)
+    aposong.usno(ra=lst,dec=50.,magmin=9,magmax=10,rad=5*u.degree)
 
-    #foc0_0=copy.copy(foc0)
-    #f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt='iodine',bin=1,thresh=100,display=display,max=5000)
-    #while f<foc0-5*delta or f>foc0+5*delta :
-    #    logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
-    #    foc0=copy.copy(f)
-    #    f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-    #foc0=copy.copy(foc0_0)
+    foc0_0=copy.copy(foc0)
+    f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt='iodine',bin=1,thresh=100,display=display,max=5000)
+    while f<foc0-3.1*delta or f>foc0+3.1*delta :
+        logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
+        foc0=copy.copy(f)
+        f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    foc0=copy.copy(foc0_0)
 
-    f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    f=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
     while f<foc0-3.1*delta or f>foc0+3.1*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
@@ -527,11 +528,12 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
         files.append(o[ifile])
 
     gd=np.where(np.array(mjds).astype(int) == mjd)[0]
+    sort=np.argsort(np.array(mjds)[gd])
 
     grid=[]
     row=[]
     i=0
-    for seq in gd :
+    for seq in gd[sort] :
         print(files[seq])
         try : 
             if clobber or not os.path.isfile(root+files[seq][0].replace('.fits','.png')) :
@@ -558,36 +560,61 @@ def mklog(mjd,root='/data/1m/') :
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
 
     d=database.DBSession()
-    out=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d}'.format(mjd,mjd+1),fmt='table')
-    obs=d.query(sql='''
+    out=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d} and camera=3'.format(mjd,mjd+1),fmt='table')
+    guideout=d.query(sql='select * from obs.exposure where mjd>{:d} and mjd<{:d} and camera=0'.format(mjd,mjd+1),fmt='table')
+    obslist=d.query(sql='''
           select * from robotic.observed as obs 
           join robotic.request as req on obs.request_pk = req.request_pk 
-          where mjd>{:d} and mjd<{:d}'''.format(mjd,mjd+1),fmt='table')
+          where mjd>{:d} and mjd<{:d}'''.format(mjd,mjd+1),fmt='list')
     d.close()
+
+    maxfiles=0
+    for o in obslist[1:] :
+        maxfiles=np.max([maxfiles,len(o[3])])
+
+    obs=Table()
+    obs=Table(names=('mjd', 'targname', 'schedulename','sequencename','priority','files'), dtype=('f4', 'S', 'S','S','i4','{:d}S24'.format(maxfiles)))
+    out['mjd'].format='{:.3f}'
+    guideout['mjd'].format='{:.3f}'
+    for o in obslist[1:] :
+        while len(o[3]) < maxfiles : o[3].append('')
+        obs.add_row([o[2],o[5],o[6],o[7],o[8],o[3]])
+
     j = np.argsort(obs['mjd'])
     obs = obs[j]
     obs['request'] = ' '*80
+    red=imred.Reducer('SONG')
     for req,o in enumerate(obs) :
-        fig,ax=plots.multi(1,1,figsize=(12,4))
+        fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
             try :
-                a=fits.open(o['files'][i])[0]
-                ax.plot(np.median(a.data[:,a.data.shape[1]//2-10:a.data.shape[1]//2+10],axis=1),
-                        label=os.path.basename(o['files'][i]))
+                t,sn=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True)
                 o['files'][i] = os.path.basename(o['files'][i])
+                ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
+                reduced=Table()
+                reduced['exp_pk'] = [out[ind]['exp_pk'][0]]
+                reduced['throughput'] = [t]
+                reduced['sn'] = [sn]
+                d=database.DBSession()
+                d.ingest('obs.reduced',reduced,onconflict='update')
+                d.close()
             except :
                 print('error with ',f)
                 pass
-        ax.legend(fontsize='x-small')
+        for i in range(3) :
+            lim = ax[i].get_ylim()
+            ax[i].set_ylim(0,lim[1])
+        ax[0].legend(fontsize='xx-small')
         fig.savefig('{:s}/{:s}/{:s}_{:d}.png'.format(root,ut,o['targname'],req))
         o['request'] = '<A HREF={:s}_{:d}.png> {:s} </A>'.format(o['targname'],req,o['targname'])
         plt.close()
 
-    gd = np.where(out['file'] != '')[0]
-    out=out[gd]
-    j = np.argsort(out['dateobs'])
-    out=out[j]
-    out['exptime'].format='{:.2f}'
+    for o in [out,guideout] :
+        gd = np.where(o['file'] != '')[0]
+        o=o[gd]
+        j = np.argsort(o['dateobs'])
+        o=o[j]
+        o['exptime'].format='{:.2f}'
 
     fp = open('{:s}/{:s}/{:s}.html'.format(root,ut,ut),'w')
 
@@ -595,12 +622,17 @@ def mklog(mjd,root='/data/1m/') :
     fp.write('<h2>{:s}  MJD: {:d}</h2><br>'.format(ut,mjd))
     fp.write('<A HREF=guide.html>Guider movies</A><BR>\n')
     fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
+    fp.write('<A HREF=../../reduced/{:s}>Rduced data</A><BR>\n'.format(ut))
 
     fp.write('<p>Observed robotic requests: <BR>\n')
+    obs['files'] = obs['files'].astype('<U')
     tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 
-    fp.write('<p>Exposures: <BR>\n')
+    fp.write('<p>Spectrograph exposures: <BR>\n')
     tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus','ccdtemp'],file=fp)
+
+    fp.write('<p>Guider exposures: <BR>\n')
+    tab = html.tab(guideout['file','dateobs','ra','dec','exptime','camera','filter','focus','ccdtemp'],file=fp)
     fp.write('</BODY></HTML>\n')
     fp.close()
 
