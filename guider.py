@@ -28,8 +28,8 @@ import yaml
 import logging.config
 try: 
     with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
+        logconfig = yaml.safe_load(f.read())
+    logging.config.dictConfig(logconfig)
     logger=logging.getLogger('aposong')
 except FileNotFoundError :
     #trap for readthedocs
@@ -38,14 +38,20 @@ except FileNotFoundError :
 
 class Guider :
 
-    def __init__(self,x0=780,y0=509,exptime=5,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
-          display=None,nintegral=10, prop=0.9,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=1) :
+    def __init__(self,x0=aposong.config['hole_pos'][1],y0=aposong.config['hole_pos'][0],findhole=True,
+                 exptime=5,expavg=1,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
+                 display=None,nintegral=10, prop=0.5,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=0.05) :
+        x0=float(x0)
+        y0=float(y0)
+        findhole=int(findhole)
         self.x0 = x0
         self.y0 = y0
         self.box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
         self.target = [x0-self.box.xmin,y0-self.box.ymin]
         self.guess = [x0-self.box.xmin,y0-self.box.ymin]
+        self.findhole = findhole
         self.exptime = float(exptime)
+        self.expavg = expavg
         self.filt = filt
         self.bin = bin
         self.rad = rad
@@ -120,7 +126,7 @@ class Guider :
         """ Find brightest object, optimize exposure time, move object to desired position
         """
         if data is None :
-            exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp,name='guide/acquire',max=self.display_max)
+            exp=aposong.expose(self.exptime,avg=self.expavg,filt=self.filt,bin=self.bin,display=self.disp,name='guide/acquire',max=self.display_max)
             hdu=exp.hdu
         else :
             hdu = data
@@ -155,7 +161,8 @@ class Guider :
             x=objs[0]['x']
             y=objs[0]['y']
 
-        self.navg = np.min([5,np.max([1,int(5/self.exptime)])])
+        if self.exptime < 1 : self.expavg = round(1/self.exptime)
+        self.navg = np.min([3,np.max([1,int(5/self.exptime)])])
 
         # take full frame acquisition image to save and offset to brightest object
         exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,name='guide/acquire')
@@ -172,7 +179,7 @@ class Guider :
         """ Take exposure and get offset from star to desired center
         """
         if data is None :
-            exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=self.display_max)
+            exp=aposong.expose(self.exptime,avg=self.expavg,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=self.display_max)
             data = exp.hdu.data
         else :
             self.disp.tv(data,max=self.display_max)
@@ -228,7 +235,8 @@ class Guider :
                 dx=self.center.x-x0
                 dy=self.center.y-y0
                 self.nseq+=1
-                self.ingest_offset(dx,dy)
+                try : self.ingest_offset(dx,dy)
+                except : print('error ingesting offset')
             else :
                 logger.debug('  AVERAGE OFFSET: {:.1f} {:.1f} {:.1f}'.format(self.xtot/self.nseq-x0,self.ytot/self.nseq-y0,self.center.tot))
                 # average offsets over navg points
@@ -253,7 +261,8 @@ class Guider :
                 logger.debug('   APPLIED Y: {:.1f} {:.1f} {:.1f}'.format(yoff,self.prop*dy,self.ki*self.integral[:,1].mean()))
                 aposong.offsetxy(xoff,yoff,scale=self.pixscale)
                 time.sleep(self.settle)
-                self.ingest_correction(x,y,dx,dy,xoff,yoff)
+                try: self.ingest_correction(x,y,dx,dy,xoff,yoff)
+                except : print('error ingesting correction')
                 # reset counter and accumulators
                 self.nseq=1
                 self.xtot=0
@@ -509,6 +518,7 @@ def main() :
     outputs=[]
 
     guiding = False
+    acquired = False
     while True :
       try:
         readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
@@ -534,27 +544,41 @@ def main() :
                 print('starting...')
                 kwargs=parse_string_to_kwargs(txt)
                 g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
-                g.get_hole_position()
+                if g.findhole : g.get_hole_position()
+                if g.x0 < 0 :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : print('failed acquire')
+                    continue
                 try : 
                     cent=g.acquire()
+                    acquired = True
                     guiding = True
-                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}'.encode())
-                    else : print(f'acquired {cent[0]} {cent[1]}')
+                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}'.encode())
+                    else : print(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}')
                 except :
                     if s is conn : conn.send(b'failed acquire')
                     else : print('failed acquire')
             elif cmd == 'stop' or cmd == 'pause' :
                 guiding = False
+                if cmd == 'stop' : acquired = False
                 if s is conn : conn.send(b'guiding stopped')
-                else : print('failed')
-            elif cmd == 'resume ' :
-                guiding = True
+                else : print('guiding stopped')
+            elif cmd == 'resume' :
+                if acquired : 
+                    guiding = True
+                    if s is conn : conn.send(b'guiding resumed')
+                    else : print('guiding resumed')
+                else :
+                    if s is conn : conn.send(b'not resumed, no guide star acquired')
+                    else : print('not resumed, no guide star acquired')
             elif len(txt) > 0 :
                 if s is conn : 
-                    conn.send(b'unknown command: {:s} {d}'.format(txt, len(txt)))
-                else : 
+                    conn.send('unknown command: {:s} {:d}'.format(txt, len(txt)).encode())
+                else :
                     print('unknown command: ', txt, len(txt))
                     print(parse_string_to_kwargs(txt))
+
+
  
         if guiding :
               g.guide()
