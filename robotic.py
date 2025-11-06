@@ -295,9 +295,42 @@ def obsopen(opentime) :
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
-def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
-  """ Full observing night sequence 
+def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
+            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, override=0) :
+  """ Start full observing night sequence 
+
+  Parameters
+  ==========
+  foc0 : integer, default=32400
+         initial focus guess
+  dt_focus : float, default=1.5
+         minimum time to wait after focus run before triggering another (will wait for sequence to complete)
+  display : pyvista TV object
+         if specified, display images as they are taken
+  dt_sunset : float, default=0
+         time relative to sunset to open dome (only if opening conditions are met)
+  dt_nautical : float, default=-0.2
+         time relative to nautical twilight to start observations
+  obs : str, default='apo'
+         observatory name, for getting site coordinates
+  tz : str, default='US/Mountain'
+         time zone
+  criterion : str, default='best'
+         criterion for choosing object to observe, 'setting', 'best' or 'longest'
+  maxdec : float, default=None
+         if given, maximum declination
+  eshelcals : bool, default=Ture
+         if True take cals at end of night
+  ccdtemp : float, default=-10
+         set temperature for CCDs (guide and spectrograph)
+  initfoc : boot, default=True
+         True to take initial focus run, so can set False if restarting after focus has been done
+  fact : float, default=1
+         factor to increase all database exposure times by
+  nfact : int, default=1
+         factor to increase all database number of exposures b
+  override : int, default=0
+         DANGEROUS: if given, set override for specified number of seconds to bypass need for 2.5m or 3.5m to be open
   """
   while True :
     site=Observer.at_site(obs,timezone=tz)
@@ -307,6 +340,11 @@ def observe(foc0=28800,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.0,ob
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
     # open dome when safe after desired time relative to sunset
+    if override > 0 :
+        if override > 1800 :
+            input('you are requesting an override of >1800s, confirm with keystrok: ')
+        aposong.S.Action('override',override)
+
     aposong.settemp(ccdtemp,cam=0)
     aposong.settemp(ccdtemp,cam=3)
     obsopen(sunset+dt_sunset*u.hour)
@@ -553,7 +591,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m/') :
+def mklog(mjd,root='/data/1m/',pause=False) :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
@@ -607,6 +645,7 @@ def mklog(mjd,root='/data/1m/') :
         ax[0].legend(fontsize='xx-small')
         fig.savefig('{:s}/{:s}/{:s}_{:d}.png'.format(root,ut,o['targname'],req))
         o['request'] = '<A HREF={:s}_{:d}.png> {:s} </A>'.format(o['targname'],req,o['targname'])
+        if pause : pdb.set_trace()
         plt.close()
 
     for o in [out,guideout] :
