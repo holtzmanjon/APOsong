@@ -622,7 +622,7 @@ def mklog(mjd,root='/data/1m/') :
     fp.write('<h2>{:s}  MJD: {:d}</h2><br>'.format(ut,mjd))
     fp.write('<A HREF=guide.html>Guider movies</A><BR>\n')
     fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
-    fp.write('<A HREF=../../reduced/{:s}>Rduced data</A><BR>\n'.format(ut))
+    fp.write('<A HREF=../reduced/{:s}>Reduced data</A><BR>\n'.format(ut))
 
     fp.write('<p>Observed robotic requests: <BR>\n')
     obs['files'] = obs['files'].astype('<U')
