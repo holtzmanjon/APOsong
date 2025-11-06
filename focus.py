@@ -309,7 +309,7 @@ def montage(display,red=None) :
         #display.imexam()
     return mfiles,montage
 
-def profile(ims,red) :
+def profile(ims,red,maxrad=80) :
     fig,ax=plots.multi(1,2,hspace=0.001)
     for i,im in enumerate(ims):
         a=red.rd(im)
@@ -317,7 +317,7 @@ def profile(ims,red) :
         cent= centroid.rasym_centroid(a,tab[0]['x'],tab[0]['y'],rad=25,skyrad=[100,150])
         tab['x'] = cent.x
         tab['y'] = cent.y
-        ap=stars.photom(a,tab,rad=np.arange(1,80),skyrad=[100,150],mag=False,cum=True)
+        ap=stars.photom(a,tab,rad=np.arange(1,maxrad),skyrad=[100,150],mag=False,cum=True)
         ax[0].plot(ap[1],label='{:d}'.format(im))
         if i == 0: 
             cum0 = ap[1]
