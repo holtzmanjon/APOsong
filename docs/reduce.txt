@@ -1,0 +1,14 @@
+reduce module
+*************
+
+reduce module provides a function for doing quick reduction, including basic
+data reduction, extraction, and addition of wavelength calibration and response
+function.
+
+Module functions
+++++++++++++++++
+.. automodule:: reduce
+   :members:
+   :member-order: bysource
+
+
