@@ -20,6 +20,8 @@ Several modules are included:
 
 * robotic contains functions for robotic observing. It imports the aposong routines but also provides logic for determining when to open/close dome, selects objects and observing sequences from a Postgres database, and performs acquisition and starts guiding before executing the observing sequences
 
+* reduce contains function for quick spectroscopic reduction, and some convenience routines for looking at data
+
 * status is a routine to display a Tk status window. It imports the aposong routines to use the Alpyca drivers to get status of various devices. It also loads some of the status information into an InfluxDB for longterm monitoring.
 
 .. toctree::
@@ -30,6 +32,7 @@ Several modules are included:
    aposong
    guider
    robotic
+   reduce
    status
 
 
