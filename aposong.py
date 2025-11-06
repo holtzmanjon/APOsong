@@ -1066,7 +1066,8 @@ def calstage_find(display=None) :
     return config['calstage_in_pos']
 
 def fans_on(roles=None):
-    """
+    """ Turn on PWI fans
+
     roles: if None, turn on all fans
     Otherwise, can be a CSV string of one or more fan roles to turn on:
         m1rear: Primary mirror fans (rear fans only)
