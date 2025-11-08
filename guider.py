@@ -16,7 +16,7 @@ import sys
 import socket
 
 import aposong
-import eshel
+import cal
 import influx
 
 display=None
@@ -81,13 +81,13 @@ class Guider :
         """
         # illuminate the aperture
         foc=aposong.foc()
-        aposong.calstage_in()
-        eshel.lamps(mirror=True,quartz=True)
+        aposong.calstage_find()
+        cal.lamps(mirror=True,quartz=True)
         time.sleep(3)
         # expose
         im=aposong.expose(0.01,bin=1,filt=None,cam=0,max=50000,display=self.disp,name='guide/hole')
         time.sleep(3)
-        eshel.lamps(close=False)
+        cal.lamps(close=False)
         time.sleep(3)
         aposong.calstage_out()
         aposong.foc(foc)
