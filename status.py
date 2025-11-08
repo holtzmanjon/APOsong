@@ -17,7 +17,6 @@ import pwi4_client
 import weather
 import influx
 import aposong
-import eshel
 
 class TelescopeWgt(ttk.Frame) :
 
