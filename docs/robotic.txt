@@ -1,7 +1,7 @@
 robotic module
 **************
 
-robotic module provides a client for robotic operation of the APO SONG telescope.
+The robotic module provides a client for robotic operation of the APO SONG telescope.
 It uses the routine and Alpyca devices of the aposong module to execute observatory,
 telescope and camera control.
 
@@ -23,12 +23,12 @@ Observations are drawn from a Postgres robotic schema that includes a
 database table (requests) that gives a target (defined in target table), observing schedule
 constraints (defined in schedule table) , and observing sequence
 (defined in squence table). The getbest() routine selects the best
-object to observed given the constraints and lenght of boserving
+object to observed given the constraints and length of observing
 sequence based on either a criterion to observe objects before they
 set (default), or to observe objects that will be available for the
 longest amount of time.
 
-Once an object is select, it is acquired, guiding started, and then the
+Once an object is selected, it is acquired, guiding started, and then the
 exposure sequence executed. Completed sequences are logged back into the Postgres
 database in the observed table.
 
