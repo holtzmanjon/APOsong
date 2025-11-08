@@ -34,7 +34,7 @@ except:
 logger=logging.getLogger(__name__)
 
 import aposong 
-import eshel
+import cal
 import database
 
 class Target() :
@@ -100,8 +100,16 @@ class Sequence() :
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp*nfact) :
                 logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
-                exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
-                names.append(exp.name)
+                if filt == 'thar' :
+                    aposong.newguider('pause')
+                    time.sleep(10)
+                    cal.cals(thar=nexp,flats=0,thar_exptime=texp)
+                    names.append('thar')
+                    aposong.newguider('resume')
+                    time.sleep(30)
+                else :
+                    exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
+                    names.append(exp.name)
         aposong.iodine_out()
         return names
 
@@ -296,7 +304,7 @@ def obsopen(opentime) :
     logger.info('open at: {:s}'.format(Time.now().to_string()))
 
 def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-            criterion='best',maxdec=None,eshelcals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, override=0) :
+            criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, override=0) :
   """ Start full observing night sequence 
 
   Parameters
@@ -319,7 +327,7 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
          criterion for choosing object to observe, 'setting', 'best' or 'longest'
   maxdec : float, default=None
          if given, maximum declination
-  eshelcals : bool, default=Ture
+  cals : bool, default=Ture
          if True take cals at end of night
   ccdtemp : float, default=-10
          set temperature for CCDs (guide and spectrograph)
@@ -344,14 +352,15 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
         if override > 1800 :
             input('you are requesting an override of >1800s, confirm with keystrok: ')
         aposong.S.Action('override',override)
+        override=0
 
     aposong.settemp(ccdtemp,cam=0)
     aposong.settemp(ccdtemp,cam=3)
     obsopen(sunset+dt_sunset*u.hour)
 
     # cals
-    #if eshelcals :
-    #    eshel.cals()
+    #if cals :
+    #    cal.cals()
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -417,8 +426,8 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     logger.info('closing: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
 
-    if eshelcals :
-        eshel.cals()
+    if cals :
+        cal.cals()
 
     matplotlib.use('Agg') 
     #mkhtml()
@@ -437,15 +446,17 @@ def focus(foc0=28800,delta=75,n=9,display=None) :
     aposong.usno(ra=lst,dec=50.,magmin=9,magmax=10,rad=5*u.degree)
 
     foc0_0=copy.copy(foc0)
-    f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt='iodine',bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-3.1*delta or f>foc0+3.1*delta :
+    aposong.iodine_in()
+    f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    while f<foc0-2.1*delta or f>foc0+2.1*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
-        f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+        f=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    aposong.iodine_out()
     foc0=copy.copy(foc0_0)
 
-    f=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-3.1*delta or f>foc0+3.1*delta :
+    f=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
+    while f<foc0-2.1*delta or f>foc0+2.1*delta :
         logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
         foc0=copy.copy(f)
         f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
@@ -616,7 +627,8 @@ def mklog(mjd,root='/data/1m/',pause=False) :
     guideout['mjd'].format='{:.3f}'
     for o in obslist[1:] :
         while len(o[3]) < maxfiles : o[3].append('')
-        obs.add_row([o[2],o[5],o[6],o[7],o[8],o[3]])
+        try: obs.add_row([o[2],o[5],o[6],o[7],o[8],o[3]])
+        except: pdb.set_trace()
 
     j = np.argsort(obs['mjd'])
     obs = obs[j]
