@@ -41,7 +41,7 @@ from astroquery.vizier import Vizier
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
-import eshel
+import cal
 
 # alpaca imports, put in try/except for readthedocs
 try:
@@ -691,11 +691,11 @@ def guide(start=True,x0=777,y0=509,rad=25,exptime=5,bin=1,filt=None,data=None,ma
     if start and guide_process is None :
         # refine position of hole
         calstage_in()
-        eshel.lamps(mirror=True,quartz=True)
+        cal.lamps(mirror=True,quartz=True)
         time.sleep(3)
         a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp,name='guide/hole')
         time.sleep(3)
-        eshel.lamps(close=False)
+        cal.lamps(close=False)
         calstage_out()
         time.sleep(3)
         # find minimum pixel
@@ -1047,7 +1047,7 @@ def calstage_find(display=None) :
     """ Find calibration spot location
     """
     calstage_in()
-    eshel.lamps(quartz=True,led=True)
+    cal.lamps(quartz=True,led=True)
     im=gexp(0.002,display=display,max=60000).hdu.data
     y0,x0=np.unravel_index(np.argmax(im),im.shape)
     mask=np.zeros_like(im)
@@ -1061,7 +1061,7 @@ def calstage_find(display=None) :
         display.tvclear()
         display.tvcirc(cent.x,cent.y,50)
     config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
-    eshel.lamps()
+    cal.lamps()
     calstage_in()
     return config['calstage_in_pos']
 
@@ -1262,9 +1262,9 @@ def commands() :
     print("  calstage_out() : move calibration stage out of beam, and adjust focus (if needed)")
     print("  calstage_position([val]) : get or set (with val) iodine stage position")
     print("  calstage_home() : home iodine stage")
-    print("  eshel.getlamps() : get eShel lamp status")
-    print("  eshel.lamps() : control eShel lamps")
-    print("  eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
+    print("  cal.getlamps() : get eShel lamp status")
+    print("  cal.lamps() : control eShel lamps")
+    print("  cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
     print()
     print("Use help(command) for more details")
 
