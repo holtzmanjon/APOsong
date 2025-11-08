@@ -16,7 +16,7 @@ import logging
 import yaml
 import logging.config
 import aposong
-import eshel
+import cal
 try :
     with open('logging.yml', 'rt') as f:
         config = yaml.safe_load(f.read())
@@ -216,7 +216,7 @@ def calfocus(foc0=34700,display=None) :
     """
     foc=aposong.foc()
     aposong.calstage_in()
-    eshel.lamps(quartz=True,led=True)
+    cal.lamps(quartz=True,led=True)
     time.sleep(3)
     if foc0 == None : foc0=aposong.foc()
     plt.figure()
@@ -229,7 +229,7 @@ def calfocus(foc0=34700,display=None) :
         plt.plot(out.hdu.data[510],label='{:d}'.format(foc0+df))
     plt.legend()
     aposong.foc(foc0)
-    eshel.lamps()
+    cal.lamps()
     aposong.calstage_out()
     aposong.foc(foc)
 
@@ -242,12 +242,12 @@ def specfocus(foc0=425000) :
     aposong.specfoc(foc0)
 
     aposong.calstage_in()
-    eshel.lamps(quartz=True,led=True)
+    cal.lamps(quartz=True,led=True)
     s=aposong.sexp(50,name='flat',display=disp,max=65535)
     t=red.reduce(s.name)
     trace.retrace(t)
 
-    eshel.lamps(thar=True)
+    cal.lamps(thar=True)
     fiber='specfoc'
     for i,df in enumerate(range(-2500,2501,500)) :
         aposong.specfoc(foc0+df)
@@ -262,7 +262,7 @@ def specfocus(foc0=425000) :
         ax[1].scatter(wav.waves,wav.waves/(wav.fwhm*(wav.wave(pixels=[wav.pix,wav.y])-wav.wave(pixels=[wav.pix+1,wav.y]))),c=wav.pix)
         ax[1].set_ylim(0,120000)
         fig.savefig('{:s}_{:d}.png'.format(fiber,foc0+df))
-    eshel.lamps()
+    cal.lamps()
     aposong.calstage_out()
 
 
