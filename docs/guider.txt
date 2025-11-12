@@ -13,7 +13,7 @@ The centering algorithm is designed to work even if the object
 is positioned over an aperture where light is lost, e.g., down
 a fiber. This is accomplished using an algorithm developed for
 SDSS, where the center of an object is defined as the location
-at which the variance of counts in a series of circular annulie
+at which the variance of counts in a series of circular annuli
 is minimized, where pixels in the aperture are masked out and
 not included in the variance calculation.
 
@@ -23,6 +23,21 @@ from each exposure, but are averaged over series of shorter
 exposures before a correction is applied.
 
 A minimum number of counts is required to determine a correction.
+
+The module defines a Guider object which can be instantiated and
+has multiple methods. Basic sequence is to first instantiate it with a
+desired position; this can be the fiber hole, and an accurate position
+for the hole can be automatically determined using a calibration
+channel image. Then the object is acquired; the brightest object
+is found and then moved to the desired position. Guiding then
+repeats calling the guide() method, which determines offset, and
+makes corrections based on parameter of the Guider object (exptime,
+number of frames to average, number of corrections to average before
+applying offset, PI proportionality constants, etc.
+
+The main() method listens for comands on localhost port 5000. The
+commands can be one of start, stop, pause, or resume. The start
+command can take keywords to set parameters of the Guider object.
 
 Module functions
 ++++++++++++++++

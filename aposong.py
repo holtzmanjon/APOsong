@@ -642,7 +642,7 @@ def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
-def newguider(cmd,**kwargs) :
+def guide(cmd,**kwargs) :
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('127.0.0.1',5000))
     if cmd == 'start' :
@@ -652,148 +652,6 @@ def newguider(cmd,**kwargs) :
     out=s.recv(1024)
     print('received {:s}'.format(out.decode()))
     s.close()
-
-def guide(start=True,x0=777,y0=509,rad=25,exptime=5,bin=1,filt=None,data=None,maskrad=7,
-          thresh=100,fwhm=1.5,
-          display=None,prop=0.7,settle=3,vmax=10000,rasym=True,name='guide',inter=False) :
-    """ Start guiding
-
-        Parameters
-        ----------
-        start   bool default=True
-                Start or stop guiding
-        x0, y0  float, default=(646,494)
-                Location to guide to
-        rad     int, default=25
-                radius to use for centering algorithm
-        exptime float, default=5
-                guide exposure time
-        bin     integer default=1
-                guider binning factor
-        filt    str, default=None
-                filter to use
-        display default=None
-                if pyvista TV, display guider images, and don't run in thread
-        vmax    float, default=10000
-                maximum value for display
-        prop    float, default=0.7
-                coefficient for proportional term 
-        settle  float, default=3
-                time (seconds) to wait after offset before starting next image
-        rasym   bool, default=True
-                use radial asymmetry minimum centroider, otherwise marginal_gfit
-        data    array-like default=None
-                for testing, supplied image rather than acquire one
-    """
-
-    global guide_process
-
-    if start and guide_process is None :
-        # refine position of hole
-        calstage_in()
-        cal.lamps(mirror=True,quartz=True)
-        time.sleep(3)
-        a=expose(0.01,bin=1,filt=None,cam=0,max=50000,display=disp,name='guide/hole')
-        time.sleep(3)
-        cal.lamps(close=False)
-        calstage_out()
-        time.sleep(3)
-        # find minimum pixel
-        box=image.BOX(cr=int(y0),cc=int(x0),n=25)
-        stats=image.abx(-a.hdu.data,box)
-        x0 = stats['peakx']
-        y0 = stats['peaky'] 
-        center=centroid.rasym_centroid(a.hdu.data,x0,y0,rad=12)
-        x0=center.x
-        y0=center.y
-        logger.info('hole center : {:.2f} {:.2f}'.format(x0,y0))
-
-        if data is None :
-            exp=expose(exptime,filt=filt,bin=bin,display=disp,name='guide/acquire')
-            hdu=exp.hdu
-        else :
-            hdu = data
-        if inter :
-            disp.tv(hdu,max=vmax)
-            print('mark star on display: ')
-            k,x,y=disp.tvmark()
-        else :
-            # find brightest star automatically
-            # adjust exposure time to get good counts
-            niter=0
-            while True :
-                mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
-                objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
-                if objs is None : raise RuntimeError('no objects found')
-                peak=objs[0]['peak']
-                if (peak < 60000 and peak>5000 ) or niter>10 or exptime>9.99: break
-                if peak>60000 : exptime*=0.8
-                else: exptime = np.max([0.01,np.min([exptime*60000/peak,10])])
-                logger.info('new exptime: {:.2f}'.format(exptime))
-                exp=expose(exptime,filt=filt,bin=bin,display=disp)
-                hdu=exp.hdu
-                niter+=1
-
-            x=objs[0]['x']
-            y=objs[0]['y']
-
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,name='guide/acquire')
-        mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
-        objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
-        x=objs[0]['x']
-        y=objs[0]['y']
-        logging.info('offsetting {:.1f} {:.1f}'.format(x-x0,y-y0))
-        offsetxy((x-x0),(y-y0),scale=pixscale())
-        time.sleep(settle)
-
-        # create mask
-        mask=np.zeros_like(hdu.data)
-        yg,xg=np.mgrid[0:hdu.data.shape[0],0:hdu.data.shape[1]]
-        r2=(xg-x0)**2+(yg-y0)**2
-        bd=np.where(r2<maskrad**2)
-        mask[bd]=1
-
-        # subwindow for guiding
-        box=image.BOX(cr=int(y0),cc=int(x0),n=int(7*rad))
-        x0-=box.xmin
-        y0-=box.ymin
-        mask=image.window(mask,box=box)
-        exp=expose(exptime,display=disp,filt=filt,bin=bin,box=box,name='guide/acquire')
-        center=centroid.rasym_centroid(exp.hdu.data,x0,y0,rad,mask=mask,skyrad=[35,40],plot=disp)
-        if center.x>0 and center.tot>10000:
-            x = center.x
-            y = center.y
-        else :
-            objs=stars.find(exp.hdu.data,thresh=thresh*mad,fwhm=fwhm/pixscale(),brightest=1)
-            x=objs[0]['x']
-            y=objs[0]['y']
-        logging.info('offsetting {:.1f} {:.1f}'.format(x-x0,y-y0))
-        offsetxy((x-x0),(y-y0),scale=pixscale())
-        time.sleep(settle)
-
-        if inter :
-            disp.tv(mask)
-            disp.tvcirc(x0,y0,rad=rad)
-            pdb.set_trace()
-
-        guiding.run_guide = True
-        # navg no greater than 5, no less than 1, otherwise 5/exptime
-        navg=np.min([5,np.max([1,int(5/exptime)])])
-        logger.info('starting guiding: {:.2f} {:.2f} exptime: {:.2f} navg: {:d} prop: {:.2f}'.format(
-                     x0,y0,exptime, navg, prop))
-        if display is None :
-            guide_process=threading.Thread(target=guiding.doguide,args=(x0,y0),
-                kwargs={'exptime' :exptime,'navg' :navg,'mask': mask ,'disp' :None,
-                        'filt' : filt, 'vmax': vmax, 'box': box, 'prop' : prop})
-            guide_process.start()
-        else :
-            guiding.doguide(exptime=exptime,navg=navg,x0=x0,y0=y0,mask=mask,disp=disp,filt=filt,vmax=vmax,box=box,prop=prop)
-    elif not start and guide_process is not None :
-        logger.info('stopping guiding')
-        guiding.run_guide = False
-        guide_process.join()
-        guide_process = None
-
 
 def offsetxy(dx,dy,sign=-1,scale=0.16,pa=None) :
     """
@@ -1027,11 +885,12 @@ def calstage_position(val=None) :
         wait_moving(F[index])
     return F[index].Position/1000.
 
-def calstage_in(val=None,calfoc=34700) :
+def calstage_in(val=None,calfoc=None) :
     """ Move calibration stage into beam
     """
     # don't move if already there, to avoid extra focus change
     if val is None : val = config['calstage_in_pos']
+    if calfoc is None : val = config['calstage_focus']
     print('val: ', val)
     foc(calfoc)
     calstage_position(val)
@@ -1125,6 +984,15 @@ def issafe() :
     """
     return S.IsSafe
 
+def override(t) :
+    """ Set override to allow open
+    """
+    try :
+        input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        S.Action('override',t)
+    except :
+        print('override aborted')
+
 def domestatus() :
     """ Return dome azimuth and shutter status
     """
@@ -1138,7 +1006,9 @@ def domehome() :
 def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     """ Open dome and mirror covers
     """
-    if dome : D.OpenShutter()
+    if dome : 
+        logger.info('opening shutter...')
+        D.OpenShutter()
     if covers : 
         # Wait for shutter open before opening mirror covers
         logger.info('waiting for shutter to open...')
@@ -1149,19 +1019,22 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
         while Covers.CoverState.value != 3 :
             time.sleep(1)
     if fans :
+        logger.info('turning fans on...')
         fans_on()
 
 def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
     """
-    guide(False)
+    guide('stop')
     if closelouvers : louvers(False)
     if fans : fans_off()
     if covers : 
+        logger.info('closing mirror covers...')
         mirror_covers(False)
     if dome : 
         # don't wait for mirror covers to report closed, in case they don't!
         park()
+        logger.info('closing shutter...')
         D.CloseShutter()
 
 def domesync(dosync=True,manual=False) :
