@@ -10,6 +10,8 @@ from pyvista import imred, spectra, image, utils, centroid
 from pyvista.dataclass import Data
 import database
 from holtztools import plots
+from astropy.table import Table
+import robotic
 
 def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, write=False, display=None, clobber=False) :
     """ Quick reduction
@@ -79,7 +81,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         imec.write(out)
     return imec
 
-def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False):
+def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False,clobber=False):
     """ Reduce and add plot of extracted spectrum, throughput, and S/N for an image to existing Axes
 
     Parameters
@@ -99,7 +101,7 @@ def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False):
     write : bool, default=False
         set to True to write out extracted data
     """
-    spec=specreduce(i,red=red,write=write)
+    spec=specreduce(i,red=red,write=write,clobber=clobber)
     targ=spec.header['OBJECT'].split('.')[0].replace('_iodine','')
     if mag == None :
         d=database.DBSession() 
@@ -124,7 +126,10 @@ def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False):
     j2=np.argmin(np.abs(spec.wave-5560))
     t=np.max(spec.data.flatten()[j1:j2])*red.gain[0]/spec.header['EXPTIME']*10**(0.4*mag)
     sn=np.max(spec.data.flatten()[j1:j2]/spec.uncertainty.array.flatten()[j1:j2])
-    return t,sn
+    t_orders=np.nanmedian(spec.data[:,1400:3400],axis=1)*red.gain[0]/spec.header['EXPTIME']*10**(0.4*mag)
+    sn_orders=np.nanmedian(spec.data[:,1400:3400]/spec.uncertainty.array[:,1400:3400],axis=1)
+
+    return t,sn,t_orders,sn_orders
 
 def throughput() :
     """ Make plot of throughput from database query
@@ -207,4 +212,40 @@ def guider(i1,i2,red=None,sat=65000,title='') :
 
     fig.suptitle('Guider positions, sat: {:d} {:s}'.format(sat,title))
     fig.tight_layout()
+
+def getobs(targ) :
+
+    d=database.DBSession()
+    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
+    obs=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk')
+    d.close()
+
+    j=np.where(obs['targname']==targ)
+    ind=[]
+    for file in obs[j]['files'] :
+        for f in file :
+            i=np.where(out['file']  == f.replace('/data/1m/',''))[0]
+            if len(i) > 0 :
+                ind.append(i[0])
+    ind=np.array(ind)
+    sort =np.argsort(out[ind]['sn'])[::-1]
+    tab=Table(out[ind[sort]])['file','filter','throughput','sn']
+    tab['sn'].format = '.2f'
+    tab['throughput'].format = '.2f'
+    return tab
+
+
+def reduceall(mjdmin) :
+
+    matplotlib.use('Agg')
+    d=database.DBSession()
+    obs=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk')
+    d.close()
+
+    for mjd in sorted(set(obs['mjd'].astype(int))) :
+        if mjd > mjdmin :
+            robotic.mkhtml(mjd)
+
+
+
 

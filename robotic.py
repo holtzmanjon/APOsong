@@ -625,18 +625,25 @@ def mklog(mjd,root='/data/1m/',pause=False) :
           join robotic.request as req on obs.request_pk = req.request_pk 
           where mjd>{:d} and mjd<{:d}'''.format(mjd,mjd+1),fmt='list')
     d.close()
+    for o in [out,guideout] :
+        o['mjd'].format='{:.3f}'
+        o['exptime'].format='{:.2f}'
+        o['alt'].format='{:.2f}'
+        o['ra'].format='{:.6f}'
+        o['dec'].format='{:.6f}'
+        o['ccdtemp'].format='{:.2f}'
+    out['airmass'] = 1./np.cos((90-out['alt'])*np.pi/180.)
+    out['airmass'].format='{:.2f}'
 
     maxfiles=0
     for o in obslist[1:] :
         maxfiles=np.max([maxfiles,len(o[3])])
 
     obs=Table()
-    obs=Table(names=('mjd', 'targname', 'schedulename','sequencename','priority','files'), dtype=('f4', 'S', 'S','S','i4','{:d}S24'.format(maxfiles)))
-    out['mjd'].format='{:.3f}'
-    guideout['mjd'].format='{:.3f}'
+    obs=Table(names=('request_pk', 'mjd', 'targname', 'schedulename','sequencename','priority','files'), dtype=('i4','f4', 'S', 'S','S','i4','{:d}S24'.format(maxfiles)))
     for o in obslist[1:] :
         while len(o[3]) < maxfiles : o[3].append('')
-        try: obs.add_row([o[2],o[5],o[6],o[7],o[8],o[3]])
+        try: obs.add_row([o[1],o[2],o[5],o[6],o[7],o[8],o[3]])
         except: pdb.set_trace()
 
     j = np.argsort(obs['mjd'])
@@ -647,13 +654,16 @@ def mklog(mjd,root='/data/1m/',pause=False) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
             try :
-                t,sn=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True)
+                t,sn,t_orders,sn_orders=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True,clobber=True)
                 o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
+                reduced['request_pk'] = [o['request_pk']]
                 reduced['exp_pk'] = [out[ind]['exp_pk'][0]]
                 reduced['throughput'] = [t]
                 reduced['sn'] = [sn]
+                reduced['throughput_orders'] = [t_orders]
+                reduced['sn_orders'] = [sn_orders]
                 d=database.DBSession()
                 d.ingest('obs.reduced',reduced,onconflict='update')
                 d.close()
@@ -674,7 +684,6 @@ def mklog(mjd,root='/data/1m/',pause=False) :
         o=o[gd]
         j = np.argsort(o['dateobs'])
         o=o[j]
-        o['exptime'].format='{:.2f}'
 
     fp = open('{:s}/{:s}/{:s}.html'.format(root,ut,ut),'w')
 
@@ -689,7 +698,7 @@ def mklog(mjd,root='/data/1m/',pause=False) :
     tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 
     fp.write('<p>Spectrograph exposures: <BR>\n')
-    tab = html.tab(out['file','dateobs','ra','dec','exptime','camera','filter','focus','ccdtemp'],file=fp)
+    tab = html.tab(out['file','dateobs','ra','dec','exptime','airmass','camera','filter','focus','ccdtemp'],file=fp)
 
     fp.write('<p>Guider exposures: <BR>\n')
     tab = html.tab(guideout['file','dateobs','ra','dec','exptime','camera','filter','focus','ccdtemp'],file=fp)
