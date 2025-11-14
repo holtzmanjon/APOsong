@@ -890,7 +890,7 @@ def calstage_in(val=None,calfoc=None) :
     """
     # don't move if already there, to avoid extra focus change
     if val is None : val = config['calstage_in_pos']
-    if calfoc is None : val = config['calstage_focus']
+    if calfoc is None : calfoc = config['calstage_focus']
     print('val: ', val)
     foc(calfoc)
     calstage_position(val)
