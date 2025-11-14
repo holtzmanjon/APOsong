@@ -160,6 +160,8 @@ def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12],
             fig2,ax2 = plots.multi(1,1)
             plots.plotp(ax2,foc[gd],hfmed[gd]*2*pixscale,xt='Focus',yt='R(half total)',size=50)
             ax2.set_title('{:s} {:s}'.format(files[0],a.header['DATE-OBS']))
+            ax2.set_ylim(1,4)
+            ax2.grid()
         if display is not None :
             plots.plotp(display.plotax2,foc[gd],hfmed[gd]*pixscale*2,
                         xt='Focus',yt='R(half total)',size=50)
