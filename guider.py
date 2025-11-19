@@ -8,6 +8,7 @@ from pyvista import imred, tv, centroid, image, stars
 import time
 import pdb
 from astropy.io import fits
+from astropy.time import Time
 import numpy as np
 from holtztools import html
 import re
@@ -291,6 +292,21 @@ class Guider :
                         self.nseq]) :
             idict[k] = v
         influx.write(idict,bucket='guider',measurement='my_measurement')
+
+    def postgres_write(self,guiding,acquired) :
+        tab = Table()
+        tab['dateobs'] = [Time.now().fits]
+        tab['acquired'] = acquired
+        tab['guiding'] = guiding
+        tab['x0'] = self.x0
+        tab['y0'] = self.y0
+        tab['exptime'] = self.exptime
+        tab['expavg'] = self.expavg
+
+        d=database.DBSession(host='localhost',database='db_apo')
+        d.ingest('public.guider',tab,onconflict='update')
+        d.close()
+        return tab
     
 def parse_string_to_kwargs(string):
   kwargs= {}
@@ -303,7 +319,9 @@ def parse_string_to_kwargs(string):
 
   return kwargs
 
-def main() :
+
+
+if __name__ == "__main__" :
 
     #fp = os.open('pipe',os.O_RDONLY | os.O_NONBLOCK)
     print('opening socket...')
@@ -320,6 +338,7 @@ def main() :
 
     guiding = False
     acquired = False
+    t0=Time.now()
     while True :
       try:
         readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
@@ -379,10 +398,12 @@ def main() :
                     print('unknown command: ', txt, len(txt))
                     print(parse_string_to_kwargs(txt))
 
-
- 
         if guiding :
               g.guide()
+
+        if (Time.now()-t0).sec > 300 :
+            #g.postgres_write(guiding,acquired)
+            t0=Time.now()
 
         time.sleep(0.25)
       except KeyboardInterrupt :
