@@ -155,6 +155,43 @@ def getrequests() :
     d.close()
     return tab
 
+def getsong(t=None,site='APO',verbose=True,skip=None) :
+
+    apo=EarthLocation.of_site(site)
+    if t is None :
+        t = Time(Time.now(),location=apo)
+    d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_song',user='song')
+    requests=d.query('public.obs_request_4',fmt='table')
+    d.close()
+    requests.rename_column('req_prio','priority')
+    requests.rename_column('right_ascension','ra')
+    requests.rename_column('declination','dec')
+    requests.rename_column('object_name','targname')
+    priorities = sorted(set(requests['priority']),reverse=True)
+    for priority in priorities :
+      gd=np.where(requests['priority'] == priority) 
+      for request in requests[gd] :
+          if t < Time(request['start_window']) or t > Time(request['stop_window']) :
+              if verbose: logger.info('{:s} out of window {:s} {:s}'.format(request['targname'],request['start_window'],request['stop_window']))
+              continue
+          else :
+              #zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
+              if request['obs_mode'] == 'iodine' :
+                  request['filter'] = ['iodine']
+                  request['bin'] = [2]
+                  request['camera'] = [3]
+                  request['n_exp'] = [request['no_exp']]
+                  request['t_exp'] = [request['exp_time']]
+              elif request['obs_mode'] == 'thar' :
+                  request=Table(request)
+                  request['filter'] = [['thar','none','thar']]
+                  request['bin'] = [[2,2,2]]
+                  request['camera'] = [[3,3,3]]
+                  request['n_exp'] = [[request['no_thar_exp'],request['no_exp'],request['no_thar_exp']]]
+                  request['t_exp'] = [[120,request['exp_time'],120]]
+                  return request
+
+
 def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90,skip=None,verbose=True) :
     """ 
     Get best request given table of requests and time
@@ -525,8 +562,8 @@ def mkhtml(mjd=None) :
     if mjd is None : 
         mjd = int(Time.now().mjd)
     mkmovie(mjd)
-    mkfocusplots(mjd)
-    mklog(mjd)
+    mkfocusplots(mjd,clobber=True)
+    mklog(mjd,clobber=True)
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
@@ -611,7 +648,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m/',pause=False) :
+def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
@@ -654,7 +691,7 @@ def mklog(mjd,root='/data/1m/',pause=False) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
             try :
-                t,sn,t_orders,sn_orders=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True,clobber=True)
+                t,sn,t_orders,sn_orders=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True,clobber=clobber)
                 o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
