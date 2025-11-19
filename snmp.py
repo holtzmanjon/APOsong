@@ -92,24 +92,33 @@ def ftoc(x) :
     return (int(x)/100.-32.)*5/9
 
 offsets=np.zeros([3,2])
+labels=np.zeros([3,2],dtype='S12')
 offsets[0,0]= 0.972 - 0.06
+labels[0,0] = 'tempagera'
 offsets[1,0]= 0.972-1.367 - 0.06
+labels[1,0] = 'uppertable'
 offsets[2,0]= 0. - 0.06
+labels[2,0] = 'OAP1'
 offsets[0,1]= 0.967 + 0.06
+labels[0,1] = 'tempagerb'
 offsets[1,1]= 0. + 0.06
+labels[1,1] = 'grating'
 offsets[2,1]= 0.967-1.505 + 0.06
+labels[2,1] = 'camera'
 while True :
     dict={}
     for i,host in enumerate(["10.75.0.18","10.75.0.25"]) :
+        print(host)
         try :
             snmpget("1.3.6.1.4.1.20916.1.7.1.1.1.2.0",host)
-            dict['t1']=ftoc(out)+offsets[0,i]
+            dict[labels[0,i].decode()]=ftoc(out)+offsets[0,i]
             snmpget("1.3.6.1.4.1.20916.1.7.1.2.1.2.0",host)
-            dict['t2']=ftoc(out)+offsets[1,i]
+            dict[labels[1,i].decode()]=ftoc(out)+offsets[1,i]
             snmpget("1.3.6.1.4.1.20916.1.7.1.2.2.2.0",host)
-            dict['t3']=ftoc(out)+offsets[2,i]
+            dict[labels[2,i].decode()]=ftoc(out)+offsets[2,i]
 
+            print(dict)
             influx.write(dict,bucket='spectemp',measurement=f'tempager_{i}')
-        except : pass
+        except : print('error')
 
-    time.sleep(60)
+    time.sleep(10)
