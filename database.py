@@ -185,7 +185,7 @@ class DBSession(object):
             # Get numpy data types
             d2d = {'smallint':int, 'integer':int, 'bigint':int, 'real':np.float32, 'double precision':np.float64,
                    'text':(str,200),'char':(str,5),'timestamp':(str,50), 'timestamp with time zone':(str,50),
-                   'timestamp without time zone':(str,50),'boolean':bool}
+                   'timestamp without time zone':(str,50),'boolean':bool,'character varying':(str,200)}
             dt = []
             for i,h in enumerate(head):
                 if h[1]=='ARRAY':
