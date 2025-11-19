@@ -11,9 +11,11 @@ from pyvista.dataclass import Data
 import database
 from holtztools import plots
 from astropy.table import Table
+from astropy.time import Time
 import robotic
 
-def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, write=False, display=None, clobber=False) :
+def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, 
+               write=False, display=None, clobber=False, twod=False) :
     """ Quick reduction
 
     Parameters
@@ -56,19 +58,30 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     else : doscat=None
 
     # get closest dark for exptime (dark subtraction will still scale)
-    darktimes=np.array([25,60,120,180,240,300])
     im=red.rd(n)
     file=im.header['FILE'].split('.')
     if isinstance(n,str) :
         out='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/reduced/'),file[0],file[-2])
     else :
-        out='{:s}{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced'),file[0],file[-2])
+        out='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced/'),file[0],file[-2])
     if os.path.exists(out) and not clobber :
         return Data.read(out)
+    if Time(im.header['DATE-OBS']).mjd < 60997 :
+        darktimes=np.array([25,60,120,180,240,300])
+        utdark='UT251010'
+        utflat='UT251009'
+    else :
+        darktimes=np.array([30,60,120,180,240,300,600])
+        utdark='UT251119'
+        utflat='UT251119'
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
-    dark=Data.read('/data/1m/cal/darks/dark_{:d}_-10_UT251010.fits'.format(dtime))
-    im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,display=display)
+    print(dtime,utdark,utflat)
+    dark=Data.read('/data/1m/cal/darks/dark_{:d}_-10_{:s}.fits'.format(dtime,utdark))
+    flat=Data.read('/data/1m/cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
+    im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
+    if twod : return im
     if retrace : trace.retrace(im,display=display)
+    trace.find(im,lags=range(-5,6)
     imec=trace.extract(im,display=display)
     wav.add_wave(imec)
     imec.add_response(response.data)
