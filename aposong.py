@@ -814,7 +814,7 @@ def iodine_tget() :
     return f'actual temperature: {tact1} {tact2}'
 
 def iodine_set(quantity,val) :
-    if quantity in ['enable'] :
+    if quantity in ['enable','dark','light'] :
         q1 = SW[0].Action('set_{:s}'.format(quantity),0,val)
         q2 = SW[0].Action('set_{:s}'.format(quantity),1,val)
         return f'{q1} {q2}'
@@ -824,7 +824,7 @@ def iodine_set(quantity,val) :
 def iodine_get(quantity) :
     """ Get iodine cell quantity
     """
-    if quantity in ['tset','voltage','current','enable'] :
+    if quantity in ['tset','voltage','current','enable','dark','light'] :
         q1 = SW[0].Action('get_{:s}'.format(quantity),0)
         q2 = SW[0].Action('get_{:s}'.format(quantity),1)
         return f'{q1} {q2}'
