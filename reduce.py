@@ -69,7 +69,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     if Time(im.header['DATE-OBS']).mjd < 60997 :
         darktimes=np.array([25,60,120,180,240,300])
         utdark='UT251010'
-        utflat='UT251009'
+        utflat='UT251119'
     else :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
@@ -81,7 +81,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
     if twod : return im
     if retrace : trace.retrace(im,display=display)
-    trace.find(im,lags=range(-5,6)
+    trace.find(im,lags=range(-5,6))
     imec=trace.extract(im,display=display)
     wav.add_wave(imec)
     imec.add_response(response.data)
