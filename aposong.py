@@ -1215,4 +1215,9 @@ def disp_init() :
        print("Can't open display")
     return disp
 
-init()
+if __name__ == '__main__' :
+    from aposong import *
+    import robotic
+
+    init()
+    disp=disp_init()
