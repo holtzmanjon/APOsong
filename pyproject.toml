@@ -1,9 +1,27 @@
+
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "aposong"
 version = "0.1.0"
-description = "Add your description here"
+authors=[
+  { name="Jon Holtzman", email="holtzmanjon@gmail.com" },
+]
+description = "Software for APO SONG"
 readme = "README.md"
 requires-python = ">=3.9"
+classifiers=[
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",  
+    "Operating System :: OS Independent",        
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "alpyca>=3.0.0",
     "astro-pyvista",
@@ -12,3 +30,6 @@ dependencies = [
     "psycopg2-binary",
     "tkthread",
 ]
+#[tool.setuptools.packages.find]
+#where = ["."]  # list of folders that contain the packages (["."] by default)
+
