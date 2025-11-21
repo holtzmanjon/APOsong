@@ -672,9 +672,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     out['airmass'] = 1./np.cos((90-out['alt'])*np.pi/180.)
     out['airmass'].format='{:.2f}'
 
-    maxfiles=0
-    for o in obslist[1:] :
-        maxfiles=np.max([maxfiles,len(o[3])])
+    maxfiles=50
+    #for o in obslist[1:] :
+    #    maxfiles=np.max([maxfiles,len(o[3])])
 
     obs=Table()
     obs=Table(names=('request_pk', 'mjd', 'targname', 'schedulename','sequencename','priority','files'), dtype=('i4','f4', 'S', 'S','S','i4','{:d}S24'.format(maxfiles)))
@@ -690,8 +690,10 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
+          if f != b'' and f!= b'thar':
             try :
-                t,sn,t_orders,sn_orders=reduce.plot(ax,f.decode(),os.path.basename(f.decode()),red=red,write=True,clobber=clobber)
+                imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
+                t,sn,t_orders,sn_orders=reduce.throughput(imec,ax,os.path.basename(f.decode()),red=red)
                 o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
@@ -701,11 +703,13 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
                 reduced['sn'] = [sn]
                 reduced['throughput_orders'] = [t_orders]
                 reduced['sn_orders'] = [sn_orders]
+                reduced['traceshift'] = [imec.header['T_SHIFT']]
                 d=database.DBSession()
                 d.ingest('obs.reduced',reduced,onconflict='update')
                 d.close()
             except :
                 print('error with ',f)
+                pdb.set_trace()
                 pass
         for i in range(3) :
             lim = ax[i].get_ylim()
