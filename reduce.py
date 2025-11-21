@@ -46,10 +46,6 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
 
     if red == None :
         red=imred.Reducer('SONG',dir='/data/1m/UT251003')
-    if trace == None :
-        trace=spectra.Trace('SONG/UT251007_Trace_fiber2.fits')
-    if wav == None :
-        wav=spectra.WaveCal('SONG/UT251007_WaveCal_fiber2.fits')
     if response == None :
         response=Data.read('/data/1m/cal/response.fits')
     if cr : crbox=[1,11]
@@ -57,44 +53,62 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     if scat : doscat=red.scat
     else : doscat=None
 
-    # get closest dark for exptime (dark subtraction will still scale)
+    # get header for filename and exptime for dark (dark subtraction will still scale)
     im=red.rd(n)
     file=im.header['FILE'].split('.')
     if isinstance(n,str) :
-        out='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/reduced/'),file[0],file[-2])
+        outfile='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/reduced/'),file[0],file[-2])
     else :
-        out='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced/'),file[0],file[-2])
-    if os.path.exists(out) and not clobber :
-        return Data.read(out)
+        outfile='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced/'),file[0],file[-2])
+
+    # if alreadly done, read and return, unless clobber
+    if os.path.exists(outfile) and not clobber :
+        return Data.read(outfile)
+
+    # set appropriate cals based on mjd
     if Time(im.header['DATE-OBS']).mjd < 60997 :
         darktimes=np.array([25,60,120,180,240,300])
         utdark='UT251010'
         utflat='UT251119'
+        if trace == None : trace=spectra.Trace('SONG/UT251007_Trace_fiber2.fits')
+        if wav == None : wav=spectra.WaveCal('SONG/UT251007_WaveCal_fiber2.fits')
     else :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
         utflat='UT251119'
+        if trace == None : trace=spectra.Trace('SONG/UT251119_Trace_fiber2.fits')
+        if wav == None : wav=spectra.WaveCal('SONG/UT251119_WaveCal_fiber2.fits')
+
+    # read dark and flat frames
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
-    print(dtime,utdark,utflat)
     dark=Data.read('/data/1m/cal/darks/dark_{:d}_-10_{:s}.fits'.format(dtime,utdark))
     flat=Data.read('/data/1m/cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
+
+    # Reduce
     im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
     if twod : return im
+
+    # Extract
     if retrace : trace.retrace(im,display=display)
-    trace.find(im,lags=range(-5,6))
+    traceshift=trace.find(im,lags=range(-10,11))
     imec=trace.extract(im,display=display)
+    imec.header['T_SHIFT'] = traceshift[0]
+
+    # Add wave and response, barycentric
     wav.add_wave(imec)
     imec.add_response(response.data)
     bv, bt = utils.getbc(imec.header)
     imec.header['BVC'] = bv.value
     imec.header['BJD-MID'] = bt.jd
+
+    # write if requested
     if write :
-        try : os.makedirs(os.path.dirname(out))
+        try : os.makedirs(os.path.dirname(outfile))
         except : pass
-        imec.write(out)
+        imec.write(outfile)
     return imec
 
-def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False,clobber=False):
+def throughput(spec,ax,name,mag=None,song=None,red=None,orders=[34]) :
     """ Reduce and add plot of extracted spectrum, throughput, and S/N for an image to existing Axes
 
     Parameters
@@ -107,14 +121,10 @@ def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False,clobber=F
         name for plot legend
     mag : float, default=None
         magnitude of object to compute throughput, if not given, query database
-    red : pyvista Reducer, default=None
-        Reducer for reducing object
     orders : list, default=[34]
         Order(s) to plot
-    write : bool, default=False
-        set to True to write out extracted data
     """
-    spec=specreduce(i,red=red,write=write,clobber=clobber)
+    #spec=specreduce(i,red=red,write=write,clobber=clobber)
     targ=spec.header['OBJECT'].split('.')[0].replace('_iodine','')
     if mag == None :
         d=database.DBSession() 
@@ -144,7 +154,7 @@ def plot(ax,i,name,mag=None,song=None,red=None,orders=[34],write=False,clobber=F
 
     return t,sn,t_orders,sn_orders
 
-def throughput() :
+def throughput_all() :
     """ Make plot of throughput from database query
     """
 
@@ -160,7 +170,7 @@ def throughput() :
         j=np.where(targs['targname'] == targ)[0][0]
         mag.append(targs[j]['mag'])
     mag=np.array(mag)
-    fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001)
+    fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001,sharex=True)
     ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')
     scat=ax[0].scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='no iodine')
     plt.colorbar(scat)
@@ -230,14 +240,28 @@ def getobs(targ) :
 
     d=database.DBSession()
     out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
-    obs=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk')
+    obslist=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk',fmt='list')
     d.close()
+
+    maxfiles=0
+    for o in obslist[1:] :
+        maxfiles=np.max([maxfiles,len(o[3])])
+
+    obs=Table(names=('request_pk', 'mjd', 'targname', 'schedulename','sequencename','priority','files'), dtype=('i4','f4', 'S', 'S','S','i4','{:d}S24'.format(maxfiles)))
+    for o in obslist[1:] :
+        while len(o[3]) < maxfiles : o[3].append('')
+        try: 
+            for i,oo in enumerate(o[3]) :
+                if oo == None : o[3][i] = ''
+            obs.add_row([o[1],o[2],o[5],o[6],o[7],o[8],o[3]])
+        except: 
+            pdb.set_trace()
 
     j=np.where(obs['targname']==targ)
     ind=[]
     for file in obs[j]['files'] :
         for f in file :
-            i=np.where(out['file']  == f.replace('/data/1m/',''))[0]
+            i=np.where(out['file']  == f.decode().replace('/data/1m/',''))[0]
             if len(i) > 0 :
                 ind.append(i[0])
     ind=np.array(ind)
@@ -252,12 +276,18 @@ def reduceall(mjdmin) :
 
     matplotlib.use('Agg')
     d=database.DBSession()
-    obs=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk')
+    obs=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk',fmt='list')
     d.close()
 
-    for mjd in sorted(set(obs['mjd'].astype(int))) :
+    mjds=[]
+    for o in obs[1:] :
+        mjds.append(o[2])
+    mjds=sorted(set(np.array(mjds).astype(int)))
+
+    for mjd in mjds :
         if mjd > mjdmin :
-            robotic.mkhtml(mjd)
+            robotic.mklog(mjd,clobber=True)
+            #robotic.mkhtml(mjd)
 
 
 
