@@ -36,6 +36,96 @@ except FileNotFoundError :
     #trap for readthedocs
     print('logging.yml not found')
 
+if __name__ == "__main__" :
+    # need to put this first so aposong.init() is run to allow use of aposong.config below
+
+    aposong.init()
+    #fp = os.open('pipe',os.O_RDONLY | os.O_NONBLOCK)
+    print('opening socket...')
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setblocking(False)  # Make the socket non-blocking
+    server_socket.bind(('localhost', 5000))
+    server_socket.listen()
+    conn = None
+    disp=tv.TV(figsize=(8,4))
+    disp.fig.canvas.manager.window.wm_geometry('-0-0')
+
+    inputs=[sys.stdin,server_socket]
+    outputs=[]
+
+    guiding = False
+    acquired = False
+    t0=Time.now()
+    while True :
+      try:
+        readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
+ 
+        for s in readable : 
+            #if s is fp:
+            #   txt = os.read(fp,80).decode().strip('\n')
+            txt=''
+            if s is sys.stdin :
+                txt = sys.stdin.readline().strip('\n')
+                print('stdin: ',txt)
+            if s is server_socket :
+                conn, addr = server_socket.accept()
+                inputs.append(conn)
+                print('adding client')
+                txt='adding'
+            if s is conn :
+                txt = conn.recv(1024).decode()
+                print('socket: ', txt)
+            try : cmd = txt.split()[0]
+            except : cmd=''
+            if cmd == 'start' :
+                print('starting...')
+                kwargs=parse_string_to_kwargs(txt)
+                g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
+                if g.findhole : g.get_hole_position()
+                if g.x0 < 0 :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : print('failed acquire')
+                    continue
+                try : 
+                    cent=g.acquire()
+                    acquired = True
+                    guiding = True
+                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}'.encode())
+                    else : print(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}')
+                except :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : print('failed acquire')
+            elif cmd == 'stop' or cmd == 'pause' :
+                guiding = False
+                if cmd == 'stop' : acquired = False
+                if s is conn : conn.send(b'guiding stopped')
+                else : print('guiding stopped')
+            elif cmd == 'resume' :
+                if acquired : 
+                    guiding = True
+                    if s is conn : conn.send(b'guiding resumed')
+                    else : print('guiding resumed')
+                else :
+                    if s is conn : conn.send(b'not resumed, no guide star acquired')
+                    else : print('not resumed, no guide star acquired')
+            elif len(txt) > 0 :
+                if s is conn : 
+                    conn.send('unknown command: {:s} {:d}'.format(txt, len(txt)).encode())
+                else :
+                    print('unknown command: ', txt, len(txt))
+                    print(parse_string_to_kwargs(txt))
+
+        if guiding :
+              g.guide()
+
+        if (Time.now()-t0).sec > 300 :
+            #g.postgres_write(guiding,acquired)
+            t0=Time.now()
+
+        time.sleep(0.25)
+      except KeyboardInterrupt :
+        server_socket.close()
+        break
 
 class Guider :
 
@@ -319,95 +409,3 @@ def parse_string_to_kwargs(string):
 
   return kwargs
 
-
-
-if __name__ == "__main__" :
-
-    #fp = os.open('pipe',os.O_RDONLY | os.O_NONBLOCK)
-    print('opening socket...')
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setblocking(False)  # Make the socket non-blocking
-    server_socket.bind(('localhost', 5000))
-    server_socket.listen()
-    conn = None
-    disp=tv.TV(figsize=(8,4))
-    disp.fig.canvas.manager.window.wm_geometry('-0-0')
-
-    inputs=[sys.stdin,server_socket]
-    outputs=[]
-
-    guiding = False
-    acquired = False
-    t0=Time.now()
-    while True :
-      try:
-        readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
- 
-        for s in readable : 
-            #if s is fp:
-            #   txt = os.read(fp,80).decode().strip('\n')
-            txt=''
-            if s is sys.stdin :
-                txt = sys.stdin.readline().strip('\n')
-                print('stdin: ',txt)
-            if s is server_socket :
-                conn, addr = server_socket.accept()
-                inputs.append(conn)
-                print('adding client')
-                txt='adding'
-            if s is conn :
-                txt = conn.recv(1024).decode()
-                print('socket: ', txt)
-            try : cmd = txt.split()[0]
-            except : cmd=''
-            if cmd == 'start' :
-                print('starting...')
-                kwargs=parse_string_to_kwargs(txt)
-                g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
-                if g.findhole : g.get_hole_position()
-                if g.x0 < 0 :
-                    if s is conn : conn.send(b'failed acquire')
-                    else : print('failed acquire')
-                    continue
-                try : 
-                    cent=g.acquire()
-                    acquired = True
-                    guiding = True
-                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}'.encode())
-                    else : print(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}')
-                except :
-                    if s is conn : conn.send(b'failed acquire')
-                    else : print('failed acquire')
-            elif cmd == 'stop' or cmd == 'pause' :
-                guiding = False
-                if cmd == 'stop' : acquired = False
-                if s is conn : conn.send(b'guiding stopped')
-                else : print('guiding stopped')
-            elif cmd == 'resume' :
-                if acquired : 
-                    guiding = True
-                    if s is conn : conn.send(b'guiding resumed')
-                    else : print('guiding resumed')
-                else :
-                    if s is conn : conn.send(b'not resumed, no guide star acquired')
-                    else : print('not resumed, no guide star acquired')
-            elif len(txt) > 0 :
-                if s is conn : 
-                    conn.send('unknown command: {:s} {:d}'.format(txt, len(txt)).encode())
-                else :
-                    print('unknown command: ', txt, len(txt))
-                    print(parse_string_to_kwargs(txt))
-
-        if guiding :
-              g.guide()
-
-        if (Time.now()-t0).sec > 300 :
-            #g.postgres_write(guiding,acquired)
-            t0=Time.now()
-
-        time.sleep(0.25)
-      except KeyboardInterrupt :
-        server_socket.close()
-        break
-
-#main()
