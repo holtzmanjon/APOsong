@@ -29,6 +29,8 @@ try :
 except FileNotFoundError :
     #trap for readthedocs
     print('logging.yml not found')
+except :
+    print('error with logging')
 
 from astropy.coordinates import SkyCoord, EarthLocation
 import astropy.units as u
