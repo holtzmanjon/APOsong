@@ -1,6 +1,7 @@
 import os
 import pdb
 import matplotlib
+import yaml
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
@@ -13,6 +14,7 @@ from holtztools import plots
 from astropy.table import Table
 from astropy.time import Time
 import robotic
+import aposong
 
 def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, 
                write=False, display=None, clobber=False, twod=False) :
@@ -44,10 +46,17 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         if True, re-reduce objects even if output file exists already
     """
 
+    try :
+        with open('aposong.yml','r') as config_file :
+            config = yaml.safe_load(config_file)
+    except:
+        print('no configuration file found')
+    dataroot = config['dataroot']+'/'
+
     if red == None :
-        red=imred.Reducer('SONG',dir='/data/1m/UT251003')
+        red=imred.Reducer('SONG',dir=dataroot+'UT251003')
     if response == None :
-        response=Data.read('/data/1m/cal/response.fits')
+        response=Data.read(dataroot+'cal/response.fits')
     if cr : crbox=[1,11]
     else : crbox=None
     if scat : doscat=red.scat
@@ -70,19 +79,19 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         darktimes=np.array([25,60,120,180,240,300])
         utdark='UT251010'
         utflat='UT251119'
-        if trace == None : trace=spectra.Trace('SONG/UT251007_Trace_fiber2.fits')
-        if wav == None : wav=spectra.WaveCal('SONG/UT251007_WaveCal_fiber2.fits')
+        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251007_Trace_fiber2.fits')
+        if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251007_WaveCal_fiber2.fits')
     else :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
         utflat='UT251119'
-        if trace == None : trace=spectra.Trace('SONG/UT251119_Trace_fiber2.fits')
-        if wav == None : wav=spectra.WaveCal('SONG/UT251119_WaveCal_fiber2.fits')
+        if trace == None : trace=spectra.Trace('cal/trace/UT251119_Trace_fiber2.fits')
+        if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
 
     # read dark and flat frames
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
-    dark=Data.read('/data/1m/cal/darks/dark_{:d}_-10_{:s}.fits'.format(dtime,utdark))
-    flat=Data.read('/data/1m/cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
+    dark=Data.read(dataroot+'cal/darks/dark_{:d}_-10_{:s}.fits'.format(dtime,utdark))
+    flat=Data.read(dataroot+'cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
 
     # Reduce
     im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
