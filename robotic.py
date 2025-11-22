@@ -241,7 +241,21 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         #if c.dec<mindec*u.deg or c.dec>maxdec*u.deg : 
         #    logger.info('{:s} out of declination range'.format(request['targname']))
         #    continue
-        obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
+        obslist=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']),fmt='list')
+        maxfiles=0
+        for o in obslist[1:] :
+            maxfiles=np.max([maxfiles,len(o[3])])
+
+        obs=Table(names=('observed_pk','request_pk', 'mjd', 'files'), dtype=('i4','i4','f4','{:d}S24'.format(maxfiles)))
+        for o in obslist[1:] :
+            while len(o[3]) < maxfiles : o[3].append('')
+            try:
+                for i,oo in enumerate(o[3]) :
+                    if oo == None : o[3][i] = ''
+                obs.add_row([o[0],o[1],o[2],o[3]])
+            except:
+                pdb.set_trace()
+
         if len(obs)>0:
             if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
                 if verbose: logger.info('{:s} observed enough visits {:d}'.format(request['targname'],len(obs)))
