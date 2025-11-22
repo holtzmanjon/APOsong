@@ -15,6 +15,7 @@ import astropy.units as u
 import pwi4_client
 
 import weather
+import spectemps
 import influx
 import aposong
 
@@ -188,9 +189,11 @@ class calWgt(ttk.Frame) :
 
 niter=0
 
-def status() :
+if __name__ == '__main__' :
     """ Start status window and updater
     """
+    aposong.init()
+
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
     default_font.configure(size=16,weight=tkinter.font.BOLD,family='Arial')
@@ -247,18 +250,23 @@ def status() :
     coverstate=['NotPresent','Closed','Moving','Open','Unknown','Error']
 
     apo=EarthLocation.of_site('APO')
-    #aposite=site.Site('APO')
-
 
     def update() :
         global niter
         niter=(niter+1)%60
         try :
             # weather status to influxDB
-            wdict=weather.getapo()
-            weather.influx_write(wdict)
-            weather.postgres_write(wdict)
+            if niter%10 == 1 :
+                wdict=weather.getapo()
+                weather.influx_write(wdict)
+                weather.postgres_write(wdict)
         except : print('error with weather')
+
+        try :
+            # spectrograph temperatures to influxDB
+            if niter%10 == 1 :
+                sdict=spectemps.get()
+        except : print('error with spectemps')
 
         try :
             if niter%60 == 1 :
@@ -347,7 +355,6 @@ def status() :
             h,m,s=t.sidereal_time('mean').hms
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
-
 
             stat = aposong.telescope_status()
 
