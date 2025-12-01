@@ -11,6 +11,7 @@ from numpy.random import randint
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.table import Table
 import astropy.units as u
 import pwi4_client
 
@@ -18,6 +19,7 @@ import weather
 import spectemps
 import influx
 import aposong
+import database
 
 class TelescopeWgt(ttk.Frame) :
 
@@ -186,6 +188,43 @@ class calWgt(ttk.Frame) :
         self.thar = StringVar()
         self.thar_label = ttk.Label(self, textvariable=self.thar)
         self.thar_label.grid(column=8,row=2,sticky=(W,E),padx=10)
+
+def postgres_bool(val) :
+    return '1' if val else '0'
+
+def postgres_write(telstatus,domestatus) :
+
+    tab=Table()
+    tab['tel_con_state'] = [postgres_bool(telstatus.mount.is_connected)]
+    tab['tel_tracking'] = [postgres_bool(telstatus.mount.is_tracking)]
+    tab['tel_ra_j2000'] = [telstatus.mount.ra_j2000_hours]
+    tab['tel_dec_j2000'] = [telstatus.mount.dec_j2000_degs]
+    tab['tel_ra'] = [telstatus.mount.ra_apparent_hours]
+    tab['tel_dec'] = [telstatus.mount.dec_apparent_degs]
+    tab['tel_alt'] = [telstatus.mount.altitude_degs]
+    tab['tel_azm'] = [telstatus.mount.azimuth_degs]
+    tab['tel_alt_rms_error'] = [telstatus.mount.axis1.rms_error_arcsec]
+    tab['tel_azm_rms_error'] = [telstatus.mount.axis0.rms_error_arcsec]
+    tab['m3_pos'] = [telstatus.m3.port]
+    tab['dome_shutterstate'] = [domestatus.shutterstate]
+    tab['dome_az'] = [domestatus.az]
+    tab['dome_slewing'] = [postgres_bool(domestatus.slewing)]
+    tab['dome_light_state'] = [postgres_bool(domestatus.lights)]
+    tab['temp_m1'] = [None]
+    tab['temp_m2'] = [None]
+    tab['temp_m3'] = [None]
+    tab['temp_back'] = [None]
+    tab['temp_amb'] = [None]
+    tab['focuser_1_pos'] = [aposong.foc()]
+    tab['focuser_1_moving'] = [postgres_bool(aposong.F[0].IsMoving)]
+    tab['focuser_2_pos'] = [aposong.specfoc()]
+    tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
+    tab['tel_lst'] = [telstatus.site.lmst_hours]
+    d=database.DBSession(host='localhost',database='db_apo')
+    d.ingest('public.tel_dome',tab,onconflict='update')
+    d.close()
+    return tab
+
 
 niter=0
 
@@ -392,10 +431,10 @@ if __name__ == '__main__' :
             telframe.focus.set('{:d}'.format(aposong.foc(port=2)))
 
         try :
-            az, shutterstatus, slewing = aposong.domestatus()
-            domeframe.az.set('{:.1f}'.format(az))
-            domeframe.shutter.set('{:s}'.format(shutter[shutterstatus]))
-            if slewing : domeframe.slewing.set('SLEWING')
+            domestat = aposong.domestatus()
+            domeframe.az.set('{:.1f}'.format(domestat.az))
+            domeframe.shutter.set('{:s}'.format(shutter[domestat.shutterstate]))
+            if domestat.slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
 
             domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
@@ -405,6 +444,8 @@ if __name__ == '__main__' :
             domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
 
+        try : postgres_write(stat,domestat)
+        except : pass
         print('setting root.after')
         root.after(5000,update)
 
@@ -415,3 +456,4 @@ if __name__ == '__main__' :
     root.after(1000,update)
     #update()
     root.mainloop()
+
