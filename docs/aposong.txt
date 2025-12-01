@@ -84,9 +84,9 @@ Calibration commands :
   - calstage_out() : move calibration stage out of beam, and adjust focus (if needed)
   - calstage_position([val]) : get or set (with val) iodine stage position
   - calstage_home : home iodine stage
-  - eshel.getlamps() : get eShel lamp status
-  - eshel.lamps() : control eShel lamps
-  - eshel.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off
+  - cal.getlamps() : get eShel lamp status
+  - cal.lamps() : control eShel lamps
+  - cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off
 
 Alpyca devices
 ++++++++++++++
