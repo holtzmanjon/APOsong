@@ -69,6 +69,7 @@ import database
 
 from collections import namedtuple
 Exposure = namedtuple('Exposure', ['hdu', 'name', 'exptime', 'filter'])
+DomeStatus = namedtuple('DomeStatus', ['shutterstate', 'az', 'slewing', 'lights'])
 
 # some global variables
 dataroot = None
@@ -150,7 +151,7 @@ def getcam(camera=None) :
         print('  2: Port 1 camera (QSI w/KAF_800 detector)')
         print('  3: SONG spectrograph camera (QHY 600)')
         return
-
+    global camindex
     if camindex[camera]>=0 : return camindex[camera]
 
     #for index,c in enumerate(C) :
@@ -513,7 +514,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     d.close()
     if display is not None : display.tvclear()
 
-    return f
+    return f, focvals
 
 def pixscale(cam=0,bin=1) :
     """ Return pixscale for desired camera
@@ -645,6 +646,8 @@ def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     time.sleep(settle)
 
 def guide(cmd,**kwargs) :
+    """ Send command to guider process
+    """
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('127.0.0.1',5000))
     if cmd == 'start' :
@@ -654,6 +657,10 @@ def guide(cmd,**kwargs) :
     out=s.recv(1024)
     print('received {:s}'.format(out.decode()))
     s.close()
+    if 'fail' in out.decode() :
+        return False
+    else :
+        return True
 
 def offsetxy(dx,dy,sign=-1,scale=0.16,pa=None) :
     """
@@ -893,7 +900,6 @@ def calstage_in(val=None,calfoc=None) :
     # don't move if already there, to avoid extra focus change
     if val is None : val = config['calstage_in_pos']
     if calfoc is None : calfoc = config['calstage_focus']
-    print('val: ', val)
     foc(calfoc)
     calstage_position(val)
 
@@ -917,7 +923,7 @@ def calstage_find(display=None) :
     bd=np.where(r2<7**2)
     mask[bd]=1
     cent=centroid.rasym_centroid(im,x0,y0,rad=35,mask=mask)
-    print(cent.x,cent.y)
+    logger.info('Calibration spot center: {:.2f} {:.2f}'.format(cent.x,cent.y))
     if display is not None : 
         display.tvclear()
         display.tvcirc(cent.x,cent.y,50)
@@ -998,7 +1004,11 @@ def override(t) :
 def domestatus() :
     """ Return dome azimuth and shutter status
     """
-    return D.Azimuth, D.ShutterStatus, D.Slewing
+    out=subprocess.run("ms list 3",shell=True,capture_output=True,text=True)
+    if 'On' in out.stdout : light = True
+    else : light = True
+    stat = DomeStatus(D.ShutterStatus.value,D.Azimuth,D.Slewing,light)
+    return stat
 
 def domehome() :
     """ Home dome
@@ -1027,7 +1037,6 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
 def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
     """
-    guide('stop')
     if closelouvers : louvers(False)
     if fans : fans_off()
     if covers : 
@@ -1038,6 +1047,8 @@ def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
         park()
         logger.info('closing shutter...')
         D.CloseShutter()
+    # put this at end in case guider has died and this won't return
+    guide('stop')
 
 def domesync(dosync=True,manual=False) :
     """ Start/stop domesync thread
@@ -1218,8 +1229,8 @@ def disp_init() :
     return disp
 
 if __name__ == '__main__' :
+
     from aposong import *
     import robotic
-
     init()
     disp=disp_init()
