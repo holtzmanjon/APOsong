@@ -103,8 +103,8 @@ class DomeWgt(ttk.Frame) :
 
         ttk.Label(self,text="35M/25M").grid(column=3,row=row,sticky=(W))
         self.stat35m = StringVar()
-        self.statcolor = StringVar()
-        ttk.Label(self, textvariable=self.stat35m, foreground=self.statcolor.get()).grid(column=4,row=row,sticky=(E),padx=10) 
+        self.stat35m_label = ttk.Label(self, textvariable=self.stat35m)
+        self.stat35m_label.grid(column=4,row=row,sticky=(W,E),padx=10)
 
      
 class CameraWgt(ttk.Frame) :
@@ -343,7 +343,7 @@ if __name__ == '__main__' :
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
             iodineframe.iodinestage.set(pos)
-            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green')
+            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green3')
             elif abs(pos-aposong.config['iodinestage_out_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
             else : iodineframe.iodinestage_label.config(foreground='yellow')
             iodineframe.temp.set(temp+' / '+tset)
@@ -370,7 +370,7 @@ if __name__ == '__main__' :
         try :
             pos =aposong.calstage_position()
             calframe.calstage.set(pos)
-            if abs(pos-aposong.config['calstage_in_pos']) < 0.2 : calframe.calstage_label.config(foreground='green')
+            if abs(pos-aposong.config['calstage_in_pos']) < 0.2 : calframe.calstage_label.config(foreground='green3')
             elif abs(pos-aposong.config['calstage_out_pos']) < 0.2 : calframe.calstage_label.config(foreground='blue')
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
@@ -437,9 +437,13 @@ if __name__ == '__main__' :
             if domestat.slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
 
-            domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
-            if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
-            else : domeframe.statcolor.set('green')
+            stat35m = aposong.S.Action('stat35m')
+            stat25m = aposong.S.Action('stat25m')
+            domeframe.stat35m.set(stat35m+'/'+stat25m)
+            if stat35m == 'open' or stat25m == 'open' : 
+                domeframe.stat35m_label.config(foreground='green3')
+            else :
+                domeframe.stat35m_label.config(foreground='red')
 
             domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
