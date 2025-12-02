@@ -690,7 +690,6 @@ def offset(dra, ddec) :
     AXIS_gradual_offset_seconds: Paired with AXIS_add_gradual_offset_arcsec; Specifies the time it should take to apply the gradual offset. For example, if an offset of 10 arcseconds is to be applied over a period of 2 seconds, then the offset will be increasing at a rate of 5 arcsec/sec.
 
     Where AXIS can be one of:
-
     ra: Offset the target Right Ascension coordinate
     dec: Offset the target Declination coordinate
     axis0: Offset the mount's primary axis position 
@@ -699,6 +698,7 @@ def offset(dra, ddec) :
            (roughly Altitude on an Alt-Az mount, or Dec on an equatorial mount)
     path: Offset along the direction of travel for a moving target
     transverse: Offset perpendicular to the direction of travel for a moving target
+
     """
     pwi.mount_offset(ra_add_arcsec=dra/np.cos(T.Declination*np.pi/180.))
     pwi.mount_offset(dec_add_arcsec=ddec)
@@ -935,6 +935,8 @@ def calstage_find(display=None) :
 def fans_on(roles=None):
     """ Turn on PWI fans
 
+    Parameters
+    ----------
     roles: if None, turn on all fans
     Otherwise, can be a CSV string of one or more fan roles to turn on:
         m1rear: Primary mirror fans (rear fans only)
