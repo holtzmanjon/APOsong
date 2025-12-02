@@ -1039,10 +1039,13 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
 def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
     """
-    if closelouvers : louvers(False)
-    if fans : fans_off()
+    if closelouvers : 
+        logger.info('closing louvers...')
+        louvers(False)
+    if fans : 
+        logger.info('turning off fans...')
+        fans_off()
     if covers : 
-        logger.info('closing mirror covers...')
         mirror_covers(False)
     if dome : 
         # don't wait for mirror covers to report closed, in case they don't!
@@ -1050,6 +1053,7 @@ def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
         logger.info('closing shutter...')
         D.CloseShutter()
     # put this at end in case guider has died and this won't return
+    logger.info('stopping guider...')
     guide('stop')
 
 def domesync(dosync=True,manual=False) :
