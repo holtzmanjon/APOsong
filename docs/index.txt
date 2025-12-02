@@ -33,6 +33,7 @@ Several modules are included:
    guider
    robotic
    reduce
+   focus
    status
 
 

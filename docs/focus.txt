@@ -1,0 +1,12 @@
+focus module
+*************
+
+focus module provides a
+
+Module functions
+++++++++++++++++
+.. automodule:: focus
+   :members:
+   :member-order: bysource
+
+
