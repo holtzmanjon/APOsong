@@ -1,8 +1,11 @@
 #interactive plots
 import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-plt.ion()
+try :
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    plt.ion()
+except :
+    print('TkAgg failed')
 
 import numpy as np
 import os
