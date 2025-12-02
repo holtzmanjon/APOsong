@@ -310,7 +310,7 @@ if __name__ == '__main__' :
         try :
             if niter%60 == 1 :
                 ccd_dict={}
-                for i in range(4) :
+                for i in [0,3] :
                     try :
                         icam = aposong.getcam(i)
                         ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
