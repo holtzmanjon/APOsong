@@ -98,7 +98,7 @@ class Guider :
         """
         # illuminate the aperture
         foc=aposong.foc()
-        aposong.calstage_find()
+        aposong.calstage_find(display=self.disp)
         cal.lamps(mirror=True,quartz=True)
         time.sleep(3)
         # expose
@@ -110,10 +110,12 @@ class Guider :
         aposong.foc(foc)
 
         # find minimum pixel (maximum of negative image)
-        box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=15)
-        stats=image.abx(-im.hdu.data,box)
-        x0 = stats['peakx']
-        y0 = stats['peaky']
+        #box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=15)
+        #stats=image.abx(-im.hdu.data,box)
+        #x0 = stats['peakx']
+        #y0 = stats['peaky']
+        x0 = self.x0
+        y0 = self.y0
    
         # get center from image and return
         center=centroid.rasym_centroid(im.hdu.data,x0,y0,rad=12,plot=self.disp,mask=self.mask)
