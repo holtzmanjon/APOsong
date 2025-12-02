@@ -16,6 +16,7 @@ import pdb
 import numpy as np
 import time
 import threading
+import subprocess
 
 import logging
 import yaml
@@ -104,7 +105,7 @@ class Sequence() :
                 if filt == 'thar' :
                     aposong.guide('pause')
                     time.sleep(10)
-                    cal.cals(thar=nexp,flats=0,thar_exptime=texp)
+                    cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
                     names.append('thar')
                     aposong.guide('resume')
                     time.sleep(30)
@@ -445,7 +446,7 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     #aposong.fans_off()
 
     # focus star on meridian 
-    if initfoc : foc=focus(foc0=foc0,delta=75,n=15,display=display)
+    if initfoc : foc=focus(foc0=foc0,delta=75,n=15,display=display,iodine=False)
     foctime=Time.now()
 
     oldtarg=''
@@ -472,7 +473,7 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
             # focus if it has been more than dt_focus since last focus
             aposong.guide('stop')
-            foc0=focus(foc0=foc0,display=display)
+            foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             foctime=tnow
             oldtarg=''
         else :
@@ -511,37 +512,40 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
         matplotlib.use('TkAgg') 
         print('you will need to restart display window with disp_init()')
 
-def focus(foc0=28800,delta=75,n=9,dec=50,iodine=True,display=None) :
+def focus(foc0=28800,delta=75,n=9,decs=[50],iodine=True,display=None) :
     """ Do focus run for object on meridian
     """    
-    t=Time(Time.now(), location=EarthLocation.of_site('APO'))
-    lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=dec,magmin=9,magmax=10,rad=5*u.degree)
 
-    # focus run with iodine cell (if desired)
-    if iodine :
-        foc0_0=copy.copy(foc0)
-        aposong.iodine_in()
-        f,focvals=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+    for dec in decs :
+        t=Time(Time.now(), location=EarthLocation.of_site('APO'))
+        lst=t.sidereal_time('mean').value
+        aposong.usno(ra=lst,dec=dec,magmin=9,magmax=10,rad=5*u.degree)
+
+        # focus run with iodine cell (if desired)
+        if iodine :
+            foc0_0=copy.copy(foc0)
+            aposong.iodine_in()
+            f,focvals=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            while f<focvals[2] or f>focvals[-3] :
+                # redo if best focus is near end of run
+                if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
+                    break
+                logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
+                foc0=copy.copy(f)
+                f,focvals=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            aposong.iodine_out()
+            foc0=copy.copy(foc0_0)
+
+        # normal focus run
+        f,focvals=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
         while f<focvals[2] or f>focvals[-3] :
             # redo if best focus is near end of run
             if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
                 break
             logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
             foc0=copy.copy(f)
-            f,focvals=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-        aposong.iodine_out()
-        foc0=copy.copy(foc0_0)
+            f,focvals=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
 
-    # normal focus run
-    f,focvals=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
-    while f<focvals[2] or f>focvals[-3] :
-        # redo if best focus is near end of run
-        if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
-            break
-        logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
-        foc0=copy.copy(f)
-        f,focvals=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
     return f
        
 def test() :
@@ -588,6 +592,17 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=1) :
     sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera,bin=bin)
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
+
+def mail(subject,message,recipients) :
+    """ Send email to recipients
+    """
+    f=open('message','w')
+    f.write(message)
+    f.close()
+    f=open('message')
+    for r in recipients :
+        subprocess.run(['mail','-s',subject,r], stdin=f)
+    f.close()
 
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
@@ -668,7 +683,6 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     i=0
     for seq in gd[sort] :
         print(files[seq])
-        pdb.set_trace()
         try : 
             if clobber or not os.path.isfile(root+files[seq][0].replace('.fits','.png')) :
                 dofocus.focus(files[seq],display=display,root=root,plot=True,hard=True,
