@@ -334,3 +334,13 @@ def profile(ims,red,maxrad=80) :
     return ap
 
 
+def allfoc() :
+    """ Get focus entries from database, skip focvals and file, plot bestfoc and besthf
+    """
+    d=database.DBSession(database='apo')
+    out=d.query('obs.focus',skip=['focvals','files'])
+    fig,ax=plots.multi(1,2,hspace=0.001)
+    plots.plotc(ax[0],out['mjd'],out['bestfoc'],out['besthf'],size=20,xt='mjd',yt='bestfoc')
+    plots.plotc(ax[1],out['mjd'],out['besthf'],out['bestfoc'],size=20,xt='mjd',yt='besthf')
+
+    return out
