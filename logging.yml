@@ -33,7 +33,7 @@ handlers:
 
 root:
     level: INFO
-    handlers: [console,daily,hourly]
+    handlers: [console,daily]
 
 loggers:
   aposong :
