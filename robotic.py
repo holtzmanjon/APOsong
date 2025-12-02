@@ -17,6 +17,7 @@ import numpy as np
 import time
 import threading
 import subprocess
+import requests
 
 import logging
 import yaml
@@ -59,6 +60,11 @@ class Target() :
         aposong.iodine_out()
         aposong.guide('stop')
         aposong.slew(self.ra,self.dec)
+        # focus adjustment for altitude
+        alt = np.max(np.min(80,aposong.T.Altitude),35)
+        adjustedfoc = foc0 + 200*(70-alt)/30
+        logger.info('Proposed focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, '.format(alt,foc0,adjustedfoc))
+
         ret = aposong.guide('start')
         if ret : time.sleep(30)
         return ret
@@ -163,16 +169,16 @@ def getsong(t=None,site='APO',verbose=True,skip=None) :
     if t is None :
         t = Time(Time.now(),location=apo)
     d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_song',user='song')
-    requests=d.query('public.obs_request_4',fmt='table')
+    song_requests=d.query('public.obs_request_4',fmt='table')
     d.close()
-    requests.rename_column('req_prio','priority')
-    requests.rename_column('right_ascension','ra')
-    requests.rename_column('declination','dec')
-    requests.rename_column('object_name','targname')
-    priorities = sorted(set(requests['priority']),reverse=True)
+    song_requests.rename_column('req_prio','priority')
+    song_requests.rename_column('right_ascension','ra')
+    song_requests.rename_column('declination','dec')
+    song_requests.rename_column('object_name','targname')
+    priorities = sorted(set(song_requests['priority']),reverse=True)
     for priority in priorities :
-      gd=np.where(requests['priority'] == priority) 
-      for request in requests[gd] :
+      gd=np.where(song_requests['priority'] == priority) 
+      for request in song_requests[gd] :
           if t < Time(request['start_window']) or t > Time(request['stop_window']) :
               if verbose: logger.info('{:s} out of window {:s} {:s}'.format(request['targname'],request['start_window'],request['stop_window']))
               continue
@@ -342,13 +348,13 @@ def load_object(request,mjd,names) :
 
     return True
 
-def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
+def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
         criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
   """ Start full observing night sequence 
 
   Parameters
   ==========
-  foc0 : integer, default=32400
+  focstart : integer, default=32400
          initial focus guess
   dt_focus : float, default=1.5
          minimum time to wait after focus run before triggering another (will wait for sequence to complete)
@@ -378,6 +384,7 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
          factor to increase all database number of exposures b
   """
   global nautical_morn
+  global foc0
 
   # change if you want to try to run across multiple nights!
   night = 0
@@ -390,6 +397,10 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     sunrise =site.sun_rise_time(Time.now(),which='next')
     nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
+
+    # open MJD file
+    f=open('{:d}'.format(int(nautical.mjd)),'w')
+    f.close()
 
     # set CCD temperatures
     aposong.settemp(ccdtemp,cam=0)
@@ -446,7 +457,7 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     #aposong.fans_off()
 
     # focus star on meridian 
-    if initfoc : foc=focus(foc0=foc0,delta=75,n=15,display=display,iodine=False)
+    if initfoc : foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
     foctime=Time.now()
 
     oldtarg=''
@@ -506,6 +517,11 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     # night log
     matplotlib.use('Agg') 
     mkhtml()
+
+    logger.info('completed observing loop!')
+    mail('APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),' ')
+    try :os.remove('{:d}'.format(int(nautical.mjd)))
+    except : print('no MJD file to remove?')
 
     # restart display
     if disp is not None :
@@ -593,15 +609,27 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=1) :
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
-def mail(subject,message,recipients) :
+def mail(subject,message,snapshot=True) :
     """ Send email to recipients
     """
     f=open('message','w')
     f.write(message)
     f.close()
+    if snapshot :
+        auth = requests.auth.HTTPDigestAuth('song',os.environ['PASS'])
+        response=requests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",auth=auth,stream=True)
+        try : os.remove('webcam_snapshot.jpg')
+        except : pass
+        f=open('webcam_snapshot.jpg','wb')
+        f.write(response.content)
+        f.close()
+    f.close()
     f=open('message')
-    for r in recipients :
-        subprocess.run(['mail','-s',subject,r], stdin=f)
+    for r in aposong.config['mail_recipients'] :
+        if snapshot :
+            subprocess.run(['mail','-s',subject,'-a','webcam_snapshot.jpg',r], stdin=f)
+        else :
+            subprocess.run(['mail','-s',subject,r], stdin=f)
     f.close()
 
 def mkhtml(mjd=None) :
