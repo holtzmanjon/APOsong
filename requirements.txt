@@ -10,6 +10,7 @@ astroplan
 astroquery
 psycopg2
 psycopg2-binary
+pysnmp
 tkthread
 influxdb_client
 sphinx_rtd_theme
