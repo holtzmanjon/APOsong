@@ -55,7 +55,7 @@ def snmpget(oid,host) :
 
                 else:
                     for oid, val in pMod.apiPDU.get_varbinds(rspPDU):
-                        print(f"{oid.prettyPrint()} = {val.prettyPrint()}")
+                        #print(f"{oid.prettyPrint()} = {val.prettyPrint()}")
                         #out = val.prettyPrint()
                         out.append(val.prettyPrint())
 
@@ -115,13 +115,11 @@ def get() :
     oids =  ["1.3.6.1.4.1.20916.1.7.1.1.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.2.2.0"]
 
     for i,host in enumerate(["10.75.0.18","10.75.0.25"]) :
-        print(host)
         dict={}
         try :
             snmpget(oids,host)
             for j in range(3) :
                 dict[labels[j,i].decode()]=ftoc(out[j])+offsets[j,i]
-            print(dict)
             influx.write(dict,bucket='spectemp',measurement=f'tempager_{i}')
         except : print('error')
     return dict
