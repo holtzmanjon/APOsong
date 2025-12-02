@@ -91,7 +91,7 @@ class DBSession(object):
         """ Close the database connection."""
         self.connection.close()
 
-    def query(self,table=None,cols='*',where=None,groupby=None,sql=None,fmt='numpy',verbose=False,skip=[]):
+    def query(self,table=None,cols='*',where=None,groupby=None,sql=None,fmt='numpy',verbose=True,skip=[]):
         """
         Query the APOGEE DRP database.
 
@@ -220,7 +220,7 @@ class DBSession(object):
                 for i,d in enumerate(data) :
                     try : cat[i] = d 
                     except:
-                        print('error loading: ',i,d)
+                        if verbose : print('error loading: ',i,d)
                         continue
             del(data)
 
@@ -289,7 +289,7 @@ class DBSession(object):
                 for i,d in enumerate(data) :
                     try : cat[i] = d 
                     except:
-                        print('error loading: ',i,d)
+                        if verbose : print('error loading: ',i,d)
                         continue
             del(data)
 
