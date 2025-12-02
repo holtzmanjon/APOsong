@@ -385,7 +385,7 @@ if __name__ == '__main__' :
             calframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
             if state[aposong.SW[1].GetSwitch(1)] == 'On' : calframe.thar_label.config(foreground='red')
             else :calframe.thar_label.config(foreground='black')
-        except : print('error with eShel')
+        except : print('error with cal')
 
         try :
             t=Time(Time.now(),location=apo)
@@ -450,7 +450,6 @@ if __name__ == '__main__' :
 
         try : postgres_write(stat,domestat)
         except : pass
-        print('setting root.after')
         root.after(5000,update)
 
     import signal
