@@ -2,9 +2,12 @@ import os
 import pdb
 import matplotlib
 import yaml
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-plt.ion()
+try :
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    plt.ion()
+except :
+    print('TkAgg failed in reduce')
 
 import numpy as np
 from pyvista import imred, spectra, image, utils, centroid
@@ -167,17 +170,17 @@ def throughput_all() :
     """ Make plot of throughput from database query
     """
 
-    pdb.set_trace()
     d=database.DBSession()
-    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk")
+    # initial query to get dtypes
+    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False)
     out=Table(dtype=outlist.dtype)
-    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",fmt="list")
+    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",fmt="list",verbose=False)
     for o in outlist[1:] :
         if len(o[4]) == 56 : o[4].append(0.)
         if len(o[5]) == 56 : o[5].append(0.)
         out.add_row(o)
 
-    targs=d.query('robotic.target')
+    targs=d.query('robotic.target',verbose=False)
     d.close()
     i=np.where(out['filter'] == 'iodine')
     o=np.where(out['filter'] != 'iodine')
