@@ -2,11 +2,13 @@
 from astropy.time import Time
 import os
 import subprocess
+
+from aposong import *
 import robotic
 
-robotic.aposong.init()
+os.chdir('/home/song/APOsong')
+init()
+
 mjd=int(Time.now().mjd)
 if os.path.exists('/home/song/APOsong/{:d}'.format(mjd)) :
-    robotic.mail('failed!','{:d} exists!'.format(mjd))
-else : 
-    robotic.mail('suceeded!','{:d} exists!'.format(mjd))
+    robotic.mail('APO SONG observing {:d} FAILED to complete'.format(int(Time.now().mjd)),'WARNING: aposong script did not complete! ')
