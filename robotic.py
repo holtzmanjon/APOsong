@@ -102,13 +102,16 @@ class Sequence() :
 
     def observe(self,name,display=None,fact=1,nfact=1) :
         names = []
+        foc1 = copy.copy(foc0)
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp*nfact) :
                 # focus adjustment for altitude
                 alt = np.max([np.min([75,aposong.T.Altitude]),35])
+                # make relative focus adjustment to last position, in case we are using iodine with focus offset
                 adjustedfoc = int(foc0 + 200*(70-alt)/30)
-                logger.info('Focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, '.format(alt,foc0,adjustedfoc))
-                aposong.foc(adjustedfoc)
+                logger.info('Focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, foc1: {:.0f}'.format(alt,foc0,adjustedfoc,foc1))
+                aposong.foc(adjustedfoc-foc1,relative=True)
+                foc1=copy.copy(adjustedfoc)
                 if filt == 'thar' :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp,filt,bin))
                     aposong.guide('pause')
@@ -655,12 +658,7 @@ def mail(subject,message,snapshot=True) :
     else :
         cmd=['mail','-s',subject,'-a','/data/1m/logs/daily.log']
     cmd.extend(aposong.config['mail_recipients'])
-    subprocess.run(cmd)
-    for r in aposong.config['mail_recipients'] :
-        if snapshot :
-            subprocess.run(['mail','-s',subject,'-a','webcam_snapshot.jpg','-a','/data/1m/logs/daily.log',r], stdin=f)
-        else :
-            subprocess.run(['mail','-s',subject,'-a','/data/1m/logs/daily.log',r], stdin=f)
+    subprocess.run(cmd,stdin=f)
     f.close()
     try : os.remove('webcam_snapshot.jpg')
     except : pass
@@ -780,8 +778,8 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
         o['mjd'].format='{:.3f}'
         o['exptime'].format='{:.2f}'
         o['alt'].format='{:.2f}'
-        o['ra'].format='{:.6f}'
-        o['dec'].format='{:.6f}'
+        #o['ra'].format='{:.6f}'
+        #o['dec'].format='{:.6f}'
         o['ccdtemp'].format='{:.2f}'
     out['airmass'] = 1./np.cos((90-out['alt'])*np.pi/180.)
     out['airmass'].format='{:.2f}'
@@ -839,6 +837,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
         o=o[gd]
         j = np.argsort(o['dateobs'])
         o=o[j]
+    # not sure why following but seems to be necessary
+    j=np.argsort(out['dateobs'])
+    out=out[j]
 
     fp = open('{:s}/{:s}/{:s}.html'.format(root,ut,ut),'w')
 
