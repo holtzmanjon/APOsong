@@ -35,7 +35,7 @@ except FileNotFoundError :
 except :
     print('error with logging')
 
-from astropy.coordinates import SkyCoord, EarthLocation
+from astropy.coordinates import SkyCoord, EarthLocation, Angle
 import astropy.units as u
 from astropy.io import fits
 from astropy.time import Time
@@ -351,13 +351,13 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     if targ is not None : hdu.header['OBJECT'] = targ
     try :
         stat = pwi.status()
-        hdu.header['RA'] = stat.mount.ra_j2000_hours
-        hdu.header['DEC'] = stat.mount.dec_j2000_degs
+        hdu.header['RA'] = Angle(stat.mount.ra_j2000_hours, unit=u.hour).to_string(sep=':',precision=2)
+        hdu.header['DEC'] = Angle(stat.mount.dec_j2000_degs, unit=u.degree).to_string(sep=':',precision=1)
         hdu.header['AZ'] = stat.mount.azimuth_degs
         hdu.header['ALT'] = stat.mount.altitude_degs
         hdu.header['ROT'] = stat.rotator.mech_position_degs
         hdu.header['TELESCOP'] = 'APO SONG 1m'
-    except : pass
+    except : pdb.set_trace()
     hdu.header['DOMEAZ'] = D.Azimuth
     try : hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
     except : hdu.header['CCD-TEMP'] = 99.999
@@ -923,6 +923,7 @@ def calstage_find(display=None) :
     mask=np.zeros_like(im)
     yg,xg=np.mgrid[0:mask.shape[0],0:mask.shape[1]]
     r2=(xg-x0)**2+(yg-y0)**2
+    r2=(xg-config['hole_pos'][1])**2+(yg-config['hole_pos'][0])**2
     bd=np.where(r2<7**2)
     mask[bd]=1
     cent=centroid.rasym_centroid(im,x0,y0,rad=35,mask=mask)
@@ -931,6 +932,7 @@ def calstage_find(display=None) :
         display.tvclear()
         display.tvcirc(cent.x,cent.y,50)
     config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
+    gexp(0.002,display=display,max=60000).hdu.data
     cal.lamps()
     calstage_in()
     return config['calstage_in_pos']
