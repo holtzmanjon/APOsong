@@ -11,4 +11,4 @@ init()
 
 mjd=int(Time.now().mjd)
 if os.path.exists('/home/song/APOsong/{:d}'.format(mjd)) :
-    robotic.mail('APO SONG observing {:d} FAILED to complete'.format(int(Time.now().mjd)),'WARNING: aposong script did not complete! ')
+    robotic.mail('APO SONG observing {:d} FAILED to complete'.format(int(Time.now().mjd)),'ALERT: aposong script did not complete! ')
