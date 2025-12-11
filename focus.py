@@ -185,7 +185,8 @@ def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12],
     # return best fit values and minimum values
 
 def mkplots(mjd,display=None,root='/data/1m/') :
-
+    """ Make focus run plots
+    """
     matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
@@ -237,6 +238,8 @@ def calfocus(foc0=34700,display=None) :
 
 
 def specfocus(foc0=425000) :
+    """ Do a spectrograph focus run
+    """
     red=imred.Reducer('SONG',dir='/data/1m/UT251002')
     trace=spectra.Trace('./UT2509xx_Trace.fits')
     wav=spectra.WaveCal('./UT2509xx_WaveCal.fits')
@@ -269,7 +272,8 @@ def specfocus(foc0=425000) :
 
 
 def montage(display,red=None) :
-
+    """ Create montage of focus sequence
+    """
     if red == None :
         red=imred.Reducer('SONG',dir='/data/1m/UT251016')
         files=glob.glob('/data/1m/UT251016/focus*.fits')
@@ -312,6 +316,8 @@ def montage(display,red=None) :
     return mfiles,montage
 
 def profile(ims,red,maxrad=80) :
+    """ Plot stellar profiles of sequence of images
+    """
     fig,ax=plots.multi(1,2,hspace=0.001)
     for i,im in enumerate(ims):
         a=red.rd(im)
@@ -334,3 +340,13 @@ def profile(ims,red,maxrad=80) :
     return ap
 
 
+def allfoc() :
+    """ Get focus entries from database, skip focvals and file, plot bestfoc and besthf
+    """
+    d=database.DBSession(database='apo')
+    out=d.query('obs.focus',skip=['focvals','files'])
+    fig,ax=plots.multi(1,2,hspace=0.001)
+    plots.plotc(ax[0],out['mjd'],out['bestfoc'],out['besthf'],size=20,xt='mjd',yt='bestfoc')
+    plots.plotc(ax[1],out['mjd'],out['besthf'],out['bestfoc'],size=20,xt='mjd',yt='besthf')
+
+    return out

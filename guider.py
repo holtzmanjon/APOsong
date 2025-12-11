@@ -9,6 +9,7 @@ import time
 import pdb
 from astropy.io import fits
 from astropy.time import Time
+from astropy.table import Table
 import numpy as np
 from holtztools import html
 import re
@@ -17,10 +18,10 @@ import sys
 import socket
 
 import aposong
+import database
 import cal
 import influx
 
-display=None
 run_guide = True
 
 # set up logger
@@ -36,102 +37,25 @@ except FileNotFoundError :
     #trap for readthedocs
     print('logging.yml not found')
 
-if __name__ == "__main__" :
-    # need to put this first so aposong.init() is run to allow use of aposong.config below
+def parse_string_to_kwargs(string):
+  kwargs= {}
+  for word in string.split() :
+    pattern = r"(.*)=(.*)"  # Matches key=value pairs
+    matches = re.findall(pattern, word)
 
-    aposong.init()
-    #fp = os.open('pipe',os.O_RDONLY | os.O_NONBLOCK)
-    print('opening socket...')
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setblocking(False)  # Make the socket non-blocking
-    server_socket.bind(('localhost', 5000))
-    server_socket.listen()
-    conn = None
-    disp=tv.TV(figsize=(8,4))
-    disp.fig.canvas.manager.window.wm_geometry('-0-0')
+    for key, value in matches:
+        kwargs[key] = value
 
-    inputs=[sys.stdin,server_socket]
-    outputs=[]
+  return kwargs
 
-    guiding = False
-    acquired = False
-    t0=Time.now()
-    while True :
-      try:
-        readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.)
- 
-        for s in readable : 
-            #if s is fp:
-            #   txt = os.read(fp,80).decode().strip('\n')
-            txt=''
-            if s is sys.stdin :
-                txt = sys.stdin.readline().strip('\n')
-                print('stdin: ',txt)
-            if s is server_socket :
-                conn, addr = server_socket.accept()
-                inputs.append(conn)
-                print('adding client')
-                txt='adding'
-            if s is conn :
-                txt = conn.recv(1024).decode()
-                print('socket: ', txt)
-            try : cmd = txt.split()[0]
-            except : cmd=''
-            if cmd == 'start' :
-                print('starting...')
-                kwargs=parse_string_to_kwargs(txt)
-                g = Guider(pixscale=aposong.pixscale(),display=disp,**kwargs)
-                if g.findhole : g.get_hole_position()
-                if g.x0 < 0 :
-                    if s is conn : conn.send(b'failed acquire')
-                    else : print('failed acquire')
-                    continue
-                try : 
-                    cent=g.acquire()
-                    acquired = True
-                    guiding = True
-                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}'.encode())
-                    else : print(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}')
-                except :
-                    if s is conn : conn.send(b'failed acquire')
-                    else : print('failed acquire')
-            elif cmd == 'stop' or cmd == 'pause' :
-                guiding = False
-                if cmd == 'stop' : acquired = False
-                if s is conn : conn.send(b'guiding stopped')
-                else : print('guiding stopped')
-            elif cmd == 'resume' :
-                if acquired : 
-                    guiding = True
-                    if s is conn : conn.send(b'guiding resumed')
-                    else : print('guiding resumed')
-                else :
-                    if s is conn : conn.send(b'not resumed, no guide star acquired')
-                    else : print('not resumed, no guide star acquired')
-            elif len(txt) > 0 :
-                if s is conn : 
-                    conn.send('unknown command: {:s} {:d}'.format(txt, len(txt)).encode())
-                else :
-                    print('unknown command: ', txt, len(txt))
-                    print(parse_string_to_kwargs(txt))
-
-        if guiding :
-              g.guide()
-
-        if (Time.now()-t0).sec > 300 :
-            #g.postgres_write(guiding,acquired)
-            t0=Time.now()
-
-        time.sleep(0.25)
-      except KeyboardInterrupt :
-        server_socket.close()
-        break
+# run aposong.init() here to get aposong.config
+aposong.init()
 
 class Guider :
 
     def __init__(self,x0=aposong.config['hole_pos'][1],y0=aposong.config['hole_pos'][0],findhole=True,
                  exptime=5,expavg=1,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
-                 display=None,nintegral=10, prop=0.5,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=0.05) :
+                 display=True,nintegral=10, prop=0.5,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=0.05) :
         x0=float(x0)
         y0=float(y0)
         findhole=int(findhole)
@@ -150,7 +74,9 @@ class Guider :
         self.mask = mask
         self.maskrad = maskrad
         self.sat = sat
-        self.disp = display
+        if display :
+            self.disp=tv.TV(figsize=(8,4))
+            self.disp.fig.canvas.manager.window.wm_geometry('-0-0')
         self.prop = prop
         self.ki = ki
         self.navg = np.min([5,np.max([1,int(5/exptime)])])
@@ -172,7 +98,7 @@ class Guider :
         """
         # illuminate the aperture
         foc=aposong.foc()
-        aposong.calstage_find()
+        aposong.calstage_find(display=self.disp)
         cal.lamps(mirror=True,quartz=True)
         time.sleep(3)
         # expose
@@ -184,10 +110,12 @@ class Guider :
         aposong.foc(foc)
 
         # find minimum pixel (maximum of negative image)
-        box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=15)
-        stats=image.abx(-im.hdu.data,box)
-        x0 = stats['peakx']
-        y0 = stats['peaky']
+        #box=image.BOX(cr=int(self.y0),cc=int(self.x0),n=15)
+        #stats=image.abx(-im.hdu.data,box)
+        #x0 = stats['peakx']
+        #y0 = stats['peaky']
+        x0 = self.x0
+        y0 = self.y0
    
         # get center from image and return
         center=centroid.rasym_centroid(im.hdu.data,x0,y0,rad=12,plot=self.disp,mask=self.mask)
@@ -275,7 +203,6 @@ class Guider :
         else :
             self.disp.tv(data,max=self.display_max)
         x,y=self.guess
-        print('rasym_centroid: ',self.sat)
         center=centroid.rasym_centroid(data,x,y,self.rad,mask=self.mask,skyrad=self.skyrad,sat=self.sat)
         bad=False
         if center.x<0 or center.tot<10000:
@@ -384,28 +311,127 @@ class Guider :
         influx.write(idict,bucket='guider',measurement='my_measurement')
 
     def postgres_write(self,guiding,acquired) :
+        """ Write guide status to database
+        """
         tab = Table()
         tab['dateobs'] = [Time.now().fits]
-        tab['acquired'] = acquired
-        tab['guiding'] = guiding
-        tab['x0'] = self.x0
-        tab['y0'] = self.y0
-        tab['exptime'] = self.exptime
-        tab['expavg'] = self.expavg
+        tab['acquired'] = '1' if acquired else '0'
+        tab['guiding'] = '1' if guiding else '0'
+        tab['guide_target_x'] = self.x0
+        tab['guide_target_y'] = self.y0
+        tab['exp_time'] = self.exptime
+        tab['exp_avg'] = self.expavg
 
         d=database.DBSession(host='localhost',database='db_apo')
-        d.ingest('public.guider',tab,onconflict='update')
+        d.ingest('public.guiders',tab,onconflict='update')
         d.close()
         return tab
     
-def parse_string_to_kwargs(string):
-  kwargs= {}
-  for word in string.split() :
-    pattern = r"(.*)=(.*)"  # Matches key=value pairs
-    matches = re.findall(pattern, word)
+def loop() :
+    """ Main guider loop, accepting commands from command line or socket
+    """
 
-    for key, value in matches:
-        kwargs[key] = value
+    print('opening socket...')
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setblocking(False)  # Make the socket non-blocking
+    server_socket.bind(('localhost', 5000))
+    server_socket.listen()
+    conn = None
 
-  return kwargs
+    inputs=[sys.stdin,server_socket]
+    outputs=[]
 
+    guiding = False
+    acquired = False
+    t0=Time.now()
+    while True :
+      try:
+        readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.25)
+
+        for s in readable : 
+            txt=''
+            if s is sys.stdin :
+                txt = sys.stdin.readline().strip('\n')
+                logger.info('stdin: {:s}'.format(txt))
+            if s is server_socket :
+                conn, addr = server_socket.accept()
+                inputs.append(conn)
+                logger.info('adding client')
+                continue
+            if s is conn :
+                txt = conn.recv(1024).decode()
+                logger.info('socket: {:s}'.format(txt))
+            try : cmd = txt.split()[0]
+            except : cmd=''
+            if cmd == 'start' :
+                kwargs=parse_string_to_kwargs(txt)
+                g = Guider(pixscale=aposong.pixscale(),**kwargs)
+                g.postgres_write(guiding,acquired)
+                if g.findhole : g.get_hole_position()
+                if g.x0 < 0 :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : logger.info('failed acquire')
+                    try : plt.close(g.disp.fig)
+                    except: pass
+                    del g
+                    continue
+                try : 
+                    cent=g.acquire()
+                    acquired = True
+                    guiding = True
+                    if s is conn : conn.send(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}'.encode())
+                    else : logger.info(f'acquired {cent[0]} {cent[1]}, exptime: {g.exptime}, expavg: {g.expavg}, navg: {g.navg}')
+                except :
+                    if s is conn : conn.send(b'failed acquire')
+                    else : logger.info('failed acquire')
+                try: g.postgres_write(guiding,acquired)
+                except: logger.info('failed postres_write')
+
+            elif cmd == 'stop' or cmd == 'pause' :
+                guiding = False
+                if cmd == 'stop' : 
+                    acquired = False
+                    if s is conn : conn.send(b'guiding stopped')
+                    else : logger.info('guiding stopped')
+                else :
+                    if s is conn : conn.send(b'guiding paused')
+                    else : logger.info('guiding paused')
+                try :
+                    try : g.postgres_write(guiding,acquired)
+                    except: logger.info('failed postres_write')
+                    if cmd == 'stop' :
+                        plt.close(g.disp.fig)
+                        del g
+                except : pass
+            elif cmd == 'resume' :
+                if acquired : 
+                    guiding = True
+                    if s is conn : conn.send(b'guiding resumed')
+                    else : logger.info('guiding resumed')
+                else :
+                    if s is conn : conn.send(b'not resumed, no guide star acquired')
+                    else : logger.info('not resumed, no guide star acquired')
+                try: g.postgres_write(guiding,acquired)
+                except: logger.info('failed postres_write')
+            elif len(txt) > 0 :
+                try: g.postgres_write(guiding,acquired)
+                except: logger.info('failed postres_write')
+                if s is conn : 
+                    conn.send('unknown command: {:s} {:d}'.format(txt, len(txt)).encode())
+                else :
+                    logger.info('unknown command: {:s} {:d}'.format(txt, len(txt)))
+
+            if conn is not None :
+                inputs.remove(conn)
+                conn.close()
+                conn = None
+
+        if guiding :
+              g.guide()
+
+      except KeyboardInterrupt :
+        server_socket.close()
+        break
+
+if __name__ == "__main__" :
+    loop()

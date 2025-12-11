@@ -27,6 +27,7 @@ dependencies = [
     "astro-pyvista",
     "influxdb-client",
     "pyqt5",
+    "pysnmp",
     "psycopg2-binary",
     "tkthread",
 ]

@@ -11,11 +11,14 @@ from holtztools import html, plots
 
 import copy
 import glob
+import io
 import os
 import pdb
 import numpy as np
 import time
 import threading
+import subprocess
+import requests
 
 import logging
 import yaml
@@ -58,8 +61,10 @@ class Target() :
         aposong.iodine_out()
         aposong.guide('stop')
         aposong.slew(self.ra,self.dec)
-        aposong.guide('start')
-        time.sleep(30)
+
+        ret = aposong.guide('start')
+        if ret : time.sleep(30)
+        return ret
 
 class Schedule() :
     def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
@@ -97,20 +102,32 @@ class Sequence() :
 
     def observe(self,name,display=None,fact=1,nfact=1) :
         names = []
+        # start back at foc0
+        aposong.foc(foc0)
+        foc1 = copy.copy(foc0)
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp*nfact) :
-                logger.info('Expose camera: {:d} exptime: {:.2f} bin: {:d}, '.format(cam,texp,bin))
+                # focus adjustment for altitude
+                alt = np.max([np.min([75,aposong.T.Altitude]),35])
+                # make relative focus adjustment to last position, in case we are using iodine with focus offset
+                adjustedfoc = int(foc0 + 200*(70-alt)/30)
+                logger.info('Focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, foc1: {:.0f}'.format(alt,foc0,adjustedfoc,foc1))
+                aposong.foc(adjustedfoc-foc1,relative=True)
+                foc1=copy.copy(adjustedfoc)
                 if filt == 'thar' :
+                    logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp,filt,bin))
                     aposong.guide('pause')
                     time.sleep(10)
-                    cal.cals(thar=nexp,flats=0,thar_exptime=texp)
+                    cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
                     names.append('thar')
                     aposong.guide('resume')
                     time.sleep(30)
                 else :
+                    logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp*fact,filt,bin))
                     exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name)
                     names.append(exp.name)
                 if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
+                    logger.info('breaking sequence for twilight or not safe')
                     break
         aposong.iodine_out()
         return names
@@ -161,16 +178,16 @@ def getsong(t=None,site='APO',verbose=True,skip=None) :
     if t is None :
         t = Time(Time.now(),location=apo)
     d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_song',user='song')
-    requests=d.query('public.obs_request_4',fmt='table')
+    song_requests=d.query('public.obs_request_4',fmt='table')
     d.close()
-    requests.rename_column('req_prio','priority')
-    requests.rename_column('right_ascension','ra')
-    requests.rename_column('declination','dec')
-    requests.rename_column('object_name','targname')
-    priorities = sorted(set(requests['priority']),reverse=True)
+    song_requests.rename_column('req_prio','priority')
+    song_requests.rename_column('right_ascension','ra')
+    song_requests.rename_column('declination','dec')
+    song_requests.rename_column('object_name','targname')
+    priorities = sorted(set(song_requests['priority']),reverse=True)
     for priority in priorities :
-      gd=np.where(requests['priority'] == priority) 
-      for request in requests[gd] :
+      gd=np.where(song_requests['priority'] == priority) 
+      for request in song_requests[gd] :
           if t < Time(request['start_window']) or t > Time(request['stop_window']) :
               if verbose: logger.info('{:s} out of window {:s} {:s}'.format(request['targname'],request['start_window'],request['stop_window']))
               continue
@@ -241,7 +258,21 @@ def getbest(t=None, requests=None, site='APO', criterion='setting',mindec=-90,ma
         #if c.dec<mindec*u.deg or c.dec>maxdec*u.deg : 
         #    logger.info('{:s} out of declination range'.format(request['targname']))
         #    continue
-        obs=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']))
+        obslist=d.query(sql='SELECT * from robotic.observed WHERE request_pk = {:d}'.format(request['request_pk']),fmt='list')
+        maxfiles=0
+        for o in obslist[1:] :
+            maxfiles=np.max([maxfiles,len(o[3])])
+
+        obs=Table(names=('observed_pk','request_pk', 'mjd', 'files'), dtype=('i4','i4','f4','{:d}S24'.format(maxfiles)))
+        for o in obslist[1:] :
+            while len(o[3]) < maxfiles : o[3].append('')
+            try:
+                for i,oo in enumerate(o[3]) :
+                    if oo == None : o[3][i] = ''
+                obs.add_row([o[0],o[1],o[2],o[3]])
+            except:
+                pdb.set_trace()
+
         if len(obs)>0:
             if request['nvisits'] > 0 and len(obs) > request['nvisits'] : 
                 if verbose: logger.info('{:s} observed enough visits {:d}'.format(request['targname'],len(obs)))
@@ -285,7 +316,8 @@ def observe_object(request,display=None,acquire=True,fact=1,nfact=1) :
         # acquire target
         targ = Target(request['targname'],request['ra'],request['dec'],epoch=request['epoch'])
         if acquire : 
-            targ.acquire(display=display)
+            success = targ.acquire(display=display)
+            if not success : return False
     except KeyboardInterrupt :
         raise KeyboardInterrupt('CTRL-C')
     except:
@@ -325,30 +357,13 @@ def load_object(request,mjd,names) :
 
     return True
 
-def obsopen(opentime) :
-    """ Open observatory at/after requested time and when safe 
-    """
-    while (Time.now()-opentime)<0 :
-        # wait until sunset + dt_sunset hours 
-        logger.info('waiting for sunset+dt_sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
-        time.sleep(60)
-
-    while not aposong.issafe() :
-        # wait until safe to open based on Safety
-        time.sleep(30)
-
-    # open if not already open (e.g., from previous observe invocation same night)
-    if aposong.D.ShutterStatus != 0 :
-        aposong.domeopen()
-    logger.info('open at: {:s}'.format(Time.now().to_string()))
-
-def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
+def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
         criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
   """ Start full observing night sequence 
 
   Parameters
   ==========
-  foc0 : integer, default=32400
+  focstart : integer, default=32400
          initial focus guess
   dt_focus : float, default=1.5
          minimum time to wait after focus run before triggering another (will wait for sequence to complete)
@@ -378,17 +393,57 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
          factor to increase all database number of exposures b
   """
   global nautical_morn
-  while True :
+  global foc0
+  global nightlogger
+
+  # change if you want to try to run across multiple nights!
+  night = 0
+  while night < 1 :
+    # new night
+    night+=1
+
+    nightlogger=logging.getLogger('night_logger')
+    nightlogger_string = io.StringIO()
+    handler = logging.StreamHandler(nightlogger_string)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    nightlogger.addHandler(handler)
+    nightlogger.info('Starting night!')
+
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
     sunrise =site.sun_rise_time(Time.now(),which='next')
     nautical = site.twilight_evening_nautical(Time.now(),which='nearest')
     nautical_morn = site.twilight_morning_nautical(Time.now(),which='next')
 
-    # open dome when safe after desired time relative to sunset
+    # open MJD file
+    f=open('{:d}'.format(int(nautical.mjd)),'w')
+    f.close()
+
+    # set CCD temperatures
     aposong.settemp(ccdtemp,cam=0)
     aposong.settemp(ccdtemp,cam=3)
-    obsopen(sunset+dt_sunset*u.hour)
+
+    # open dome when safe after desired time relative to sunset
+    opentime = sunset+dt_sunset*u.hour
+    while (Time.now()-opentime)<0 :
+        # wait until sunset + dt_sunset hours 
+        logger.info('waiting for sunset+dt_sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
+        time.sleep(60)
+
+    while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
+        # wait until safe to open based on Safety
+        logger.info('waiting for issafe()')
+        time.sleep(30)
+
+    # if we haven't opened by morning twilight, we're done for the night!
+    if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : continue
+
+    # open if not already open (e.g., from previous robotic.observe invocation same night)
+    if aposong.D.ShutterStatus != 0 :
+        aposong.domeopen()
+    logger.info('open at: {:s}'.format(Time.now().to_string()))
+    nightlogger.info('open at: {:s}'.format(Time.now().to_string()))
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
@@ -421,36 +476,51 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
     #aposong.fans_off()
 
     # focus star on meridian 
-    if initfoc : foc=focus(foc0=foc0,delta=75,n=15,display=display)
+    if initfoc : 
+        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
+    else :
+        foc0=focstart
     foctime=Time.now()
 
     oldtarg=''
     skiptarg=None
+
+    # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
+
+        # close if not safe, open if it has become safe
         if not aposong.issafe() : 
-            logger.info('closing: {:s}'.format(Time.now().to_string()))
-            aposong.domeclose()
+            if aposong.D.ShutterStatus != 1 and aposong.D.ShutterStatus != 3 :
+                logger.info('closing: {:s}'.format(Time.now().to_string()))
+                nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
+                aposong.domeclose()
+            oldtarg=''
             time.sleep(90)
             continue
         elif aposong.D.ShutterStatus != 0 :
             logger.info('opening: {:s}'.format(Time.now().to_string()))
+            nightlogger.info('opening: {:s}'.format(Time.now().to_string()))
             aposong.domeopen()
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
+            # focus if it has been more than dt_focus since last focus
             aposong.guide('stop')
-            foc0=focus(foc0=foc0,display=display)
+            foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             foctime=tnow
             oldtarg=''
         else :
+            # observe best object!
             best=getbest(criterion=criterion,maxdec=maxdec,skip=skiptarg)
             if best is None :
                 time.sleep(60)
             else :
+                nightlogger.info('observe: {:s}'.format(best['targname']))
                 success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),fact=fact,nfact=nfact)
+                nightlogger.info('success: {:d}'.format(success))
                 # if object failed, skip it for the next selection, but can try again after that
                 if success : 
                     oldtarg=best['targname'] 
@@ -463,47 +533,76 @@ def observe(foc0=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.2,ob
       except:
           logger.exception('observe error!')
 
-    logger.info('closing: {:s}'.format(Time.now().to_string()))
+    # close
+    logger.info('closing for night: {:s}'.format(Time.now().to_string()))
+    nightlogger.info('closing for night: {:s}'.format(Time.now().to_string()))
     aposong.domeclose()
 
+    # morning cals
     if cals :
         cal.cals()
 
+    # night log
     matplotlib.use('Agg') 
     mkhtml()
-    #html_process=threading.Thread(target=mkhtml)
-    #html_lock=threading.Lock() 
-    #html_process.start()
-    #html_process.join()
 
-    input("Hit a key to start next night: ")
+    logger.info('completed observing loop!')
+    nightlogger.info('completed observing loop!')
+    mail('APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),nightlogger_string.getvalue())
+    try :os.remove('{:d}'.format(int(nautical.mjd)))
+    except : print('no MJD file to remove?')
 
-def focus(foc0=28800,delta=75,n=9,display=None) :
+    # restart display
+    try :
+        if display is not None :
+            matplotlib.use('TkAgg') 
+            print('you will need to restart display window with disp_init()')
+    except NameError : pass
+
+def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
     """ Do focus run for object on meridian
     """    
-    t=Time(Time.now(), location=EarthLocation.of_site('APO'))
-    lst=t.sidereal_time('mean').value
-    aposong.usno(ra=lst,dec=50.,magmin=9,magmax=10,rad=5*u.degree)
 
-    foc0_0=copy.copy(foc0)
-    aposong.iodine_in()
-    f=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-2.1*delta or f>foc0+2.1*delta :
-        if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
-            break
-        logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
-        foc0=copy.copy(f)
-        f=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
-    aposong.iodine_out()
-    foc0=copy.copy(foc0_0)
+    for dec in decs :
+        t=Time(Time.now(), location=EarthLocation.of_site('APO'))
+        lst=t.sidereal_time('mean').value
+        aposong.usno(ra=lst,dec=dec,magmin=9,magmax=10,rad=5*u.degree)
 
-    f=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
-    while f<foc0-2.1*delta or f>foc0+2.1*delta :
-        if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
-            break
-        logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
-        foc0=copy.copy(f)
-        f=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+        # focus run with iodine cell (if desired)
+        if iodine :
+            foc0_0=copy.copy(foc0)
+            aposong.iodine_in()
+            f,focvals,best=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            alt = aposong.T.Altitude
+            logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            while f<focvals[2] or f>focvals[-3] :
+                # redo if best focus is near end of run
+                if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
+                    break
+                foc0=copy.copy(f)
+                f,focvals,best=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+                alt = aposong.T.Altitude
+                logger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                nightlogger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            aposong.iodine_out()
+            foc0=copy.copy(foc0_0)
+
+        # normal focus run
+        f,focvals,best=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
+        alt = aposong.T.Altitude
+        logger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+        nightlogger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+        while f<focvals[2] or f>focvals[-3] :
+            # redo if best focus is near end of run
+            if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
+                break
+            foc0=copy.copy(f)
+            f,focvals,best=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            alt = aposong.T.Altitude
+            logger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            nightlogger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+
     return f
        
 def test() :
@@ -551,6 +650,32 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=1) :
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
+def mail(subject,message,snapshot=True) :
+    """ Send email to recipients
+    """
+    f=open('message','w')
+    f.write(message)
+    f.close()
+    if snapshot :
+        auth = requests.auth.HTTPDigestAuth('snapshot',os.environ['VIDEOPASS'])
+        response=requests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",stream=True,auth=auth)
+        try : os.remove('webcam_snapshot.jpg')
+        except : pass
+        f=open('webcam_snapshot.jpg','wb')
+        f.write(response.content)
+        f.close()
+    f.close()
+    f=open('message')
+    if snapshot :
+        cmd=['mail','-s',subject,'-a','webcam_snapshot.jpg','-a','/data/1m/logs/daily.log']
+    else :
+        cmd=['mail','-s',subject,'-a','/data/1m/logs/daily.log']
+    cmd.extend(aposong.config['mail_recipients'])
+    subprocess.run(cmd,stdin=f)
+    f.close()
+    try : os.remove('webcam_snapshot.jpg')
+    except : pass
+
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
 
@@ -562,8 +687,8 @@ def mkhtml(mjd=None) :
     if mjd is None : 
         mjd = int(Time.now().mjd)
     mkmovie(mjd)
-    mkfocusplots(mjd,clobber=True)
-    mklog(mjd,clobber=True)
+    mkfocusplots(mjd,clobber=False)
+    mklog(mjd,clobber=False)
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
@@ -594,9 +719,9 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         t=tv.TV()
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
-            red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
-            #try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
-            #except: pass
+            #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+            try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+            except: pass
 
         if i>0 and i%5 == 0 :
             grid.append(row)
@@ -666,8 +791,8 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
         o['mjd'].format='{:.3f}'
         o['exptime'].format='{:.2f}'
         o['alt'].format='{:.2f}'
-        o['ra'].format='{:.6f}'
-        o['dec'].format='{:.6f}'
+        #o['ra'].format='{:.6f}'
+        #o['dec'].format='{:.6f}'
         o['ccdtemp'].format='{:.2f}'
     out['airmass'] = 1./np.cos((90-out['alt'])*np.pi/180.)
     out['airmass'].format='{:.2f}'
@@ -681,7 +806,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     for o in obslist[1:] :
         while len(o[3]) < maxfiles : o[3].append('')
         try: obs.add_row([o[1],o[2],o[5],o[6],o[7],o[8],o[3]])
-        except: pdb.set_trace()
+        except: pass
 
     j = np.argsort(obs['mjd'])
     obs = obs[j]
@@ -725,6 +850,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
         o=o[gd]
         j = np.argsort(o['dateobs'])
         o=o[j]
+    # not sure why following but seems to be necessary
+    j=np.argsort(out['dateobs'])
+    out=out[j]
 
     fp = open('{:s}/{:s}/{:s}.html'.format(root,ut,ut),'w')
 

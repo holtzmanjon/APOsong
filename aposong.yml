@@ -7,8 +7,6 @@ devices :
     - 10.75.0.220:5555  # pwi1m Alpyca server
     - 10.75.0.251:5555  # spec1m Alpyca server
     - 10.75.0.251:11111  # spec1m ASCOM server
-      #    - 172.24.4.202:11111 # spec1m ASCOM remote
-      #    - 172.24.4.202:5555  # spec1m Alpyca server
 
   pwi_srv : 10.75.0.220  # PWI API, set to blank if not available
       #pwi_srv : 
@@ -18,7 +16,7 @@ updatecamera : True
 calstage_in_pos : 45.35
 calstage_out_pos : 150.
 calstage_focus : 34300
-#iodinestage_in_pos : 83.
 iodinestage_in_pos : 78.
 iodinestage_out_pos : 150.
 hole_pos : [509,780]
+mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu']

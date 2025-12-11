@@ -2,7 +2,6 @@ import os
 import pdb
 import matplotlib
 import yaml
-#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
 
@@ -168,16 +167,25 @@ def throughput_all() :
     """
 
     d=database.DBSession()
-    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
-    targs=d.query('robotic.target')
+    # initial query to get dtypes
+    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False)
+    out=Table(dtype=outlist.dtype)
+    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",fmt="list",verbose=False)
+    for o in outlist[1:] :
+        if len(o[4]) == 56 : o[4].append(0.)
+        if len(o[5]) == 56 : o[5].append(0.)
+        out.add_row(o)
+
+    targs=d.query('robotic.target',verbose=False)
     d.close()
     i=np.where(out['filter'] == 'iodine')
     o=np.where(out['filter'] != 'iodine')
     mag=[]
     for f in out['file'] :
         targ = os.path.basename(f).split('.')[0]
-        j=np.where(targs['targname'] == targ)[0][0]
-        mag.append(targs[j]['mag'])
+        if targ != '':
+            j=np.where(targs['targname'] == targ)[0][0]
+            mag.append(targs[j]['mag'])
     mag=np.array(mag)
     fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001,sharex=True)
     ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')

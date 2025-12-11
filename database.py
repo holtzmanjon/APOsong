@@ -91,7 +91,7 @@ class DBSession(object):
         """ Close the database connection."""
         self.connection.close()
 
-    def query(self,table=None,cols='*',where=None,groupby=None,sql=None,fmt='numpy',verbose=False):
+    def query(self,table=None,cols='*',where=None,groupby=None,sql=None,fmt='numpy',verbose=True,skip=[]):
         """
         Query the APOGEE DRP database.
 
@@ -182,6 +182,22 @@ class DBSession(object):
                 cur.close()
                 return data
 
+            if len(skip) > 0 :
+                iskip=[]
+                for s in skip :
+                    iskip.append(np.where(np.array(head) == s)[0][0])
+                newdata=[]
+                for d in data :
+                    new=list(d)
+                    for s in sorted(iskip)[::-1] :
+                        new.pop(s)
+                    newdata.append(tuple(new))
+                data = newdata
+                newh=list(head)
+                for s in sorted(iskip)[::-1] :
+                    newh.pop(s)
+                head = newh
+
             # Get numpy data types
             d2d = {'smallint':int, 'integer':int, 'bigint':int, 'real':np.float32, 'double precision':np.float64,
                    'text':(str,200),'char':(str,5),'timestamp':(str,50), 'timestamp with time zone':(str,50),
@@ -204,7 +220,7 @@ class DBSession(object):
                 for i,d in enumerate(data) :
                     try : cat[i] = d 
                     except:
-                        print('error loading: ',i,d)
+                        if verbose : print('error loading: ',i,d)
                         continue
             del(data)
 
@@ -273,7 +289,7 @@ class DBSession(object):
                 for i,d in enumerate(data) :
                     try : cat[i] = d 
                     except:
-                        print('error loading: ',i,d)
+                        if verbose : print('error loading: ',i,d)
                         continue
             del(data)
 

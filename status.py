@@ -11,12 +11,15 @@ from numpy.random import randint
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.table import Table
 import astropy.units as u
 import pwi4_client
 
 import weather
+import spectemps
 import influx
 import aposong
+import database
 
 class TelescopeWgt(ttk.Frame) :
 
@@ -100,8 +103,8 @@ class DomeWgt(ttk.Frame) :
 
         ttk.Label(self,text="35M/25M").grid(column=3,row=row,sticky=(W))
         self.stat35m = StringVar()
-        self.statcolor = StringVar()
-        ttk.Label(self, textvariable=self.stat35m, foreground=self.statcolor.get()).grid(column=4,row=row,sticky=(E),padx=10) 
+        self.stat35m_label = ttk.Label(self, textvariable=self.stat35m)
+        self.stat35m_label.grid(column=4,row=row,sticky=(W,E),padx=10)
 
      
 class CameraWgt(ttk.Frame) :
@@ -186,11 +189,50 @@ class calWgt(ttk.Frame) :
         self.thar_label = ttk.Label(self, textvariable=self.thar)
         self.thar_label.grid(column=8,row=2,sticky=(W,E),padx=10)
 
+def postgres_bool(val) :
+    return '1' if val else '0'
+
+def postgres_write(telstatus,domestatus) :
+
+    tab=Table()
+    tab['tel_con_state'] = [postgres_bool(telstatus.mount.is_connected)]
+    tab['tel_tracking'] = [postgres_bool(telstatus.mount.is_tracking)]
+    tab['tel_ra_j2000'] = [telstatus.mount.ra_j2000_hours]
+    tab['tel_dec_j2000'] = [telstatus.mount.dec_j2000_degs]
+    tab['tel_ra'] = [telstatus.mount.ra_apparent_hours]
+    tab['tel_dec'] = [telstatus.mount.dec_apparent_degs]
+    tab['tel_alt'] = [telstatus.mount.altitude_degs]
+    tab['tel_azm'] = [telstatus.mount.azimuth_degs]
+    tab['tel_alt_rms_error'] = [telstatus.mount.axis1.rms_error_arcsec]
+    tab['tel_azm_rms_error'] = [telstatus.mount.axis0.rms_error_arcsec]
+    tab['m3_pos'] = [telstatus.m3.port]
+    tab['dome_shutterstate'] = [domestatus.shutterstate]
+    tab['dome_az'] = [domestatus.az]
+    tab['dome_slewing'] = [postgres_bool(domestatus.slewing)]
+    tab['dome_light_state'] = [postgres_bool(domestatus.lights)]
+    tab['temp_m1'] = [None]
+    tab['temp_m2'] = [None]
+    tab['temp_m3'] = [None]
+    tab['temp_back'] = [None]
+    tab['temp_amb'] = [None]
+    tab['focuser_1_pos'] = [aposong.foc()]
+    tab['focuser_1_moving'] = [postgres_bool(aposong.F[0].IsMoving)]
+    tab['focuser_2_pos'] = [aposong.specfoc()]
+    tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
+    tab['tel_lst'] = [telstatus.site.lmst_hours]
+    d=database.DBSession(host='localhost',database='db_apo')
+    d.ingest('public.tel_dome',tab,onconflict='update')
+    d.close()
+    return tab
+
+
 niter=0
 
-def status() :
+if __name__ == '__main__' :
     """ Start status window and updater
     """
+    aposong.init()
+
     root = Tk()
     default_font=tkinter.font.nametofont('TkDefaultFont')
     default_font.configure(size=16,weight=tkinter.font.BOLD,family='Arial')
@@ -247,23 +289,28 @@ def status() :
     coverstate=['NotPresent','Closed','Moving','Open','Unknown','Error']
 
     apo=EarthLocation.of_site('APO')
-    #aposite=site.Site('APO')
-
 
     def update() :
         global niter
         niter=(niter+1)%60
         try :
             # weather status to influxDB
-            wdict=weather.getapo()
-            weather.influx_write(wdict)
-            weather.postgres_write(wdict)
+            if niter%10 == 1 :
+                wdict=weather.getapo()
+                weather.influx_write(wdict)
+                weather.postgres_write(wdict)
         except : print('error with weather')
+
+        try :
+            # spectrograph temperatures to influxDB
+            if niter%10 == 1 :
+                sdict=spectemps.get()
+        except : print('error with spectemps')
 
         try :
             if niter%60 == 1 :
                 ccd_dict={}
-                for i in range(4) :
+                for i in [0,3] :
                     try :
                         icam = aposong.getcam(i)
                         ccd_dict[f'camera_{i}_temp'] = aposong.C[icam].CCDTemperature
@@ -296,7 +343,7 @@ def status() :
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
             iodineframe.iodinestage.set(pos)
-            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green')
+            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green3')
             elif abs(pos-aposong.config['iodinestage_out_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
             else : iodineframe.iodinestage_label.config(foreground='yellow')
             iodineframe.temp.set(temp+' / '+tset)
@@ -323,7 +370,7 @@ def status() :
         try :
             pos =aposong.calstage_position()
             calframe.calstage.set(pos)
-            if abs(pos-aposong.config['calstage_in_pos']) < 0.2 : calframe.calstage_label.config(foreground='green')
+            if abs(pos-aposong.config['calstage_in_pos']) < 0.2 : calframe.calstage_label.config(foreground='green3')
             elif abs(pos-aposong.config['calstage_out_pos']) < 0.2 : calframe.calstage_label.config(foreground='blue')
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
@@ -338,7 +385,7 @@ def status() :
             calframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
             if state[aposong.SW[1].GetSwitch(1)] == 'On' : calframe.thar_label.config(foreground='red')
             else :calframe.thar_label.config(foreground='black')
-        except : print('error with eShel')
+        except : print('error with cal')
 
         try :
             t=Time(Time.now(),location=apo)
@@ -347,7 +394,6 @@ def status() :
             h,m,s=t.sidereal_time('mean').hms
             telframe.lst.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
             telframe.mjd.set('{:.2f}'.format(t.mjd))
-
 
             stat = aposong.telescope_status()
 
@@ -385,20 +431,25 @@ def status() :
             telframe.focus.set('{:d}'.format(aposong.foc(port=2)))
 
         try :
-            az, shutterstatus, slewing = aposong.domestatus()
-            domeframe.az.set('{:.1f}'.format(az))
-            domeframe.shutter.set('{:s}'.format(shutter[shutterstatus]))
-            if slewing : domeframe.slewing.set('SLEWING')
+            domestat = aposong.domestatus()
+            domeframe.az.set('{:.1f}'.format(domestat.az))
+            domeframe.shutter.set('{:s}'.format(shutter[domestat.shutterstate]))
+            if domestat.slewing : domeframe.slewing.set('SLEWING')
             else : domeframe.slewing.set(' ')
 
-            domeframe.stat35m.set(aposong.S.Action('stat35m')+'/'+aposong.S.Action('stat25m'))
-            if domeframe.stat35m.get() == 'closed' : domeframe.statcolor.set('red')
-            else : domeframe.statcolor.set('green')
+            stat35m = aposong.S.Action('stat35m')
+            stat25m = aposong.S.Action('stat25m')
+            domeframe.stat35m.set(stat35m+'/'+stat25m)
+            if stat35m == 'open' or stat25m == 'open' : 
+                domeframe.stat35m_label.config(foreground='green3')
+            else :
+                domeframe.stat35m_label.config(foreground='red')
 
             domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
 
-        print('setting root.after')
+        try : postgres_write(stat,domestat)
+        except : pass
         root.after(5000,update)
 
     import signal
@@ -408,3 +459,4 @@ def status() :
     root.after(1000,update)
     #update()
     root.mainloop()
+
