@@ -47,6 +47,7 @@ import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
 import cal
+import fitsheader
 
 # alpaca imports, put in try/except for readthedocs
 try:
@@ -336,11 +337,29 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         display.tv(data,min=min,max=max)
 
     hdu=fits.PrimaryHDU(data)
-    hdu.header['DATE-OBS'] = t.fits
-    hdu.header['JD'] = t.jd
-    hdu.header['MJD'] = t.mjd
-    hdu.header['EXPTIME'] = exptime 
-    hdu.header['EXPAVG'] = avg
+    hdu.header['ORIGIN'] = 'SONG/APO'
+    hdu.header['DATE'] = Time.now().fits
+    hdu.header['OBSERVAT'] = 'APO'
+    hdu.header['TELESCOP'] = ('Node 4', 'APO SONG 1m')
+    if cam == 3 :
+        hdu.header['INSTRUME'] = 'Spectrograph'
+    elif cam == 1 :
+        hdu.header['INSTRUME'] = 'Acquisition/guider'
+    hdu.header['IMFORM'] = 'FITS'
+    hdu.header['DATATYPE'] = 'Counts'
+    fitsheader.camera(hdu,C[getcam(cam)],exptime,avg,light)
+    #fitsheader.mixed(hdu)
+    fitsheader.object(hdu,targ)
+    try : focval = specfoc()
+    except : focval = None
+    fitsheader.spectrograph(hdu,focval)
+    try : focval = foc()
+    except : focval = None
+    fitsheader.telescope(hdu,pwi.status(),focval)
+    #fitsheader.weather(hdu)
+    #fitsheader.sunmoon(hdu)
+    fitsheader.time(hdu,t)
+
     hdu.header['FILTER'] = filt 
     try : 
         hdu.header['FOCUS'] = foc()
@@ -348,23 +367,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     try : 
         hdu.header['SPECFOC'] = specfoc()
     except : pass
-    if targ is not None : hdu.header['OBJECT'] = targ
-    try :
-        stat = pwi.status()
-        hdu.header['RA'] = Angle(stat.mount.ra_j2000_hours, unit=u.hour).to_string(sep=':',precision=2)
-        hdu.header['DEC'] = Angle(stat.mount.dec_j2000_degs, unit=u.degree).to_string(sep=':',precision=1)
-        hdu.header['AZ'] = stat.mount.azimuth_degs
-        hdu.header['ALT'] = stat.mount.altitude_degs
-        hdu.header['ROT'] = stat.rotator.mech_position_degs
-        hdu.header['TELESCOP'] = 'APO SONG 1m'
-    except : pdb.set_trace()
     hdu.header['DOMEAZ'] = D.Azimuth
-    try : hdu.header['CCD-TEMP'] = C[icam].CCDTemperature
-    except : hdu.header['CCD-TEMP'] = 99.999
-    hdu.header['XBINNING'] = C[icam].BinX
-    hdu.header['YBINNING'] = C[icam].BinY
-    if light: hdu.header['IMAGTYP'] = 'LIGHT'
-    else: hdu.header['IMAGTYP'] = 'DARK'
     pos = iodine_position()
     temp1,temp2 = iodine_tget().split()[2:]
     hdu.header['I_POS'] = float(pos)
@@ -376,19 +379,22 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['TUNGSTEN'] = int(SW[1].GetSwitch(0))
     hdu.header['LED'] = int(SW[1].GetSwitch(2))
     hdu.header['THAR'] = int(SW[1].GetSwitch(1))
-    if cam == 3 :
-        hdu.header['INSTRUME'] = 'APO SONG'
 
     tab=Table()
-    cards = ['DATE-OBS','MJD','EXPTIME','FILTER','FOCUS','CCD-TEMP','XBINNING','YBINNING','RA','DEC','AZ','ALT','ROT',
-             'SPECFOC','I_POS','I_TEMP1','I_TEMP2','CAL_POS','TUNGSTEN','LED','THAR'] 
-    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp','xbin','ybin','ra','dec','az','alt','rot',
-             'specfoc','iodine_position','iodine_temp1','iodine_temp2','calstage_position','tungsten','led','thar'] 
+    cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
+             'HOR_BIN','VER_BIN','RA','DEC','AZ','ALT','ROT',
+             'SPECFOC','I_POS','I_TEMP1','I_TEMP2',
+             'CAL_POS','TUNGSTEN','LED','THAR'] 
+    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp',
+            'xbin','ybin','ra','dec','az','alt','rot',
+            'specfoc','iodine_position','iodine_temp1','iodine_temp2',
+            'calstage_position','tungsten','led','thar'] 
     for card,col in zip(cards,cols) :
         try : tab[col] = [hdu.header[card]]
         except KeyError: print('no {:s} card found'.format(card))
     tab['camera'] = [cam]
 
+    # write file to disk  if name given
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
         dirname = os.path.dirname('{:s}/UT{:d}{:02d}{:02d}/{:s}'.format(dataroot,y-2000,m,d,name))
@@ -402,6 +408,18 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         else : ext=1
         outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name),ext)
         hdu.writeto(outname)
+        # Create hard link for SONG directory and file name
+        if cam == 3 and targ != None :
+            dirname = os.path.dirname(
+                '/data/song/{:s}/{:04d}/{:04d}{:02d}{:02d}/night/raw/'.format(
+                targ,y,y,m,d))
+            try: os.makedirs(dirname)
+            except : pass
+            filename = 's4_{:04d}-{:02d}-{:02d}T{:02d}-{:02d}-{:02d}.fits'.format(
+                y,m,d,hr,mi,int(se))
+            os.link(outname,'{:s}/{:s}'.format(dirname,filename))
+
+        # construct Exposure object to return, and populate filename in tab
         exposure = Exposure(hdu, outname, exptime, filt)
         tmp=outname.split('/')
         tab['file'] = [tmp[-2]+'/'+tmp[-1]]
@@ -411,6 +429,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         tab['file'] = ''
 
     if insert :
+        # insert exposure into database
         try :
             d=database.DBSession()
             d.ingest('obs.exposure',tab,onconflict='update')
@@ -491,10 +510,12 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
                   bestfitfoc,bestfithf))
             f=foc(int(bestfitfoc))
+            best=bestfitfoc
         else :
             logger.info('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfoc,besthf))
             f=foc(int(bestfoc))
+            best=bestfoc
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
         logger.exception('focus failed')
@@ -517,7 +538,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     d.close()
     if display is not None : display.tvclear()
 
-    return f, focvals
+    return f, focvals, best
 
 def pixscale(cam=0,bin=1) :
     """ Return pixscale for desired camera
@@ -922,7 +943,6 @@ def calstage_find(display=None) :
     y0,x0=np.unravel_index(np.argmax(im),im.shape)
     mask=np.zeros_like(im)
     yg,xg=np.mgrid[0:mask.shape[0],0:mask.shape[1]]
-    r2=(xg-x0)**2+(yg-y0)**2
     r2=(xg-config['hole_pos'][1])**2+(yg-config['hole_pos'][0])**2
     bd=np.where(r2<7**2)
     mask[bd]=1
