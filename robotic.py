@@ -102,6 +102,8 @@ class Sequence() :
 
     def observe(self,name,display=None,fact=1,nfact=1) :
         names = []
+        # start back at foc0
+        aposong.foc(foc0)
         foc1 = copy.copy(foc0)
         for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
             for iexp in range(nexp*nfact) :
@@ -491,9 +493,10 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
 
         # close if not safe, open if it has become safe
         if not aposong.issafe() : 
-            logger.info('closing: {:s}'.format(Time.now().to_string()))
-            nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
-            aposong.domeclose()
+            if aposong.D.ShutterStatus != 1 and aposong.D.ShutterStatus != 3 :
+                logger.info('closing: {:s}'.format(Time.now().to_string()))
+                nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
+                aposong.domeclose()
             oldtarg=''
             time.sleep(90)
             continue
@@ -569,26 +572,36 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
         if iodine :
             foc0_0=copy.copy(foc0)
             aposong.iodine_in()
-            f,focvals=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            f,focvals,best=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            alt = aposong.T.Altitude
+            logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             while f<focvals[2] or f>focvals[-3] :
                 # redo if best focus is near end of run
                 if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
                     break
-                logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
                 foc0=copy.copy(f)
-                f,focvals=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+                f,focvals,best=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+                alt = aposong.T.Altitude
+                logger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                nightlogger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             aposong.iodine_out()
             foc0=copy.copy(foc0_0)
 
         # normal focus run
-        f,focvals=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
+        f,focvals,best=aposong.focrun(foc0,delta,n,exptime=3,filt='open',bin=1,thresh=100,display=display,max=5000)
+        alt = aposong.T.Altitude
+        logger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+        nightlogger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
         while f<focvals[2] or f>focvals[-3] :
             # redo if best focus is near end of run
             if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
                 break
-            logger.info('focus: {:d}  foc0: {:d}'.format(f,foc0))
             foc0=copy.copy(f)
-            f,focvals=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            f,focvals,best=aposong.focrun(foc0,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            alt = aposong.T.Altitude
+            logger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+            nightlogger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
 
     return f
        
@@ -793,7 +806,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     for o in obslist[1:] :
         while len(o[3]) < maxfiles : o[3].append('')
         try: obs.add_row([o[1],o[2],o[5],o[6],o[7],o[8],o[3]])
-        except: pdb.set_trace()
+        except: pass
 
     j = np.argsort(obs['mjd'])
     obs = obs[j]

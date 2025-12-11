@@ -19,4 +19,4 @@ calstage_focus : 34300
 iodinestage_in_pos : 78.
 iodinestage_out_pos : 150.
 hole_pos : [509,780]
-mail_recipients : ['holtz@nmsu.edu']
+mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu']

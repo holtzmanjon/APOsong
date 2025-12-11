@@ -47,7 +47,7 @@ def cals(display=None,flats=2,thar=2,flat_exptime=50,thar_exptime=120,cam=3,bin=
 
     if calstage :
         foc=aposong.foc()
-        aposong.calstage_find()
+        aposong.calstage_find(display=display)
         aposong.calstage_in()
     lamps(mirror=mirror,quartz=True,led=True)
     time.sleep(3)
