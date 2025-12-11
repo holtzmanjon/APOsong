@@ -2,7 +2,7 @@ import os
 import pdb
 import matplotlib
 import yaml
-matplotlib.use('TkAgg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ion()
 
@@ -17,7 +17,7 @@ import robotic
 import aposong
 
 def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, 
-               write=False, display=None, clobber=False, twod=False) :
+               write=False, outdir='reduced', display=None, clobber=False, twod=False) :
     """ Quick reduction
 
     Parameters
@@ -66,9 +66,9 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     im=red.rd(n)
     file=im.header['FILE'].split('.')
     if isinstance(n,str) :
-        outfile='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/reduced/'),file[0],file[-2])
+        outfile='{:s}/{:s}_ec.{:s}.fits'.format(os.path.dirname(n).replace('1m/','1m/'+outdir+'/'),file[0],file[-2])
     else :
-        outfile='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/reduced/'),file[0],file[-2])
+        outfile='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/'+outdir+'/'),file[0],file[-2])
 
     # if alreadly done, read and return, unless clobber
     if os.path.exists(outfile) and not clobber :
@@ -85,7 +85,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
         utflat='UT251119'
-        if trace == None : trace=spectra.Trace('cal/trace/UT251119_Trace_fiber2.fits')
+        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251119_Trace_fiber2.fits')
         if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
 
     # read dark and flat frames
@@ -94,7 +94,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     flat=Data.read(dataroot+'cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
 
     # Reduce
-    im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
+    im=red.reduce(n,crbox=crbox,scat=doscat,scat_smooth=3,dark=dark,flat=flat,display=display)
     if twod : return im
 
     # Extract
@@ -297,7 +297,4 @@ def reduceall(mjdmin) :
         if mjd > mjdmin :
             robotic.mklog(mjd,clobber=True)
             #robotic.mkhtml(mjd)
-
-
-
 
