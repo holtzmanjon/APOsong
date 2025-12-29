@@ -355,30 +355,18 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     fitsheader.spectrograph(hdu,focval)
     try : focval = foc()
     except : focval = None
-    fitsheader.telescope(hdu,pwi.status(),focval)
+    fitsheader.telescope(hdu,pwi.status(),focval,D.Azimuth)
+    pos = iodine_position()
+    if abs(float(pos)-config['iodinestage_in_pos']) < 1. : 
+        i2pos = 4
+    else : 
+        i2pos = 0
+    temp1,temp2 = iodine_tget().split()[2:]
+    fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
+                   calstage_position(),SW[1],filt)
     #fitsheader.weather(hdu)
     #fitsheader.sunmoon(hdu)
     fitsheader.time(hdu,t)
-
-    hdu.header['FILTER'] = filt 
-    try : 
-        hdu.header['FOCUS'] = foc()
-    except : pass
-    try : 
-        hdu.header['SPECFOC'] = specfoc()
-    except : pass
-    hdu.header['DOMEAZ'] = D.Azimuth
-    pos = iodine_position()
-    temp1,temp2 = iodine_tget().split()[2:]
-    hdu.header['I_POS'] = float(pos)
-    if abs(float(pos)-config['iodinestage_in_pos']) < 1. : hdu.header['I2POS'] = 4
-    else : hdu.header['I2POS'] = 0
-    hdu.header['I_TEMP1'] = float(temp1)
-    hdu.header['I_TEMP2'] = float(temp2)
-    hdu.header['CAL_POS'] = calstage_position()
-    hdu.header['TUNGSTEN'] = int(SW[1].GetSwitch(0))
-    hdu.header['LED'] = int(SW[1].GetSwitch(2))
-    hdu.header['THAR'] = int(SW[1].GetSwitch(1))
 
     tab=Table()
     cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
@@ -510,12 +498,12 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             logger.info('setting focus to best fit focus : {:.1f} with hf diameter {:.2f}'.format(
                   bestfitfoc,bestfithf))
             f=foc(int(bestfitfoc))
-            best=bestfitfoc
+            best=bestfithf
         else :
             logger.info('setting focus to minimum image focus : {:.1f} with hf diameter {:.2f}'.format(
               bestfoc,besthf))
             f=foc(int(bestfoc))
-            best=bestfoc
+            best=besthf
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
         logger.exception('focus failed')
@@ -1023,8 +1011,9 @@ def override(t) :
     """ Set override to allow open
     """
     try :
-        input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
-        S.Action('override',t)
+        resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        if resp != 'n' and resp != 'N' :
+            S.Action('override',t)
     except :
         print('override aborted')
 
