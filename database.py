@@ -262,6 +262,22 @@ class DBSession(object):
                 for j in np.arange(1,nind):
                     colnames[ind[j]] += str(j+1)
             
+            if len(skip) > 0 :
+                iskip=[]
+                for s in skip :
+                    iskip.append(np.where(np.array(colnames) == s)[0][0])
+                newdata=[]
+                for d in data :
+                    new=list(d)
+                    for s in sorted(iskip)[::-1] :
+                        new.pop(s)
+                    newdata.append(tuple(new))
+                data = newdata
+                newh=list(colnames)
+                for s in sorted(iskip)[::-1] :
+                    newh.pop(s)
+                colnames = newh
+
             # Use the data returned to get the type
             dt = []
             for i,c in enumerate(colnames):
