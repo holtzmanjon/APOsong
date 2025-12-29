@@ -413,6 +413,9 @@ def loop() :
                     else : logger.info('not resumed, no guide star acquired')
                 try: g.postgres_write(guiding,acquired)
                 except: logger.info('failed postres_write')
+            elif cmd == 'status' :
+                if s is conn : conn.send(b'guider alive')
+                else : logger.info('guider alive')
             elif len(txt) > 0 :
                 try: g.postgres_write(guiding,acquired)
                 except: logger.info('failed postres_write')
