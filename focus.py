@@ -184,12 +184,30 @@ def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12],
     return bestfitfoc, bestfithf,  bestfoc, besthf
     # return best fit values and minimum values
 
+def mksum(mjd,hard=None) :
+    """ Make plots of focus values for a night
+    """
+    d=database.DBSession()
+    out=d.query('obs.focus',skip=['focvals','files'])
+    d.close()
+    gd=np.where(out['mjd'].astype(int) == mjd)[0]
+    fig,ax=plots.multi(1,2,hspace=0.001)
+    plots.plotc(ax[0],out['mjd'][gd],out['besthf'][gd],out['bestfoc'][gd],size=20,yr=[1,4],yt='besthf')
+    ax[0].grid()
+    plots.plotc(ax[1],out['mjd'][gd],out['bestfoc'][gd],out['besthf'][gd],size=20,xt='MJD',yt='bestfoc')
+    fig.suptitle('MJD: {:d}'.format(mjd))
+    if hard is not None :
+        fig.savefig(hard)
+        plt.close()
+    return out[gd]
+
 def mkplots(mjd,display=None,root='/data/1m/') :
     """ Make focus run plots
     """
     matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
+    d.close()
     i =np.where(np.array(out[0]) == 'mjd')[0][0]
     ifile =np.where(np.array(out[0]) == 'files')[0][0]
     mjds=[]
