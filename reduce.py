@@ -93,7 +93,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     flat=Data.read(dataroot+'cal/pixflats/pixflat_flat_{:s}.fits'.format(utflat))
 
     # Reduce
-    im=red.reduce(n,crbox=crbox,scat=doscat,scat_smooth=3,dark=dark,flat=flat,display=display)
+    im=red.reduce(n,crbox=crbox,scat=doscat,dark=dark,flat=flat,display=display)
     if twod : return im
 
     # Extract
@@ -162,19 +162,25 @@ def throughput(spec,ax,name,mag=None,song=None,red=None,orders=[34]) :
 
     return t,sn,t_orders,sn_orders
 
-def throughput_all() :
+def throughput_all(mjd=None,hard=None) :
     """ Make plot of throughput from database query
     """
 
     d=database.DBSession()
     # initial query to get dtypes
-    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False)
-    out=Table(dtype=outlist.dtype)
-    outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",fmt="list",verbose=False)
-    for o in outlist[1:] :
-        if len(o[4]) == 56 : o[4].append(0.)
-        if len(o[5]) == 56 : o[5].append(0.)
-        out.add_row(o)
+    #outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False)
+    #out=Table(dtype=outlist.dtype)
+    #outlist=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",fmt="list",verbose=False)
+    #print(outlist[0])
+    #for o in outlist[1:] :
+    #    if len(o[4]) == 56 : o[4].append(0.)
+    #    if len(o[5]) == 56 : o[5].append(0.)
+    #    out.add_row(o)
+    out=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False,
+                    skip=['throughput_orders','sn_orders'])
+    if mjd is not None :
+        gd = np.where(out['mjd'].astype(int) == mjd)[0]
+        out=out[gd]
 
     targs=d.query('robotic.target',verbose=False)
     d.close()
@@ -187,6 +193,7 @@ def throughput_all() :
             j=np.where(targs['targname'] == targ)[0][0]
             mag.append(targs[j]['mag'])
     mag=np.array(mag)
+
     fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001,sharex=True)
     ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')
     scat=ax[0].scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='no iodine')
@@ -215,6 +222,9 @@ def throughput_all() :
     ax[0].set_title('Throughput at 5560-70 (color coded by altitude)')
     ax[1].set_title('Throughput at 5560-70 (color coded by mag)')
     fig.tight_layout()
+    if hard is not None :
+        fig.savefig(hard)
+        plt.close()
 
 def guider(i1,i2,red=None,sat=65000,title='') :
     """ Make plots of derived star positions from guider sequence
