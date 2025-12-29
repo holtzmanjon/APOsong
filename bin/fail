@@ -2,13 +2,13 @@
 from astropy.time import Time
 import os
 import subprocess
+import yaml
+import mail
 
-from aposong import *
-import robotic
-
-os.chdir('/home/song/APOsong')
-init()
+with open('/home/song/APOsong/aposong.yml','r') as config_file :
+    config = yaml.safe_load(config_file)
 
 mjd=int(Time.now().mjd)
 if os.path.exists('/home/song/APOsong/{:d}'.format(mjd)) :
-    robotic.mail('APO SONG observing {:d} FAILED to complete'.format(int(Time.now().mjd)),'ALERT: aposong script did not complete! ')
+    #robotic.mail('APO SONG observing {:d} FAILED to complete'.format(int(Time.now().mjd)),'ALERT: aposong script did not complete! ')
+    mail.send(config['mail_recipients'],subject='APO Song observing {:d} FAILED to complete'.format(mjd),message='ALERT: aposong script did not complete! ',snapshot=True)
