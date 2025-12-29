@@ -27,7 +27,7 @@ def spectrograph(hdu,foc) :
         hdu.header['CAMFOCS'] = (foc, 'Spectrograph camera focus')
         hdu.header['SPECFOC'] = (foc, 'Spectrograph camera focus')
 
-def telescope(hdu,stat,foc) :
+def telescope(hdu,stat,foc,domeaz) :
     hdu.header['---TEL--'] = ('-----TELESCOPE----','-------------------------------------')
     hdu.header['RA'] = (Angle(stat.mount.ra_j2000_hours, unit=u.hour).to_string(sep=':',precision=2), 'Telescope RA (hh:mm:ss)')
     hdu.header['DEC'] = (Angle(stat.mount.dec_j2000_degs, unit=u.degree).to_string(sep=':',precision=1), 'Telescope DEC (dd:mm:ss)')
@@ -36,8 +36,20 @@ def telescope(hdu,stat,foc) :
     hdu.header['ROT'] = (stat.rotator.mech_position_degs, 'Telescope port 1 rotator')
     if foc is not None :
         hdu.header['FOCUS'] = (foc, 'Nasymyth focus')
-        hdu.header['TEL-FOC'] = (foc, 'Nasymyth focus')
+    hdu.header['DOMEAZ'] = (domeaz, 'Azimuth of dome')
     #hdu.header['TELESCOP'] = 'APO SONG 1m'
+
+def fpu(hdu,pos,i2pos,temp1,temp2,calpos,SW,filt) :
+    hdu.header['---FPU--'] = ('---FOCALPLANE-----','-------------------------------------')
+    hdu.header['I_POS'] = (float(pos), 'Iodine stage position')
+    hdu.header['I2POS'] = (i2pos, 'Code for APO iodine cell')
+    hdu.header['I_TEMP1'] = (float(temp1), 'First iodine temperature')
+    hdu.header['I_TEMP2'] = (float(temp2), 'Second iodine temperature')
+    hdu.header['CAL_POS'] = (calpos, 'Calibration stage position')
+    hdu.header['TUNGSTEN'] = (int(SW.GetSwitch(0)),'Calibration source tungstenThAr on/off')
+    hdu.header['LED'] = (int(SW.GetSwitch(2)),'Calibration stage LEDThAr on/off')
+    hdu.header['THAR'] = (int(SW.GetSwitch(1)),'Calibration stage ThAr on/off')
+    hdu.header['FILTER'] = (filt,'Filter')
 
 def weather(hdu) :
     hdu.header['---W----'] = ('-----WEATHER------','-------------------------------------')
