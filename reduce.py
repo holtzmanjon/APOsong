@@ -176,7 +176,7 @@ def throughput_all(mjd=None,hard=None) :
     #    if len(o[4]) == 56 : o[4].append(0.)
     #    if len(o[5]) == 56 : o[5].append(0.)
     #    out.add_row(o)
-    out=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk",verbose=False,
+    out=d.query(sql="select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk where mjd>60900",verbose=True,
                     skip=['throughput_orders','sn_orders'])
     if mjd is not None :
         gd = np.where(out['mjd'].astype(int) == mjd)[0]
@@ -192,6 +192,8 @@ def throughput_all(mjd=None,hard=None) :
         if targ != '':
             j=np.where(targs['targname'] == targ)[0][0]
             mag.append(targs[j]['mag'])
+        else :
+            mag.append(99.999)
     mag=np.array(mag)
 
     fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001,sharex=True)
@@ -225,6 +227,8 @@ def throughput_all(mjd=None,hard=None) :
     if hard is not None :
         fig.savefig(hard)
         plt.close()
+
+    return out
 
 def guider(i1,i2,red=None,sat=65000,title='') :
     """ Make plots of derived star positions from guider sequence

@@ -720,7 +720,7 @@ def mkhtml(mjd=None) :
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     dofocus.mksum(mjd,hard='/data/1m/'+ut+'/focus.png')
-    reduce.throughput_all(mjd=mjd,hard='/data/1m/'+ut+'/throughput.png')
+    out=reduce.throughput_all(mjd=mjd,hard='/data/1m/'+ut+'/throughput.png')
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
