@@ -26,6 +26,7 @@ import logging.config
  
 import focus as dofocus
 import reduce
+import mail
 
 try:
     with open('logging.yml', 'rt') as f:
@@ -401,6 +402,12 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
   while night < 1 :
     # new night
     night+=1
+    if not isguideok() :
+        print('guider not responding, restart it!')
+        return
+    if not isdomeok() :
+        print('dome not responding, restart it!')
+        return
 
     nightlogger=logging.getLogger('night_logger')
     nightlogger_string = io.StringIO()
@@ -484,6 +491,9 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
 
     oldtarg=''
     skiptarg=None
+    closed = False
+    guideok = True
+    domeok = True
 
     # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
@@ -493,10 +503,11 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
 
         # close if not safe, open if it has become safe
         if not aposong.issafe() : 
-            if aposong.D.ShutterStatus != 1 and aposong.D.ShutterStatus != 3 :
+            if not closed :
                 logger.info('closing: {:s}'.format(Time.now().to_string()))
                 nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
                 aposong.domeclose()
+                closed = True
             oldtarg=''
             time.sleep(90)
             continue
@@ -504,12 +515,47 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
             logger.info('opening: {:s}'.format(Time.now().to_string()))
             nightlogger.info('opening: {:s}'.format(Time.now().to_string()))
             aposong.domeopen()
+            closed = False
+
+        # check if guider is responding, send text if not
+        if guideok :
+            if not isguideok() :
+                guideok = False
+                mail.send(aposong.config['text_recipients'],subject='guider failed',message='restart guider!')
+                logger.info('guider failed, suspending operations')
+                nightlogger.info('guider failed, suspending operations')
+
+        if not guideok :
+            # check to see if guider communication has been recovered
+            time.sleep(90)
+            if isguideok() :
+                guideok = True
+                logger.info('guider OK, resuming operations')
+                nightlogger.info('guider OK, resuming operations')
+            continue
+
+        # check if dome is responding, send text if not
+        if domeok :
+            if not isdomeok() :
+                domeok = False
+                mail.send(aposong.config['text_recipients'],subject='dome not responding',message='restart dome on dome1m')
+                logger.info('dome not responding, suspending operations')
+                nightlogger.info('dome not responding failed, suspending operations')
+
+        if not domeok :
+            # check to see if dome communication has been recovered
+            time.sleep(90)
+            if isdomeok() :
+                domeok = True
+                logger.info('dome OK, resuming operations')
+                nightlogger.info('dome OK, resuming operations')
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
             # focus if it has been more than dt_focus since last focus
             aposong.guide('stop')
-            foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
+            #foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
+            foc0=focus(foc0=foc0,display=display,iodine=False)
             foctime=tnow
             oldtarg=''
         else :
@@ -548,7 +594,15 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
 
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
-    mail('APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),nightlogger_string.getvalue())
+    y,m,d,hr,mi,se = Time.now().ymdhms
+    ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
+    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'>'+'astronomy.nmsu.edu web page</A><P>'
+    message+=nightlogger_string.getvalue()
+    attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
+    mail.send(aposong.config['mail_recipients'],
+              subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),
+              message=message, snapshot=True,attachment=attachments,html=True)
+
     try :os.remove('{:d}'.format(int(nautical.mjd)))
     except : print('no MJD file to remove?')
 
@@ -650,32 +704,6 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=1) :
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
 
-def mail(subject,message,snapshot=True) :
-    """ Send email to recipients
-    """
-    f=open('message','w')
-    f.write(message)
-    f.close()
-    if snapshot :
-        auth = requests.auth.HTTPDigestAuth('snapshot',os.environ['VIDEOPASS'])
-        response=requests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",stream=True,auth=auth)
-        try : os.remove('webcam_snapshot.jpg')
-        except : pass
-        f=open('webcam_snapshot.jpg','wb')
-        f.write(response.content)
-        f.close()
-    f.close()
-    f=open('message')
-    if snapshot :
-        cmd=['mail','-s',subject,'-a','webcam_snapshot.jpg','-a','/data/1m/logs/daily.log']
-    else :
-        cmd=['mail','-s',subject,'-a','/data/1m/logs/daily.log']
-    cmd.extend(aposong.config['mail_recipients'])
-    subprocess.run(cmd,stdin=f)
-    f.close()
-    try : os.remove('webcam_snapshot.jpg')
-    except : pass
-
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
 
@@ -689,6 +717,10 @@ def mkhtml(mjd=None) :
     mkmovie(mjd)
     mkfocusplots(mjd,clobber=False)
     mklog(mjd,clobber=False)
+    y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
+    ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
+    dofocus.mksum(mjd,hard='/data/1m/'+ut+'/focus.png')
+    reduce.throughput_all(mjd=mjd,hard='/data/1m/'+ut+'/throughput.png')
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
@@ -696,7 +728,6 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
 
-#    matplotlib.use('Agg')
     dir=root+ut+'/guide'
     red=imred.Reducer(dir=dir)
     files=sorted(glob.glob(dir+'/acquire*.fits'))
@@ -735,7 +766,6 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
 def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     """ Make focus plot from focus sequences from database for specified MJD
     """
-#    matplotlib.use('Agg')
     d=database.DBSession()
     out=d.query('obs.focus',fmt='list')
     d.close()
@@ -861,6 +891,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     fp.write('<A HREF=guide.html>Guider movies</A><BR>\n')
     fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
     fp.write('<A HREF=../reduced/{:s}>Reduced data</A><BR>\n'.format(ut))
+    fp.write('<A HREF=focus.png><IMG SRC=focus.png WIDTH=30%></A>\n')
+    fp.write('<A HREF=throughput.png><IMG SRC=throughput.png WIDTH=30%></A>\n')
+    fp.write('<A HREF=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png><IMG SRC=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png WIDTH=30%></A>'.format(mjd,mjd))
 
     fp.write('<p>Observed robotic requests: <BR>\n')
     obs['files'] = obs['files'].astype('<U')
@@ -878,3 +911,19 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     except: pass
 
     return out
+
+def isguideok() :
+    try :
+        aposong.guide('status')
+        return True
+    except :
+        return False
+
+
+def isdomeok() :
+    try :
+        test=aposong.D.Azimuth
+        return True
+    except :
+        return False
+
