@@ -289,8 +289,18 @@ if __name__ == '__main__' :
     coverstate=['NotPresent','Closed','Moving','Open','Unknown','Error']
 
     apo=EarthLocation.of_site('APO')
+    guideok=True
+    domeok=True
+    telescopeok=True
+    ccdok=True
 
     def update() :
+        global guideok, domeok, telescopeok, ccdok
+        guideok = aposong.isguideok(guideok,recipients=aposong.config['test_recipients'])
+        domeok = aposong.isdomeok(domeok,recipients=aposong.config['test_recipients'])
+        telescopeok = aposong.istelescopeok(telescopeok,recipients=aposong.config['test_recipients'])
+        ccdok = aposong.isccdok(ccdok,recipients=aposong.config['test_recipients'])
+
         global niter
         niter=(niter+1)%60
         try :
@@ -335,9 +345,12 @@ if __name__ == '__main__' :
             influx.write(dict,bucket='ccdtemp',measurement='qhy_thermocouple')
         except  : pass
 
+        # table for postgres
+        motors=Table()
         try :
             # Get iodine cell related data
             pos = aposong.iodine_position()
+            motors['iodine_pos'] = [pos]
             temp = aposong.iodine_tget().replace('actual temperature: ','')
             tset = aposong.iodine_tset().replace('set temperature: ','')
             volt = aposong.iodine_get('voltage')
@@ -359,6 +372,16 @@ if __name__ == '__main__' :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0)
 
+            # table for postgres
+            motors['iodine1_temp_set'] = [tset1]
+            motors['iodine1_temp_read'] = [temp1]
+            motors['iodine1_current'] = [curr1]
+            motors['iodine1_voltage'] = [volt1]
+            motors['iodine2_temp_set'] = [tset2]
+            motors['iodine2_temp_read'] = [temp2]
+            motors['iodine2_current'] = [curr2]
+            motors['iodine2_voltage'] = [volt2]
+
             # load into influx database
             iodine_dict={}
             for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
@@ -374,17 +397,27 @@ if __name__ == '__main__' :
             elif abs(pos-aposong.config['calstage_out_pos']) < 0.2 : calframe.calstage_label.config(foreground='blue')
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
-            state = ['Off','On']
-            calframe.mirror.set(state[aposong.SW[1].GetSwitch(3)])
-            calframe.quartz.set(state[aposong.SW[1].GetSwitch(0)])
-            if state[aposong.SW[1].GetSwitch(0)] == 'On' : calframe.quartz_label.config(foreground='red')
+            lamps=np.zeros(4,dtype=bool)
+            state=np.zeros(4,dtype=str)
+            for i in range(4) : 
+                lamps[i] = aposong.SW[1].GetSwitch(i)
+                state[i] = 'On' if lamps[i] else 'Off'
+            calframe.mirror.set(state[3])
+            calframe.quartz.set(state[0])
+            if state[0] == 'On' : calframe.quartz_label.config(foreground='red')
             else :calframe.quartz_label.config(foreground='black')
-            calframe.led.set(state[aposong.SW[1].GetSwitch(2)])
-            if state[aposong.SW[1].GetSwitch(2)] == 'On' : calframe.led_label.config(foreground='red')
+            calframe.led.set(state[2])
+            if state[2] == 'On' : calframe.led_label.config(foreground='red')
             else :calframe.led_label.config(foreground='black')
-            calframe.thar.set(state[aposong.SW[1].GetSwitch(1)])
-            if state[aposong.SW[1].GetSwitch(1)] == 'On' : calframe.thar_label.config(foreground='red')
+            calframe.thar.set(state[1])
+            if state[1] == 'On' : calframe.thar_label.config(foreground='red')
             else :calframe.thar_label.config(foreground='black')
+
+            motors['calib_mirror_pos'] = [pos]
+            motors['lamp_halogen_on'] = [1 if lamps[0] else 0]
+            motors['lamp_thar_on'] = [1 if lamps[1] else 0]
+            motors['lamp_led_on'] = [1 if lamps[2] else 0]
+
         except : print('error with cal')
 
         try :
@@ -449,6 +482,11 @@ if __name__ == '__main__' :
         except : print('error with dome')
 
         try : postgres_write(stat,domestat)
+        except : pass
+        try :
+            d=database.DBSession(host='localhost',database='db_apo')
+            d.ingest('public.motors',motors,onconflict='update')
+            d.close()
         except : pass
         root.after(5000,update)
 
