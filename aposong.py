@@ -48,6 +48,7 @@ astroquery.utils.suppress_vo_warnings()
 
 import cal
 import fitsheader
+import mail
 
 # alpaca imports, put in try/except for readthedocs
 try:
@@ -1247,6 +1248,98 @@ def disp_init() :
     except : 
        print("Can't open display")
     return disp
+
+
+def alert(message,loggers=None,recipients=None) :
+    """ Print alert, and log and email as requeste3d
+    """
+    print('{:s} aposong alert: {:s}'.format(Time.now().fits,message))
+    if loggers is not None :
+        if isinstance(loggers,str) : loggers=list(logger)
+        for logger in loggers :
+            logger.info(message)
+    if recipients is not None :
+        mail.send(recipients,subject='aposong alert: {:s}'.format(Time.now().fits),message=message)
+
+def isguideok(ok,loggers=None,recipients=None) :
+    """ Check to see if guider is responding, if not send alert/log as requested (if a state change)
+
+    Parameters
+    ----------
+    ok : bool
+         current state of guider going into call
+    loggers : logger or list of loggers, default=None
+         loggers to send message not
+    recipients : list of addresses, default=None
+         addresses to send alerts to, if specified
+    """
+    try :
+        ret=guide('status')
+        if not ok :
+            # if guider had changed state, log and alert
+            alert('guider OK, resuming operations',loggers=loggers,recipients=recipients)
+        return True
+    except :
+        if ok :
+            # if guider had changed state, log and alert
+            msg='guider failed, suspending operations. Check guider process in guider tab on song1m, quit/CTRL-\\ and restart guider'
+            alert(msg,loggers=loggers,recipients=recipients)
+        return False
+
+def isdomeok(ok,loggers=None,recipients=None) :
+    try :
+        test=D.Azimuth
+        if not ok :
+            # if dome had changed state, log and alert
+            alert('dome OK, resuming operations',loggers=loggers,recipients=recipients)
+        return True
+    except :
+        if ok :
+            # if dome had changed state, log and alert
+            msg='dome failed, suspending operations. Check dome1m desktop, kill dome_app.py process (CTRL-\\) and restart python dome_app.py'
+            alert(msg,loggers=loggers,recipients=recipients)
+        return False
+
+def istelescopeok(ok,loggers=None,recipients=None) :
+    try :
+        stat=telescope_status()
+        if stat.RightAscension != 0 or stat.Declination != 0 : 
+            if not ok :
+                # if dome had changed state, log and alert
+                alert('telescope OK, resuming operations',loggers=loggers,recipients=recipients)
+            return True 
+        else : 
+            if ok :
+                # if dome had changed state, log and alert
+                msg='telescope failed, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
+                alert(msg,loggers=loggers,recipients=recipients)
+            return False
+    except :
+        if ok :
+            # if dome had changed state, log and alert
+            alert('telescope failed, suspending operations',loggers=loggers,recipients=recipients)
+        return False
+
+def isccdok(ok,loggers=None,recipients=None) :
+    try :
+        temp=C[2].CCDTemperature
+        if temp != 0 :
+            if not ok :
+                # if dome had changed state, log and alert
+                alert('CCD temperature OK',loggers=loggers,recipients=recipients)
+            return True 
+        else : 
+            if ok :
+                # if dome had changed state, log and alert
+                msg='CCD temperature=0. Check spec1m desktop: Is ASCOM remote running? Should it be restarted?'
+                alert(msg,loggers=loggers,recipients=recipients)
+            return False
+    except :
+        if ok :
+            # if dome had changed state, log and alert
+            alert('CCD temperature=0',loggers=loggers,recipients=recipients)
+        return False
+
 
 if __name__ == '__main__' :
 

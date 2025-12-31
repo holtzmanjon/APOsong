@@ -13,7 +13,7 @@ def send(recipients,subject=None,message=None,attachment=None,snapshot=False,htm
     f=open('message')
     cmd = ['mail']
     if html : cmd.extend(['-M','text/html'])
-    if subject is not None : cmd.extend(['-s',subject])
+    if subject is not None : cmd.extend(['-s','"'+subject+'"'])
     if snapshot : 
         auth = requests.auth.HTTPDigestAuth('snapshot',os.environ['VIDEOPASS'])
         response=requests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",stream=True,auth=auth)
@@ -30,6 +30,7 @@ def send(recipients,subject=None,message=None,attachment=None,snapshot=False,htm
         else :
             cmd.extend(['-a',attachment])
     cmd.extend(recipients)
+    print('cmd: ', cmd)
     subprocess.run(cmd,stdin=f)
     f.close()
     try : os.remove('webcam_snapshot.jpg')

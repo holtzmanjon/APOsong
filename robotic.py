@@ -402,11 +402,17 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
   while night < 1 :
     # new night
     night+=1
-    if not isguideok() :
+    guideok = True
+    domeok = True
+    telescopeok = True
+    if not aposong.isguideok(guideok) :
         print('guider not responding, restart it!')
         return
-    if not isdomeok() :
+    if not aposong.isdomeok(domeok) :
         print('dome not responding, restart it!')
+        return
+    if not aposong.istelescopeok(telescopeok) :
+        print('telescope not responding, restart it!')
         return
 
     nightlogger=logging.getLogger('night_logger')
@@ -492,8 +498,6 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
     oldtarg=''
     skiptarg=None
     closed = False
-    guideok = True
-    domeok = True
 
     # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
@@ -517,38 +521,10 @@ def observe(focstart=32400,dt_focus=1.5,display=None,dt_sunset=0,dt_nautical=-0.
             aposong.domeopen()
             closed = False
 
-        # check if guider is responding, send text if not
-        if guideok :
-            if not isguideok() :
-                guideok = False
-                mail.send(aposong.config['text_recipients'],subject='guider failed',message='restart guider!')
-                logger.info('guider failed, suspending operations')
-                nightlogger.info('guider failed, suspending operations')
-
-        if not guideok :
-            # check to see if guider communication has been recovered
-            time.sleep(90)
-            if isguideok() :
-                guideok = True
-                logger.info('guider OK, resuming operations')
-                nightlogger.info('guider OK, resuming operations')
-            continue
-
-        # check if dome is responding, send text if not
-        if domeok :
-            if not isdomeok() :
-                domeok = False
-                mail.send(aposong.config['text_recipients'],subject='dome not responding',message='restart dome on dome1m')
-                logger.info('dome not responding, suspending operations')
-                nightlogger.info('dome not responding failed, suspending operations')
-
-        if not domeok :
-            # check to see if dome communication has been recovered
-            time.sleep(90)
-            if isdomeok() :
-                domeok = True
-                logger.info('dome OK, resuming operations')
-                nightlogger.info('dome OK, resuming operations')
+        # check if guider, dome, telescope are responding, send text if not
+        guideok = aposong.isguideok(guideok,logger=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+        domeok = aposong.isdomeok(domeok,logger=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+        telescopeok = aposong.istelescopeok(telescopeok,logger=[logger,nightlogger],recipients=aposong.config['test_recipients'])
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus*u.hour :
@@ -911,19 +887,3 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     except: pass
 
     return out
-
-def isguideok() :
-    try :
-        aposong.guide('status')
-        return True
-    except :
-        return False
-
-
-def isdomeok() :
-    try :
-        test=aposong.D.Azimuth
-        return True
-    except :
-        return False
-
