@@ -13,8 +13,10 @@ def camera(hdu,C,exptime,avg,light) :
     if light: hdu.header['IMAGTYP'] = ('LIGHT','Image type')
     else: hdu.header['IMAGTYP'] = ('DARK','Image type')
 
-def mixed(hdu) :
+def mixed(hdu,header) :
     hdu.header['---M----'] = ('-----MIXED--------','-------------------------------------')
+    for key,val in zip(header.keys(),header.values()) :
+        hdu.header[key] = val
 
 def object (hdu,targ) :
     hdu.header['---O----'] = ('-----OBJECT-------','-------------------------------------')
