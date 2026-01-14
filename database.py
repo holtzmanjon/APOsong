@@ -93,14 +93,13 @@ class DBSession(object):
 
     def query(self,table=None,cols='*',where=None,groupby=None,sql=None,fmt='numpy',verbose=True,skip=[]):
         """
-        Query the APOGEE DRP database.
+        Query the database.
 
         Parameters
         ----------
         table : str, optional
-            Name of table to query.  Default is to use the apogee_drp schema, but
-              table names with schema (e.g. catalogdb.gaia_dr2_source) can also be input.
-              If the sql command is given directly, then this is not needed.
+            Name of table to query.  
+            If the sql command is given directly, then this is not needed.
         cols : str, optional
             Comma-separated list of columns to return.  Default is "*", all columns.
         where : str, optional
@@ -373,7 +372,6 @@ class DBSession(object):
         db.ingest('visit',cat)
 
         """
-
         ncat = size(cat)
         cur = self.connection.cursor()
 
@@ -419,7 +417,7 @@ class DBSession(object):
             ]
             del data1
             
-        
+       
         # On conflict do nothing
         if onconflict=='nothing':
             insert_query = 'INSERT INTO '+schema+'.'+tab+' ('+','.join(columns)+') VALUES %s ON CONFLICT DO NOTHING'
@@ -466,8 +464,7 @@ class DBSession(object):
         Parameters
         ----------
         table : str
-            Name of table to query.  Default is to use the apogee_drp schema, but
-              table names with schema (e.g. catalogdb.gaia_dr2_source) can also be input.
+            Name of table to query.  
         cat : numpy structured array or astropy table
             Catalog as (1) numpy structured array or (2) astropy table to insert into db
               table. The first column must be a unique ID or key.
@@ -549,8 +546,7 @@ class DBSession(object):
         Parameters
         ----------
         table : str
-            Name of table to query.  Default is to use the apogee_drp schema, but
-              table names with schema (e.g. catalogdb.gaia_dr2_source) can also be input.
+            Name of table to query.  
         cat : numpy structured array or astropy table
             Catalog as (1) numpy structured array or (2) astropy table that contains
              unique ID/keys of rows to delete.  Only the first column is used.
