@@ -192,9 +192,23 @@ class calWgt(ttk.Frame) :
 def postgres_bool(val) :
     return '1' if val else '0'
 
+def tel_ready() :
+    d=database.DBSession()
+    tab=d.query('robotic.status')
+    if tab['status'] == 'ready' :
+        return 1
+    elif tab['status'] == 'observing' :
+        return 2
+    elif tab['status'] == 'focus' :
+        return 3
+    else :
+        return 0
+
 def postgres_write(telstatus,domestatus) :
 
     tab=Table()
+    tab['tel_dome_id'] = [1]
+    tab['tel_ready_state'] = [tel_ready()]
     tab['tel_con_state'] = [postgres_bool(telstatus.mount.is_connected)]
     tab['tel_tracking'] = [postgres_bool(telstatus.mount.is_tracking)]
     tab['tel_ra_j2000'] = [telstatus.mount.ra_j2000_hours]
@@ -220,8 +234,9 @@ def postgres_write(telstatus,domestatus) :
     tab['focuser_2_pos'] = [aposong.specfoc()]
     tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
     tab['tel_lst'] = [telstatus.site.lmst_hours]
-    d=database.DBSession(host='localhost',database='db_apo')
-    d.ingest('public.tel_dome',tab,onconflict='update')
+    tab['ins_at' ] = [Time.now().fits]
+    d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
+    d.ingest('public.tel_dome',tab,onconflict='update',constraintname='tel_dome_id')
     d.close()
     return tab
 
@@ -296,7 +311,7 @@ if __name__ == '__main__' :
 
     def update() :
         global guideok, domeok, telescopeok, ccdok
-        guideok = aposong.isguideok(guideok,recipients=aposong.config['test_recipients'])
+        #guideok = aposong.isguideok(guideok,recipients=aposong.config['test_recipients'])
         domeok = aposong.isdomeok(domeok,recipients=aposong.config['test_recipients'])
         telescopeok = aposong.istelescopeok(telescopeok,recipients=aposong.config['test_recipients'])
         ccdok = aposong.isccdok(ccdok,recipients=aposong.config['test_recipients'])
@@ -347,6 +362,7 @@ if __name__ == '__main__' :
 
         # table for postgres
         motors=Table()
+        motors['motors_id'] = [1]
         try :
             # Get iodine cell related data
             pos = aposong.iodine_position()
@@ -484,8 +500,9 @@ if __name__ == '__main__' :
         try : postgres_write(stat,domestat)
         except : pass
         try :
-            d=database.DBSession(host='localhost',database='db_apo')
-            d.ingest('public.motors',motors,onconflict='update')
+            d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
+            motors['ins_at' ] = [Time.now().fits]
+            d.ingest('public.motors',motors,onconflict='update',constraintname='motors_id')
             d.close()
         except : pass
         root.after(5000,update)
