@@ -243,7 +243,7 @@ def sexp(*args,**kwargs) :
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0, insert=True, targ=None, avg=1) :
+           min=None, max=None, cam=0, insert=True, targ=None, avg=1, header=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -317,7 +317,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
                     print('{:<4d}'.format(i),end='\r')
                     time.sleep(0.99)
             while not C[icam].ImageReady or C[icam].CameraState != 0:
-                time.sleep(0.1)
+                time.sleep(0.25)
             if iavg == 0 :
                 if avg == 1 :
                     data = np.array(C[icam].ImageArray)
@@ -349,7 +349,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['IMFORM'] = 'FITS'
     hdu.header['DATATYPE'] = 'Counts'
     fitsheader.camera(hdu,C[getcam(cam)],exptime,avg,light)
-    #fitsheader.mixed(hdu)
+    if header is not None : fitsheader.mixed(hdu,header)
     fitsheader.object(hdu,targ)
     try : focval = specfoc()
     except : focval = None
@@ -386,7 +386,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     # write file to disk  if name given
     if name is not None :
         y,m,d,hr,mi,se = t.ymdhms
-        dirname = os.path.dirname('{:s}/UT{:d}{:02d}{:02d}/{:s}'.format(dataroot,y-2000,m,d,name))
+        try: dirname = os.path.dirname('{:s}/UT{:d}{:02d}{:02d}/{:s}'.format(dataroot,y-2000,m,d,name))
+        except : pdb.set_trace()
         try: os.makedirs(dirname)
         except : pass
         files = glob.glob(dirname+'/*.fits')
@@ -395,18 +396,22 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             exts.append(int(f.split('.')[-2]))
         if len(exts) > 0 : ext = np.array(exts).max() + 1
         else : ext=1
-        outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name),ext)
+        outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name).replace(' ','_'),ext)
+        songname = 's4_{:04d}-{:02d}-{:02d}T{:02d}-{:02d}-{:02d}.fits'.format(
+                y,m,d,hr,mi,int(se))
+        hdu.header['ORIGNAME'] = outname
+        hdu.header['SONGNAME'] = songname
         hdu.writeto(outname)
         # Create hard link for SONG directory and file name
-        if cam == 3 and targ != None :
+        try : project = header['PROJECT']
+        except : project = 'APO'
+        if cam == 3 and project != 'APO' :
             dirname = os.path.dirname(
                 '/data/song/{:s}/{:04d}/{:04d}{:02d}{:02d}/night/raw/'.format(
                 targ,y,y,m,d))
             try: os.makedirs(dirname)
             except : pass
-            filename = 's4_{:04d}-{:02d}-{:02d}T{:02d}-{:02d}-{:02d}.fits'.format(
-                y,m,d,hr,mi,int(se))
-            os.link(outname,'{:s}/{:s}'.format(dirname,filename))
+            os.link(outname,'{:s}/{:s}'.format(dirname,songname))
 
         # construct Exposure object to return, and populate filename in tab
         exposure = Exposure(hdu, outname, exptime, filt)
@@ -554,7 +559,7 @@ def slew(ra, dec,dome=True) :
     Parameters
     ----------
     ra : float or str
-         RA in degrees (float), or hh:mm:ss (str)
+         RA in hours (float), or hh:mm:ss (str)
     dec : float or str
          DEC in degrees (float), or dd:mm:ss (str)
     """
@@ -658,7 +663,7 @@ def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     offsetxy((x-x0),(y-y0),scale=pixscale())
     time.sleep(settle)
 
-def guide(cmd,**kwargs) :
+def guide(cmd,verbose=True, **kwargs) :
     """ Send command to guider process
     """
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -667,8 +672,18 @@ def guide(cmd,**kwargs) :
         for key,value in zip(kwargs.keys(),kwargs.values()) :
             cmd+=(' {:s}={:d}'.format(key,value))
     s.send(cmd.encode())
+    if cmd == 'status' :
+        try : 
+            out = s.recv(16, socket.MSG_DONTWAIT | socket.MSG_PEEK)
+            print('out: ', out)
+        except BlockingIOError :
+            print('blockingIOError')
+            pass
+        except : 
+            print('recv failed')
+            raise Exception('error with guider')
     out=s.recv(1024)
-    print('received {:s}'.format(out.decode()))
+    if verbose : print('received {:s}'.format(out.decode()))
     s.close()
     if 'fail' in out.decode() :
         return False
@@ -1023,7 +1038,7 @@ def domestatus() :
     """
     out=subprocess.run("ms list 3",shell=True,capture_output=True,text=True)
     if 'On' in out.stdout : light = True
-    else : light = True
+    else : light = False
     stat = DomeStatus(D.ShutterStatus.value,D.Azimuth,D.Slewing,light)
     return stat
 
@@ -1274,14 +1289,14 @@ def isguideok(ok,loggers=None,recipients=None) :
          addresses to send alerts to, if specified
     """
     try :
-        ret=guide('status')
+        guide('status',verbose=False)
         if not ok :
-            # if guider had changed state, log and alert
+            # if guider has changed state, log and alert
             alert('guider OK, resuming operations',loggers=loggers,recipients=recipients)
         return True
     except :
         if ok :
-            # if guider had changed state, log and alert
+            # if guider has changed state, log and alert
             msg='guider failed, suspending operations. Check guider process in guider tab on song1m, quit/CTRL-\\ and restart guider'
             alert(msg,loggers=loggers,recipients=recipients)
         return False
@@ -1310,14 +1325,15 @@ def istelescopeok(ok,loggers=None,recipients=None) :
             return True 
         else : 
             if ok :
-                # if dome had changed state, log and alert
-                msg='telescope failed, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
+                # if telescope has changed state, log and alert
+                msg='telescope failed 1, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
                 alert(msg,loggers=loggers,recipients=recipients)
             return False
     except :
         if ok :
-            # if dome had changed state, log and alert
-            alert('telescope failed, suspending operations',loggers=loggers,recipients=recipients)
+            # if telescope has changed state, log and alert
+            msg='telescope failed 2, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
+            alert(msg,loggers=loggers,recipients=recipients)
         return False
 
 def isccdok(ok,loggers=None,recipients=None) :
@@ -1325,18 +1341,18 @@ def isccdok(ok,loggers=None,recipients=None) :
         temp=C[2].CCDTemperature
         if temp != 0 :
             if not ok :
-                # if dome had changed state, log and alert
+                # if CCD has changed state, log and alert
                 alert('CCD temperature OK',loggers=loggers,recipients=recipients)
             return True 
         else : 
             if ok :
-                # if dome had changed state, log and alert
+                # if CCD has changed state, log and alert
                 msg='CCD temperature=0. Check spec1m desktop: Is ASCOM remote running? Should it be restarted?'
                 alert(msg,loggers=loggers,recipients=recipients)
             return False
     except :
         if ok :
-            # if dome had changed state, log and alert
+            # if CCD has changed state, log and alert
             alert('CCD temperature=0',loggers=loggers,recipients=recipients)
         return False
 
