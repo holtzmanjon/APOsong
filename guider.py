@@ -189,7 +189,7 @@ class Guider :
         objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/self.pixscale,brightest=1)
         x=objs[0]['x']
         y=objs[0]['y']
-        logging.info('offsetting {:.1f} {:.1f}'.format(x-self.x0,y-self.y0))
+        logger.info('offsetting {:.1f} {:.1f}'.format(x-self.x0,y-self.y0))
         aposong.offsetxy((x-self.x0),(y-self.y0),scale=self.pixscale)
         time.sleep(self.settle)
         return self.get_offset(name='guide/acquire')
@@ -198,7 +198,8 @@ class Guider :
         """ Take exposure and get offset from star to desired center
         """
         if data is None :
-            exp=aposong.expose(self.exptime,avg=self.expavg,display=self.disp,filt=self.filt,bin=self.bin,box=self.box,name=name,max=self.display_max)
+            exp=aposong.expose(self.exptime,avg=self.expavg,display=self.disp,filt=self.filt,bin=self.bin,
+                               box=self.box,name=name,max=self.display_max)
             data = exp.hdu.data
         else :
             self.disp.tv(data,max=self.display_max)
@@ -241,7 +242,10 @@ class Guider :
     def guide(self) :
         """ Take image and accumulate offset, make correction if accumulated
         """
-        x,y = self.get_offset(name='guide/guide')
+        try : x,y = self.get_offset(name='guide/guide')
+        except :
+            logger.error('  ERROR in get_offset')
+            self.center.x = -1
         if self.center.x>0 :
             self.xtot+=self.center.x
             self.ytot+=self.center.y
@@ -277,7 +281,10 @@ class Guider :
                 elif abs(dy)*self.pixscale > 0.1 : yoff=self.prop*dy + self.ki*self.integral[:,1].mean()
                 else : yoff=0.
                 logger.debug('   APPLIED Y: {:.1f} {:.1f} {:.1f}'.format(yoff,self.prop*dy,self.ki*self.integral[:,1].mean()))
-                aposong.offsetxy(xoff,yoff,scale=self.pixscale)
+                try: 
+                    aposong.offsetxy(xoff,yoff,scale=self.pixscale)
+                except: 
+                    logger.error('Error in offsetxy')
                 time.sleep(self.settle)
                 try: self.ingest_correction(x,y,dx,dy,xoff,yoff)
                 except : print('error ingesting correction')
@@ -314,6 +321,7 @@ class Guider :
         """ Write guide status to database
         """
         tab = Table()
+        tab['guiders_id'] = [1]
         tab['dateobs'] = [Time.now().fits]
         tab['acquired'] = '1' if acquired else '0'
         tab['guiding'] = '1' if guiding else '0'
@@ -321,9 +329,10 @@ class Guider :
         tab['guide_target_y'] = self.y0
         tab['exp_time'] = self.exptime
         tab['exp_avg'] = self.expavg
+        tab['ins_at'] = [Time.now().fits]
 
-        d=database.DBSession(host='localhost',database='db_apo')
-        d.ingest('public.guiders',tab,onconflict='update')
+        d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
+        d.ingest('public.guiders',tab,onconflict='update',constraintname='guiders_id')
         d.close()
         return tab
     
