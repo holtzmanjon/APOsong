@@ -45,7 +45,7 @@ def postgres_write(wdict) :
     if wdict['encl25m'] == 'open' : tab['encl25m'] = 1
     else : tab['encl25m'] = 0
 
-    d=database.DBSession(host='localhost',database='db_apo')
+    d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
     d.ingest('public.weather',tab,onconflict='update')
     d.close()
     return tab
