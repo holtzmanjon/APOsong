@@ -190,7 +190,7 @@ def throughput_all(mjd=None,hard=None) :
     for f in out['file'] :
         targ = os.path.basename(f).split('.')[0]
         if targ != '':
-            j=np.where(targs['targname'] == targ)[0][0]
+            j=np.where(np.char.replace(targs['targname'],' ','_') == targ)[0][0]
             mag.append(targs[j]['mag'])
         else :
             mag.append(99.999)
