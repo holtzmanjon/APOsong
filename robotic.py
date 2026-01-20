@@ -19,6 +19,7 @@ import time
 import threading
 import subprocess
 import requests
+from datetime import datetime, timezone
 
 import logging
 import yaml
@@ -120,13 +121,13 @@ class Sequence() :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp,filt,bin))
                     aposong.guide('pause')
                     time.sleep(10)
-                    cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
-                    names.append('thar')
+                    calnames=cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
+                    names.extend(calnames)
                     aposong.guide('resume')
                     time.sleep(30)
                 else :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp*fact,filt,bin))
-                    exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name,header=header)
+                    exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name,header=header,imagetyp='STAR')
                     names.append(exp.name)
                     no_exp+=1
                     load_song_status(req_no,'exec',no_exp=no_exp)
@@ -176,7 +177,7 @@ def getrequests() :
     d.close()
     return tab
 
-def getsong(t=None,site='APO',verbose=True,max_airmass=2) :
+def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
 
     apo=EarthLocation.of_site(site)
     if t is None :
@@ -214,6 +215,8 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2) :
               if verbose: logger.info('{:s} out of window {:s} {:s}'.format(request['targname'],request['start_window'],request['stop_window']))
               continue
           else :
+              n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus else int(dt_focus/request['exp_time'])
+              logger.info('n_exp: {:d} no_exp: {:d}'.format(n_exp,request['no_exp']))
               if request['obs_mode'] == 'iodine' :
                   request=Table(request)
                   request['filter'] = [['iodine']]
@@ -383,7 +386,7 @@ def load_song_status(req_no,status,no_exp=None) :
     try :
         tab=Table()
         tab['req_no'] = [req_no]
-        tab['ins_at'] = [Time.now().fits]
+        tab['ins_at'] = [datetime.now(timezone.utc)]
         tab['status'] = [status]
         if no_exp is not None : tab['no_exp'] = [no_exp]
         d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
@@ -638,11 +641,17 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 if success : 
                     oldtarg=best['targname'] 
                     skiptarg=None
-                    try : load_song_status(best['req_no'],'done')
+                    try : 
+                        if req_no > 0 :
+                            d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_song',user='song')
+                            best = d.query(sql="SELECT * FROM public.obs_request_4 as req JOIN public.obs_request_status_4 as stat ON req.req_no = stat.req_no WHERE req.req_no = {:d}".format(req_no), fmt='table')
+                            d.close()
+                            logger.info('no_exp: {:d} no_exp2: {:d}'.format(best[0]['no_exp'],best[0]['no_exp2']))
+                            load_song_status(best[0]['req_no'],'done')
                     except KeyError : pass
                 else : 
                     skiptarg=best['targname']
-                    try: load_song_status(best['req_no'],'abort')
+                    try: load_song_status(best[0]['req_no'],'abort')
                     except KeyError : pass
       except KeyboardInterrupt :
           return
@@ -660,7 +669,11 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     # morning cals
     if cals :
-        cal.cals()
+        header={}
+        header['OBS-MODE'] = 'cal'
+        header['PROJECT'] = 'No-Proj'
+        header['PROJ-ID'] = 'No-Proj'
+        cal.cals(header=header,flats=3,iodineflats=3)
 
     # night log
     mkhtml()
@@ -816,6 +829,19 @@ def loadrequest(name,targname,seqname,schedname,priority) :
     pk=d.query(sql="select currval('robotic.request_request_pk_seq')")[0][0]
     d.close()
     return pk
+
+def createrequest(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_exp=[60],camera=3) :
+    request={}
+    request['targname'] = targname
+    request['ra'] = ra
+    request['dec'] = dec
+    request['epoch'] = epoch
+    request['filter'] = filter
+    request['n_exp'] = n_exp
+    request['t_exp'] = t_exp
+    request['bin'] = bin
+    request['camera'] = camera
+    return request
 
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
