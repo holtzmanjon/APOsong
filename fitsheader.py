@@ -10,8 +10,6 @@ def camera(hdu,C,exptime,avg,light) :
     hdu.header['VER_BIN'] = (C.BinY,'Vertical binning')
     hdu.header['EXPTIME'] = (exptime, 'Exposure time in seconds')
     hdu.header['EXPAVG'] = avg
-    if light: hdu.header['IMAGTYP'] = ('LIGHT','Image type')
-    else: hdu.header['IMAGTYP'] = ('DARK','Image type')
 
 def mixed(hdu,header) :
     hdu.header['---M----'] = ('-----MIXED--------','-------------------------------------')
