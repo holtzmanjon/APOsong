@@ -1,6 +1,6 @@
 from socket import *
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from astropy.time import Time
 from astropy.table import Table
 import influx
@@ -32,7 +32,7 @@ def postgres_write(wdict) :
     """ Loads subset of weather quantities into table for postgres db loading
     """
     tab=Table()
-    #tab['timestamp'] = [datetime.now()]
+    tab['ins_at'] = [Time.now().fits]
     tab['dateobs'] = [Time.now().fits]
     tab['temp'] = float(wdict['airtemp'])
     tab['hum'] = float(wdict['humidity'])
