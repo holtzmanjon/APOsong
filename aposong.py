@@ -243,7 +243,7 @@ def sexp(*args,**kwargs) :
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0, insert=True, targ=None, avg=1, header=None) :
+           min=None, max=None, cam=0, insert=True, targ=None, avg=1, imagetyp='unspecified', header=None) :
     """ Take an exposure with camera
 
     Parameters
@@ -346,6 +346,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         hdu.header['INSTRUME'] = 'Spectrograph'
     elif cam == 1 :
         hdu.header['INSTRUME'] = 'Acquisition/guider'
+    hdu.header['IMAGETYP'] = imagetyp
     hdu.header['IMFORM'] = 'FITS'
     hdu.header['DATATYPE'] = 'Counts'
     fitsheader.camera(hdu,C[getcam(cam)],exptime,avg,light)
@@ -399,7 +400,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         outname = '{:s}/{:s}.{:04d}.fits'.format(dirname,os.path.basename(name).replace(' ','_'),ext)
         songname = 's4_{:04d}-{:02d}-{:02d}T{:02d}-{:02d}-{:02d}.fits'.format(
                 y,m,d,hr,mi,int(se))
-        hdu.header['ORIGNAME'] = outname
+        hdu.header['APONAME'] = outname
         hdu.header['SONGNAME'] = songname
         hdu.writeto(outname)
         # Create hard link for SONG directory and file name
@@ -407,8 +408,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         except : project = 'APO'
         if cam == 3 and project != 'APO' :
             dirname = os.path.dirname(
-                '/data/song/{:s}/{:04d}/{:04d}{:02d}{:02d}/night/raw/'.format(
-                targ,y,y,m,d))
+                '/data/song/star_spec/{:04d}/{:04d}{:02d}{:02d}/night/raw/'.format(y,y,m,d))
             try: os.makedirs(dirname)
             except : pass
             os.link(outname,'{:s}/{:s}'.format(dirname,songname))
