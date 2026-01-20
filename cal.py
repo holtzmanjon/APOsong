@@ -18,7 +18,8 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
         if aposong.SW[1].GetSwitch(dev) != state :
             aposong.SW[1].SetSwitch(dev,state)
   
-def cals(display=None,flats=2,thar=2,flat_exptime=50,thar_exptime=120,cam=3,bin=2,root='',calstage=True,mirror=False) :
+def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_exptime=60,thar_exptime=120,
+         cam=3,bin=2,root='',calstage=True,mirror=False,header=None) :
     """ Take series of eShel cals, flat and ThAr
 
     Parameters
@@ -52,19 +53,29 @@ def cals(display=None,flats=2,thar=2,flat_exptime=50,thar_exptime=120,cam=3,bin=
     lamps(mirror=mirror,quartz=True,led=True)
     time.sleep(3)
     aposong.gexp(0.001,display=display,name=root+'guide',max=20000)
+    names=[]
     if flats>0 :
         for i in range(flats) :
-            aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'flat')
+            exp=aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'flat',imagetyp='FLAT',header=header)
+            names.append(exp.name)
+    if iodineflats>0 :
+        aposong.iodine_in()
+        for i in range(iodineflats) :
+            exp=aposong.expose(iodineflat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'iodineflat',imagetyp='FLATI2',header=header)
+            names.append(exp.name)
+        aposong.iodine_out()
     if thar>0 :
         lamps(mirror=mirror,thar=True)
         time.sleep(3)
         for i in range(thar) :
-            aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'thar')
+            exp=aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'thar',imagetyp='THAR',header=header)
+            names.append(exp.name)
     lamps()
     time.sleep(3)
     if calstage :
         aposong.calstage_out()
         aposong.foc(foc)
+    return names
 
 def dark(exptime,ccdtemp=None,cam=0,n=5,bin=1,filt=None,name=None) :
     """ Take one series of darks
@@ -74,7 +85,7 @@ def dark(exptime,ccdtemp=None,cam=0,n=5,bin=1,filt=None,name=None) :
         aposong.settemp(ccdtemp,cam=cam)
         time.sleep(300)
     for i in range(n) :
-        aposong.expose(exptime,cam=cam,light=False,bin=bin,filt=filt,name=name)
+        aposong.expose(exptime,cam=cam,light=False,bin=bin,filt=filt,name=name,imagetyp='DARK')
 
 def darks(temps=[-10,-5,-15],bins=[2],exps=[30,60,120,180,240,300,600],cam=3,n=11,filt=None) :
     """ Take multiple series of darks at different temps, bins, exptimes
