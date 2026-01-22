@@ -200,8 +200,14 @@ def throughput_all(mjd=None,hard=None) :
     ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')
     scat=ax[0].scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='no iodine')
     plt.colorbar(scat)
-    ax[1].scatter(out['mjd'][i],out['throughput'][i],c=mag[i],marker='+',label='iodine')
-    scat=ax[1].scatter(out['mjd'][o],out['throughput'][o],c=mag[o],marker='s',label='no iodine')
+    ax[1].scatter(out['mjd'][i],out['sn'][i],c=mag[i],marker='+',label='iodine')
+    scat=ax[1].scatter(out['mjd'][o],out['sn'][o],c=mag[o],marker='s',label='no iodine')
+    oldtarg=''
+    for oo in out :
+        targ = os.path.basename(oo['file']).split('.')[0]
+        if targ != oldtarg :
+            ax[1].text(oo['mjd'],500,targ,rotation='vertical',va='top',ha='center')
+        oldtarg = targ
     plt.colorbar(scat)
     xlim=ax[0].get_xlim()
     for targ in ['muHer','HD185144','gammaCep'] :
@@ -217,12 +223,19 @@ def throughput_all(mjd=None,hard=None) :
         ax[0].plot(xlim,[song*10**(0.4*mag),song*10**(0.4*mag)],label='Tenerife {:s}'.format(targ))
 
     ax[0].set_ylim(0,6000)
-    ax[1].set_ylim(0,6000)
+    ax[1].set_ylim(0,500)
+    if mjd is not None :
+        ax[0].set_xlim(mjd,mjd+0.6)
+        ax[1].set_xlim(mjd,mjd+0.6)
     ax[0].legend()
     ax[1].set_xlabel('MJD')
     ax[0].set_ylabel('cnts/s scaled to m=0')
+    ax[1].set_ylabel('S/N')
     ax[0].set_title('Throughput at 5560-70 (color coded by altitude)')
     ax[1].set_title('Throughput at 5560-70 (color coded by mag)')
+    if mjd is not None :
+        plt.suptitle('MJD: {:d}'.format(mjd))
+
     fig.tight_layout()
     if hard is not None :
         fig.savefig(hard)
