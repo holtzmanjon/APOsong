@@ -114,6 +114,9 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         try : os.makedirs(os.path.dirname(outfile))
         except : pass
         imec.write(outfile)
+        if outfile.find('thar') >= 0 or imec.header['IMAGETYP'] == 'THAR' :
+            wav.identify(imec,thresh=20)
+            wav.write(outfile.replace('_ec','_wav'))
     return imec
 
 def throughput(spec,ax,name,mag=None,song=None,red=None,orders=[34]) :
