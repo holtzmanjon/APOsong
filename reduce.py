@@ -1,4 +1,6 @@
 import os
+import glob
+import multiprocessing as mp
 import pdb
 import matplotlib
 import yaml
@@ -87,6 +89,15 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251119_Trace_fiber2.fits')
         if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
 
+    if isinstance(wav,list) :
+        mjd=[]
+        for w in wav :
+          ww=spectra.WaveCal(w)
+          mjd.append(Time(ww.dateobs).mjd)
+        mjd=np.array(mjd)
+        imjd=np.argmin(np.abs(mjd-Time(im.header['DATE-OBS']).mjd))
+        wav=spectra.WaveCal(wav[imjd])
+
     # read dark and flat frames
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
     dark=Data.read(dataroot+'cal/darks/dark_{:d}_-10_{:s}.fits'.format(dtime,utdark))
@@ -105,6 +116,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     # Add wave and response, barycentric
     wav.add_wave(imec)
     imec.add_response(response.data)
+    if isinstance(imec.header['RA'], float) : imec.header['RA'] *= 15.
     bv, bt = utils.getbc(imec.header)
     imec.header['BVC'] = bv.value
     imec.header['BJD-MID'] = bt.jd
@@ -114,9 +126,13 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         try : os.makedirs(os.path.dirname(outfile))
         except : pass
         imec.write(outfile)
-        if outfile.find('thar') >= 0 or imec.header['IMAGETYP'] == 'THAR' :
+        try : imagetyp = imec.header['IMAGETYP']
+        except : imagetyp = 'UNKNOWN'
+        if outfile.find('thar') >= 0 or imagetyp == 'THAR' :
             wav.identify(imec,thresh=20)
-            wav.write(outfile.replace('_ec','_wav'))
+            ngd=len(np.where(wav.weights>0)[0])
+            if ngd>100 and wav.rms < 0.003 :
+                wav.write(outfile.replace('_ec','_wav'))
     return imec
 
 def throughput(spec,ax,name,mag=None,song=None,red=None,orders=[34]) :
@@ -318,8 +334,64 @@ def getobs(targ) :
     tab['throughput'].format = '.2f'
     return tab
 
+def process_thar(pars,outdir='rereduced',clobber=False) :
+    specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber)
 
-def reduceall(mjdmin) :
+def process(pars,outdir='rereduced',clobber=True) :
+    specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber,wav=pars[2])
+ 
+def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
+    """ Reduce all frames of specified object, optionally on a single UT. Includes ThAr frames first
+    """
+    try :
+        with open('aposong.yml','r') as config_file :
+            config = yaml.safe_load(config_file)
+    except:
+        print('no configuration file found')
+    dataroot = config['dataroot']
+
+    if ut is None :
+        files = sorted(glob.glob('{:s}/*/{:s}*.fits'.format(dataroot,obj)) )
+    else :
+        files = sorted(glob.glob('{:s}/{:s}/{:s}*.fits'.format(dataroot,ut,obj)) )
+    dates = []
+    for file in files :
+        dates.append(file.split('/')[3])
+    dates = set(dates)
+
+    pars = []
+    for date in dates :
+        tharfiles = sorted(glob.glob('{:s}/{:s}/thar*.fits'.format(dataroot,date)) )
+        red=imred.Reducer('SONG')
+        for file in tharfiles :
+            pars.append((file,red))
+
+    if threads == 0 :
+        for par in pars :
+            process_thar(par)
+    else :
+        pool = mp.Pool(threads)
+        output = pool.map_async(process_thar, pars).get()
+        pool.close()
+        pool.join()
+
+    pars=[]
+    for date in dates :
+        wavs = glob.glob('{:s}/{:s}/{:s}/thar_wav*.fits'.format(dataroot,outdir,date))
+        files = sorted(glob.glob('{:s}/{:s}/{:s}*.fits'.format(dataroot,date,obj)) )
+        for file in files :
+            pars.append((file,red,wavs))
+
+    if threads == 0 :
+        for par in pars :
+            process_thar(par)
+    else :
+        pool = mp.Pool(threads)
+        output = pool.map_async(process, pars).get()
+        pool.close()
+        pool.join()
+
+def logall(mjdmin) :
 
     matplotlib.use('Agg')
     d=database.DBSession()
