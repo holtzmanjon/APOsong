@@ -195,7 +195,10 @@ def mksum(mjd,hard=None) :
     plots.plotc(ax[0],out['mjd'][gd],out['besthf'][gd],out['bestfoc'][gd],size=20,yr=[1,4],yt='besthf')
     ax[0].grid()
     plots.plotc(ax[1],out['mjd'][gd],out['bestfoc'][gd],out['besthf'][gd],size=20,xt='MJD',yt='bestfoc')
+    ax[0].set_xlim(mjd,mjd+0.6)
+    ax[1].set_xlim(mjd,mjd+0.6)
     fig.suptitle('MJD: {:d}'.format(mjd))
+    fig.tight_layout()
     if hard is not None :
         fig.savefig(hard)
         plt.close()
