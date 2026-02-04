@@ -28,11 +28,13 @@ run_guide = True
 import logging
 import yaml
 import logging.config
+import datetime
 try: 
     with open('logging.yml', 'rt') as f:
         logconfig = yaml.safe_load(f.read())
+    log_rollover_time = datetime.time(hour=14)
     logging.config.dictConfig(logconfig)
-    logger=logging.getLogger('aposong')
+    logger=logging.getLogger('guider')
 except FileNotFoundError :
     #trap for readthedocs
     print('logging.yml not found')
