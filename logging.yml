@@ -31,6 +31,15 @@ handlers:
     utc: True
     filename: /home/song/logs/daily.log
 
+  guider :
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: simple
+    when: midnight
+    interval: 1
+    utc: True
+    filename: /home/song/logs/guider.log
+
 root:
     level: INFO
     handlers: [console,daily]
@@ -39,6 +48,10 @@ loggers:
   aposong :
     level: DEBUG
     handlers: [console,daily]
+    propagate: no
+  guider :
+    level: DEBUG
+    handlers: [console,guider]
     propagate: no
 
     
