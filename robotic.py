@@ -181,7 +181,8 @@ def getrequests() :
     return tab
 
 def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
-
+    """ Try to get observing request from SONG database
+    """
     apo=EarthLocation.of_site(site)
     if t is None :
         t = Time(Time.now(),location=apo)
@@ -205,17 +206,27 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
           ha = t.sidereal_time('mean') - c.ra
           ha.wrap_at(12*u.hourangle,inplace=True)
           am = secz(ha,c.dec,apo.lat)
-          seq = Sequence(request['targname'],filt=['none'],n_exp=[request['no_exp']],t_exp=[request['exp_time']],camera=3,bin=2)
-          length=seq.length()
-          haend=ha+(length/3600.)*u.hourangle
-          ham=hamax(c.dec,max_airmass,apo.lat).to(u.hourangle)
-          dt=ham-haend
-          hamid=ha+(length/3600./2.)*u.hourangle
+          while True :
+              # if length of sequence will bring us above airmass limit, trim number of exposures
+              seq = Sequence(request['targname'],filt=['none'],n_exp=[request['no_exp']],t_exp=[request['exp_time']],camera=3,bin=2)
+              length=seq.length()
+              haend=ha+(length/3600.)*u.hourangle
+              ham=hamax(c.dec,max_airmass,apo.lat).to(u.hourangle)
+              dt=ham-haend
+              if dt > 0 or request['no_exp'] < 1: break
+              request['no_exp'] -= 1
+          if request['no_exp'] < 1 : 
+              if verbose: logger.info('{:d}, {:s} not enough time for an exposure: {:.2f}, hamax-haend: {:.2f}'.format(request['req_no'],request['targname'],am,dt))
+              continue
+
           if am < 1.0 or am > max_airmass or dt<0 : 
               if verbose: logger.info('{:d}, {:s} out of airmass range {:.2f}, hamax-haend: {:.2f}'.format(request['req_no'],request['targname'],am,dt))
               continue
           if t < Time(request['start_window']) or t > Time(request['stop_window']) :
               if verbose: logger.info('{:d}, {:s} out of window {:s} {:s}'.format(request['req_no'],request['targname'],request['start_window'],request['stop_window']))
+              if t > Time(request['stop_window']) :
+                  # if we've passed observing window set status to abort  
+                  load_song_status(request['req_no'],'abort')
               continue
           else :
               n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus else int(dt_focus/request['exp_time'])
@@ -629,13 +640,15 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             best,header=getsong()
             if best is None :
                 best,header=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
+                if best is not None :
+                    nightlogger.info('observe: LOCAL, {:s}'.format(best['targname']))
                 req_no = -1
             else :
                 req_no = best['req_no']
+                nightlogger.info('observe: SONG {:d}, {:s}, {:s}'.format(req_no, best['targname'], best['project_id']))
             if best is None :
                 time.sleep(300)
             else :
-                print(best)
                 nightlogger.info('observe: {:s}'.format(best['targname']))
                 logger.info('observe: {:s}'.format(best['targname']))
                 load_status('observing')
@@ -694,7 +707,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     nightlogger.info('completed observing loop!')
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
-    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+'astronomy.nmsu.edu web page</A><P>'
+    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
     message+=nightlogger_string.getvalue()
     attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
     mail.send(aposong.config['mail_recipients'],
