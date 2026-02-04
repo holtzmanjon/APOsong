@@ -1,1 +1,3 @@
-rsync -avz -e "ssh -i $HOME/.ssh/xfer"  /data/1m/ observe@astronomy.nmsu.edu:/home/1m/
+rsync -avz -e "ssh -i $HOME/.ssh/xfer"  /data/1m/$1 observe@astronomy.nmsu.edu:/home/1m/
+rsync -avz -e "ssh -i $HOME/.ssh/xfer"  /data/1m/reduced/$1 observe@astronomy.nmsu.edu:/home/1m/reduced/
+rsync -avz -e "ssh -i $HOME/.ssh/xfer"  /data/1m/logs/ observe@astronomy.nmsu.edu:/home/1m/logs/
