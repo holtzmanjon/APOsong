@@ -14,7 +14,7 @@ import glob
 import yaml
 import socket
 import time
-from datetime import datetime
+import datetime
 import multiprocessing as mp
 import threading
 import yaml
@@ -28,6 +28,9 @@ try :
     with open('logging.yml', 'rt') as f:
         logconfig = yaml.safe_load(f.read())
     logging.config.dictConfig(logconfig)
+    for handler in logging.root.manager.loggerDict['aposong'].handlers :
+         if handler.name == 'daily' :
+             handler.atTime = datetime.time(hour=14)
     logger=logging.getLogger('aposong')
 except FileNotFoundError :
     #trap for readthedocs
