@@ -6,7 +6,7 @@ import astropy.units as u
 from astroplan import Observer, time_grid_from_range
 import matplotlib
 import matplotlib.pyplot as plt
-from pyvista import imred,tv
+from pyvista import imred,tv,spectra
 from holtztools import html, plots
 
 import copy
@@ -19,7 +19,7 @@ import time
 import threading
 import subprocess
 import requests
-from datetime import datetime, timezone
+import datetime
 
 import logging
 import yaml
@@ -33,10 +33,13 @@ try:
     with open('logging.yml', 'rt') as f:
         config = yaml.safe_load(f.read())
     logging.config.dictConfig(config)
+    for handler in logging.root.manager.loggerDict['aposong'].handlers :
+        if handler.name == 'daily' :
+            handler.atTime = datetime.time(hour=14)
 except:
     print("can't open logging.yml")
 
-logger=logging.getLogger(__name__)
+logger=logging.getLogger('aposong')
 
 import aposong 
 import cal
@@ -209,10 +212,10 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
           dt=ham-haend
           hamid=ha+(length/3600./2.)*u.hourangle
           if am < 1.0 or am > max_airmass or dt<0 : 
-              if verbose: logger.info('{:s} out of airmass range {:.2f}'.format(request['targname'],am))
+              if verbose: logger.info('{:d}, {:s} out of airmass range {:.2f}, hamax-haend: {:.2f}'.format(request['req_no'],request['targname'],am,dt))
               continue
           if t < Time(request['start_window']) or t > Time(request['stop_window']) :
-              if verbose: logger.info('{:s} out of window {:s} {:s}'.format(request['targname'],request['start_window'],request['stop_window']))
+              if verbose: logger.info('{:d}, {:s} out of window {:s} {:s}'.format(request['req_no'],request['targname'],request['start_window'],request['stop_window']))
               continue
           else :
               n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus else int(dt_focus/request['exp_time'])
@@ -386,7 +389,7 @@ def load_song_status(req_no,status,no_exp=None) :
     try :
         tab=Table()
         tab['req_no'] = [req_no]
-        tab['ins_at'] = [datetime.now(timezone.utc)]
+        tab['ins_at'] = [datetime.datetime.now(datetime.timezone.utc)]
         tab['status'] = [status]
         if no_exp is not None : tab['no_exp'] = [no_exp]
         d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
@@ -493,7 +496,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     nightlogger.addHandler(handler)
+
     nightlogger.info('Starting night!')
+    logger.info('Starting night!')
 
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
@@ -632,11 +637,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             else :
                 print(best)
                 nightlogger.info('observe: {:s}'.format(best['targname']))
+                logger.info('observe: {:s}'.format(best['targname']))
                 load_status('observing')
                 load_song_status(req_no,'exec',no_exp=0)
                 success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),
                                          fact=fact,nfact=nfact,req_no=req_no,header=header)
                 nightlogger.info('success: {:d}'.format(success))
+                logger.info('success: {:d}'.format(success))
                 # if object failed, skip it for the next selection, but can try again after that
                 if success : 
                     oldtarg=best['targname'] 
@@ -651,7 +658,12 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                     except KeyError : pass
                 else : 
                     skiptarg=best['targname']
-                    try: load_song_status(best[0]['req_no'],'abort')
+                    try: 
+                        if req_no > 0 :
+                            d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_song',user='song')
+                            best = d.query(sql="SELECT * FROM public.obs_request_4 as req JOIN public.obs_request_status_4 as stat ON req.req_no = stat.req_no WHERE req.req_no = {:d}".format(req_no), fmt='table')
+                            d.close()
+                            load_song_status(best[0]['req_no'],'abort')
                     except KeyError : pass
       except KeyboardInterrupt :
           return
@@ -682,12 +694,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     nightlogger.info('completed observing loop!')
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
-    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'>'+'astronomy.nmsu.edu web page</A><P>'
+    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+'astronomy.nmsu.edu web page</A><P>'
     message+=nightlogger_string.getvalue()
     attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
     mail.send(aposong.config['mail_recipients'],
               subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),
-              message=message, snapshot=True,attachment=attachments,html=True)
+              message=message.replace('\n','<br>'), snapshot=True,attachment=attachments,html=True)
+    subprocess.run('copy {:s}'.format(ut),shell=True)
 
     try :os.remove('{:d}'.format(int(nautical.mjd)))
     except : print('no MJD file to remove?')
@@ -836,11 +849,11 @@ def createrequest(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_e
     request['ra'] = ra
     request['dec'] = dec
     request['epoch'] = epoch
-    request['filter'] = filter
-    request['n_exp'] = n_exp
-    request['t_exp'] = t_exp
-    request['bin'] = bin
-    request['camera'] = camera
+    request['filter'] = filter if isinstance(filter,list) else [filter]
+    request['n_exp'] = n_exp if isinstance(n_exp,list) else [n_exp]
+    request['t_exp'] = t_exp if isinstance(t_exp,list) else [t_exp]
+    request['bin'] = bin if isinstance(bin,list) else [bin]
+    request['camera'] = camera if isinstance(camera,list) else [camera]
     return request
 
 def mkhtml(mjd=None) :
@@ -981,13 +994,26 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     obs = obs[j]
     obs['request'] = ' '*80
     red=imred.Reducer('SONG')
+
+    # do ThAr first
+    wavs=[]
+    for req,o in enumerate(obs) :
+        for i,f in enumerate(o['files']) : 
+            if f.find(b'thar') >=0 :
+                imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
+                file=imec.header['FILE'].split('.')
+                outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(f.decode()).replace('1m/','1m/reduced/'),file[0],file[-2])
+                wavs.append(spectra.WaveCal(outfile))
+
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
-          if f != b'' and f!= b'thar':
+          if f != b'' and f.find( b'thar') <0 :
             try :
-                imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
-                t,sn,t_orders,sn_orders=reduce.throughput(imec,ax,os.path.basename(f.decode()),red=red)
+                im=red.rd(f.decode())
+                imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True,wav=wavs)
+                if f.find(b'thar')  >= 0 : continue
+                t,sn,t_orders,sn_orders=reduce.throughput(imec,ax,os.path.basename(f.decode()),red=red,orders=[34])
                 o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
