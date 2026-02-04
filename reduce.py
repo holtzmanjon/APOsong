@@ -81,22 +81,21 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         utdark='UT251010'
         utflat='UT251119'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251007_Trace_fiber2.fits')
-        if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251007_WaveCal_fiber2.fits')
+        if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251007_WaveCal_fiber2.fits')
     else :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
         utflat='UT251119'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251119_Trace_fiber2.fits')
-        if wav == None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
+        if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
 
     if isinstance(wav,list) :
         mjd=[]
         for w in wav :
-          ww=spectra.WaveCal(w)
-          mjd.append(Time(ww.dateobs).mjd)
+          mjd.append(Time(w.dateobs).mjd)
         mjd=np.array(mjd)
         imjd=np.argmin(np.abs(mjd-Time(im.header['DATE-OBS']).mjd))
-        wav=spectra.WaveCal(wav[imjd])
+        wav=wav[imjd]
 
     # read dark and flat frames
     dtime=darktimes[np.argmin(abs(im.header['EXPTIME']-darktimes))]
@@ -377,7 +376,10 @@ def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
 
     pars=[]
     for date in dates :
-        wavs = glob.glob('{:s}/{:s}/{:s}/thar_wav*.fits'.format(dataroot,outdir,date))
+        wavfiles = glob.glob('{:s}/{:s}/{:s}/thar_wav*.fits'.format(dataroot,outdir,date))
+        wavs=[]
+        for wavfile in wavfiles :
+            wavs.append(spectra.Wavecal(wavfile))
         files = sorted(glob.glob('{:s}/{:s}/{:s}*.fits'.format(dataroot,date,obj)) )
         for file in files :
             pars.append((file,red,wavs))
