@@ -5,12 +5,10 @@ The robotic module provides a client for robotic operation of the APO SONG teles
 It uses the routine and Alpyca devices of the aposong module to execute observatory,
 telescope and camera control.
 
-Once SONG operation starts, robotic observing will be driven by the conductor at
-Aarhus University, but this has not yet been implemented.
+The robotic module can draw targets and observing sequences from a local database
+or from a database populated by the SONG conductor at Aarhus.
 
-In the meantime, an independent robotic observer has been developer; it seems likely
-that some of the pieces will be of use with the SONG operations.
-
+The basic robotic operation is independent of where requests are drawn from.
 The main function is observe(). This will wait until a specified time relative
 to sunset to open the dome, and then wait until a specified time relative to nautical
 twilight to start observing. Observing continues in a loop until a specified time
@@ -19,7 +17,7 @@ determine whether to suspend operations until it becomes safe again; note that
 the dome closes independently immediately on unsafe conditions through the
 Dome server.
 
-Observations are drawn from a Postgres robotic schema that includes a 
+Local requests are drawn from a Postgres robotic schema that includes a 
 database table (requests) that gives a target (defined in target table), observing schedule
 constraints (defined in schedule table) , and observing sequence
 (defined in squence table). The getbest() routine selects the best
@@ -28,11 +26,20 @@ sequence based on either a criterion to observe objects before they
 set (default), or to observe objects that will be available for the
 longest amount of time.
 
+For SONG targets, robotic targets are conducted through Postgres
+database syncs from Aarhus to the song1m_db machine. Requested
+observations are loaded into the obs_request_4 table in db_song with
+information about the target and the observing sequence. As the request
+is started, completed, or aborted, the status is communicated back
+through the obs_reqeust_status_4 table in db_apo. Other tables in db_apo
+communicate the state of the APO system so that the conductor can choose
+appropriate targets.
+
 Once an object is selected, it is acquired, guiding started, and then the
 exposure sequence executed. Completed sequences are logged back into the Postgres
 database in the observed table.
 
-The contents of the database tables is shown below:
+The contents of the database tables for local requests is shown below:
 
 .. image:: robotic_schema.png
   :width: 600
