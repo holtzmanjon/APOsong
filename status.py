@@ -172,7 +172,7 @@ class calWgt(ttk.Frame) :
 
         ttk.Label(self,text="MIRROR",width=8).grid(column=1,row=2,sticky=(W))
         self.mirror = StringVar()
-        ttk.Label(self, textvariable=self.mirror).grid(column=2,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self, textvariable=self.mirror).grid(column=2,row=2,sticky=(E),padx=10)
 
         ttk.Label(self,text="QUARTZ",width=8).grid(column=3,row=2,sticky=(W))
         self.quartz = StringVar()
@@ -414,7 +414,7 @@ if __name__ == '__main__' :
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
             lamps=np.zeros(4,dtype=bool)
-            state=np.zeros(4,dtype=str)
+            state=np.zeros(4,dtype='U3')
             for i in range(4) : 
                 lamps[i] = aposong.SW[1].GetSwitch(i)
                 state[i] = 'On' if lamps[i] else 'Off'
