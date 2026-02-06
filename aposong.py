@@ -514,7 +514,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             f=foc(int(bestfoc))
             best=besthf
     except :
-        bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
+        bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1, -1, -1, -1
         logger.exception('focus failed')
         f=foc(foc0)
 
@@ -1032,9 +1032,10 @@ def override(t) :
     try :
         resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
         if resp != 'n' and resp != 'N' :
-            S.Action('override',t)
+            S.Action('override',int(t))
+            print('override in place for {:d} seconds'.format(int(t)))
     except :
-        print('override aborted')
+        print('override aborted',resp)
 
 def domestatus() :
     """ Return dome azimuth and shutter status
