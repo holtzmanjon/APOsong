@@ -442,7 +442,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
+        criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -637,7 +637,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             oldtarg=''
         else :
             # observe best object!
-            best,header=getsong()
+            if usesong : best,header=getsong()
+            else : best=None
             if best is None :
                 best,header=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
                 if best is not None :
@@ -645,7 +646,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 req_no = -1
             else :
                 req_no = best['req_no']
-                nightlogger.info('observe: SONG {:d}, {:s}, {:s}'.format(req_no, best['targname'], best['project_id']))
+                nightlogger.info('observe: SONG {:d}, {:s}, {:s}'.format(req_no, best['targname'], best['project_name']))
             if best is None :
                 time.sleep(300)
             else :
