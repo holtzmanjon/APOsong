@@ -19,19 +19,13 @@ as needed. Individual devices can also be addressed using the Alpaca device
 instantiations and the standard ASCOM command sets for more experienced users
 if needed.
 
-It can be used to run an interactive Python client. To run the software, start 
-an ipython session on the song1m
-
+It can be used to run an interactive Python client. To run the software, simply issue
 .. code-block:: 
 
-    from aposong import *
+    aposong
 
-Several functions/commands have a disp= keyword for image display. To use these
-you should instantiate a pyvista TV tool, e.g.
-
-.. code-block::
-
-    disp=tv.TV(figsize=(9.5,6))
+This will start an ipython client, load appropriate modules and commands, and instantiate
+a pyvista TV tool into the variable, disp.
 
 Commands
 ++++++++

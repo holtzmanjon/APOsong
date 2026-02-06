@@ -39,6 +39,13 @@ The main() method listens for comands on localhost port 5000. The
 commands can be one of start, stop, pause, or resume. The start
 command can take keywords to set parameters of the Guider object.
 
+To start the guider, simply issue the command:
+
+.. code-block::
+
+    guider
+
+
 Module functions
 ++++++++++++++++
 .. automodule:: guider

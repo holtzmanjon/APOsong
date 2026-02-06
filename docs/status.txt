@@ -5,10 +5,15 @@ status is a module that provide a Tk window that gives observatory, telescope, c
 It works by importing the aposong module that gives it access to the Alpyca devices
 that are queried for their state.
 
-status is critical in that it also ingests some of the information into an Influx database for long term
-monitoring.
+status is critical in that it also ingests some of the information into Influx 
+and Postgres database for long term and communication with the SONG conductor.
 
-status is designed to be run standalone via the status command
+status is designed to be run standalone via the status command:
+
+.. code-block::
+
+    status
+
 
 Module functions
 ++++++++++++++++
