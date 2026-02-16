@@ -68,7 +68,11 @@ class Target() :
         aposong.slew(self.ra,self.dec)
 
         ret = aposong.guide('start')
-        if ret : time.sleep(30)
+        if ret : 
+            time.sleep(30)
+        else :
+            logger.info('guider failed in aquire')
+            nightlogger.info('guider failed in aquire')
         return ret
 
 class Schedule() :
@@ -229,21 +233,22 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
                   load_song_status(request['req_no'],'abort')
               continue
           else :
-              n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus else int(dt_focus/request['exp_time'])
-              logger.info('n_exp: {:d} no_exp: {:d}'.format(n_exp,request['no_exp']))
+              n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus*3600 else int(dt_focus*3600/request['exp_time'])
+              if n_exp != request['no_exp'] :
+                  logger.info('reducing to n_exp: {:d} from no_exp: {:d} because of dt_focus'.format(n_exp,request['no_exp']))
               if request['obs_mode'] == 'iodine' :
                   request=Table(request)
                   request['filter'] = [['iodine']]
                   request['bin'] = [[2]]
                   request['camera'] = [[3]]
-                  request['n_exp'] = [[request[0]['no_exp']]]
+                  request['n_exp'] = [[n_exp]]
                   request['t_exp'] = [[request[0]['exp_time']]]
               elif request['obs_mode'] == 'thar' or request['obs_mode'] == 'none-iodine' :
                   request=Table(request)
                   request['filter'] = [['thar','none','thar']]
                   request['bin'] = [[2,2,2]]
                   request['camera'] = [[3,3,3]]
-                  request['n_exp'] = [[request[0]['no_thar_exp'],request[0]['no_exp'],request[0]['no_thar_exp']]]
+                  request['n_exp'] = [[request[0]['no_thar_exp'],n_exp,request[0]['no_thar_exp']]]
                   request['t_exp'] = [[120,request[0]['exp_time'],120]]
               header={}
               header['OBSERVER'] = request['observer'][0]
@@ -536,7 +541,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
-        time.sleep(30)
+        time.sleep(60)
 
     # if we haven't opened by morning twilight, we're done for the night!
     if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : continue
@@ -552,7 +557,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
-    aposong.louvers(True)
+    if aposong.D.ShutterState == 0 : aposong.louvers(True)
 
     # cals
     #if cals :
@@ -566,6 +571,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 logger.info('reopening dome')
                 aposong.domeopen()
                 load_status('open')
+                aposong.louvers(True)
             elif aposong.D.ShutterStatus != 0 :
                 load_status('closed')
             logger.info('waiting for nautical twilight+dt_nautical: {:.3f}'.format(
@@ -578,6 +584,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
         load_status('open')
+        aposong.louvers(True)
 
     # fans off for observing?
     #aposong.fans_off()
@@ -585,7 +592,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
+        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=True)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -594,10 +601,11 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     skiptarg=None
     closed = False
     nfocus = 0
+    nerror = 0
 
     # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
-      load_status('ready')
+      if usesong : load_status('ready')
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
@@ -632,12 +640,12 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.guide('stop')
             #foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             load_status('focus')
-            foc0=focus(foc0=foc0,display=display,iodine=False)
+            foc0=focus(foc0=foc0,display=display,iodine=True)
             foctime=tnow
             oldtarg=''
         else :
             # observe best object!
-            if usesong : best,header=getsong()
+            if usesong : best,header=getsong(dt_focus=dt_focus[nfocus])
             else : best=None
             if best is None :
                 best,header=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
@@ -684,6 +692,12 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
  
       except:
           logger.exception('observe error!')
+          nerror += 1
+          if nerror > 3 : 
+              logger.exception('too many errors: turning off usesong')
+              nightlogger.exception('too many errors: turning off usesong')
+              usesong=False
+          time.sleep(300)
 
     # close
     try: aposong.guide('stop')
@@ -701,31 +715,31 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['PROJ-ID'] = 'No-Proj'
         cal.cals(header=header,flats=3,iodineflats=3)
 
-    # night log
-    mkhtml()
-
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
+    subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+
+    # night log
+    try :
+        mkhtml()
+    except :
+        logger.info('FAILED web / auto-reduction')
+        nightlogger.info('FAILED web / auto-reduction')
+        subject+=', web/reduction FAILED'
+
+    # send completion email and start sync to NMSU via APOsong/copy
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
     message+=nightlogger_string.getvalue()
     attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
-    mail.send(aposong.config['mail_recipients'],
-              subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),
+    mail.send(aposong.config['mail_recipients'],subject=subject,
               message=message.replace('\n','<br>'), snapshot=True,attachment=attachments,html=True)
     subprocess.run('copy {:s}'.format(ut),shell=True)
 
+    # remove MJD file to indicate successful completion
     try :os.remove('{:d}'.format(int(nautical.mjd)))
     except : print('no MJD file to remove?')
-
-    # restart display
-    try :
-        if display is not None :
-            matplotlib.use('TkAgg') 
-            plt.close('all')
-            print('you will need to restart display window with disp=disp_init() if you use display=disp in robotic.observe()')
-    except NameError : pass
 
 def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
     """ Do focus run for object on meridian
@@ -740,7 +754,7 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
         if iodine :
             foc0_0=copy.copy(foc0)
             aposong.iodine_in()
-            f,focvals,best=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            f,focvals,best=aposong.focrun(foc0-4600,delta,n,exptime=5,filt=None,bin=1,thresh=50,display=display,max=5000)
             alt = aposong.T.Altitude
             logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
@@ -751,8 +765,8 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
                 foc0=copy.copy(f)
                 f,focvals,best=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
                 alt = aposong.T.Altitude
-                logger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
-                nightlogger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             aposong.iodine_out()
             foc0=copy.copy(foc0_0)
 
@@ -911,8 +925,6 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     grid=[]
     row=[]
     for i,seq in enumerate(seqs):
-        try: plt.close('all')
-        except: pass
         t=tv.TV()
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
@@ -924,6 +936,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
             grid.append(row)
             row=[]
         row.append('guide/{:d}.mp4'.format(seq[0]))
+        plt.close(t.fig)
     for ii in range(i%5+1,5) :
         row.append('')
     grid.append(row)
@@ -1017,7 +1030,8 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
                 imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
                 file=imec.header['FILE'].split('.')
                 outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(f.decode()).replace('1m/','1m/reduced/'),file[0],file[-2])
-                wavs.append(spectra.WaveCal(outfile))
+                try: wavs.append(spectra.WaveCal(outfile))
+                except: pass
 
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
