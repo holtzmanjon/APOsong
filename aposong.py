@@ -514,7 +514,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             f=foc(int(bestfoc))
             best=besthf
     except :
-        bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1, -1, -1, -1
+        bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1., -1, -1., -1.
         logger.exception('focus failed')
         f=foc(foc0)
 
@@ -871,7 +871,7 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=None,focoffset=-4625) :
+def iodine_in(val=None,focoffset=-4600) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -883,7 +883,7 @@ def iodine_in(val=None,focoffset=-4625) :
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
-def iodine_out(val=None,focoffset=4625) :
+def iodine_out(val=None,focoffset=4600) :
     """ Move iodine cell out of beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -1088,7 +1088,8 @@ def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
         D.CloseShutter()
     # put this at end in case guider has died and this won't return
     logger.info('stopping guider...')
-    guide('stop')
+    try : guide('stop')
+    except : pass
 
 def domesync(dosync=True,manual=False) :
     """ Start/stop domesync thread
