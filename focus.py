@@ -130,7 +130,7 @@ def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12],
                         xt='Focus',yt='R(half total)',size=5)
 
     gd=np.where(hfmed>0)[0]
-    if len(hfmed) > 3 :
+    if len(gd) > 3 :
         # get smallest median half-flux radius
         besthf=np.min(hfmed[gd])
         # convert to diameter in arcsec
@@ -170,6 +170,9 @@ def focus(files, apers=np.arange(0.3,6,0.2), thresh=100, fwhm=2, skyrad=[8,12],
                 plots.plotl(display.plotax2,x,(poly[0]*x**2+poly[1]*x+poly[2])*pixscale*2)
             plt.draw()
     else :
+        if plot :
+            plt.close(fig)
+            plt.close(fig2)
         raise Exception('focus run failed')
 
     if plot :
