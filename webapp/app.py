@@ -7,11 +7,11 @@ app = Flask(__name__)
 
 # ─── DATABASE CONFIG ────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     "YOUR_HOST",
+    "host":     "localhost",
     "port":     5432,
-    "dbname":   "YOUR_DATABASE",
-    "user":     "YOUR_USER",
-    "password": "YOUR_PASSWORD",
+    "dbname":   "apo",
+    "user":     "song",
+    "password": "singSONG!",
 }
 # ────────────────────────────────────────────────────────────────
 
@@ -65,4 +65,4 @@ def history():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=9000)
