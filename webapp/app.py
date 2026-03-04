@@ -66,6 +66,22 @@ def current():
     return jsonify({"pressed_at": None})
 
 
+@app.route("/clear", methods=["POST"])
+def clear():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO button_presses (id, pressed_at)
+                VALUES (1, NOW())
+                ON CONFLICT (id) DO UPDATE
+                    SET pressed_at = EXCLUDED.pressed_at
+                RETURNING id, pressed_at;
+            """)
+            row = cur.fetchone()
+        conn.commit()
+    return jsonify({"id": row["id"], "pressed_at": row["pressed_at"].isoformat()})
+
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=True, port=9000)
