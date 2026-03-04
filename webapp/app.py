@@ -1,9 +1,8 @@
 from flask import Flask, jsonify, render_template
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 
 # ─── DATABASE CONFIG ────────────────────────────────────────────
 DB_CONFIG = {
@@ -25,8 +24,8 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS button_presses (
-                    id        SERIAL PRIMARY KEY,
-                    pressed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    id         INTEGER PRIMARY KEY,
+                    pressed_at TIMESTAMPTZ NOT NULL
                 );
             """)
         conn.commit()
@@ -37,30 +36,34 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/press", methods=["POST"])
-def press():
+@app.route("/press/<int:hours>", methods=["POST"])
+def press(hours):
+    if hours not in (1, 2, 3):
+        return jsonify({"error": "hours must be 1, 2, or 3"}), 400
+
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "INSERT INTO button_presses (pressed_at) VALUES (NOW()) RETURNING id, pressed_at;"
-            )
+            cur.execute("""
+                INSERT INTO button_presses (id, pressed_at)
+                VALUES (1, NOW() + %s * INTERVAL '1 hour')
+                ON CONFLICT (id) DO UPDATE
+                    SET pressed_at = EXCLUDED.pressed_at
+                RETURNING id, pressed_at;
+            """, (hours,))
             row = cur.fetchone()
         conn.commit()
     return jsonify({"id": row["id"], "pressed_at": row["pressed_at"].isoformat()})
 
 
-@app.route("/history")
-def history():
+@app.route("/current")
+def current():
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, pressed_at FROM button_presses ORDER BY pressed_at DESC LIMIT 50;"
-            )
-            rows = cur.fetchall()
-    return jsonify([
-        {"id": r["id"], "pressed_at": r["pressed_at"].isoformat()}
-        for r in rows
-    ])
+            cur.execute("SELECT id, pressed_at FROM button_presses WHERE id = 1;")
+            row = cur.fetchone()
+    if row:
+        return jsonify({"pressed_at": row["pressed_at"].isoformat()})
+    return jsonify({"pressed_at": None})
 
 
 if __name__ == "__main__":
