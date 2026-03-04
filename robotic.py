@@ -8,6 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from pyvista import imred,tv,spectra
 from holtztools import html, plots
+import weather
 
 import copy
 import glob
@@ -29,17 +30,17 @@ import focus as dofocus
 import reduce
 import mail
 
-try:
-    with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
-    for handler in logging.root.manager.loggerDict['aposong'].handlers :
-        if handler.name == 'daily' :
-            handler.atTime = datetime.time(hour=14)
-except:
-    print("can't open logging.yml")
+#try:
+#    with open('logging.yml', 'rt') as f:
+#        config = yaml.safe_load(f.read())
+#    logging.config.dictConfig(config)
+#    for handler in logging.root.manager.loggerDict['aposong'].handlers :
+#        if handler.name == 'daily' :
+#            handler.atTime = datetime.time(hour=14)
+#except:
+#    print("can't open logging.yml")
 
-logger=logging.getLogger('aposong')
+logger=logging.getLogger(__name__)
 
 import aposong 
 import cal
@@ -540,11 +541,23 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
+        #if weather.conditionsok() and (Time.now()< sunset+1*u.hour) :
+        #    aposong.override(120)
         logger.info('waiting for issafe()')
         time.sleep(60)
 
     # if we haven't opened by morning twilight, we're done for the night!
-    if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : continue
+    if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : 
+        logger.info('Never opened before morning twilight')
+        nightlogger.info('Never opened before morning twilight')
+        subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+        message=nightlogger_string.getvalue()
+        mail.send(aposong.config['mail_recipients'],subject=subject,
+                  message=message.replace('\n','<br>'), snapshot=True,html=True)
+        # remove MJD file to indicate successful completion
+        try :os.remove('{:d}'.format(int(nautical.mjd)))
+        except : print('no MJD file to remove?')
+        continue
 
     # open if not already open (e.g., from previous robotic.observe invocation same night)
     if aposong.D.ShutterStatus != 0 :
@@ -555,9 +568,11 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
+        #if weather.conditionsok() and (Time.now()< sunset+1*u.hour) :
+        #    aposong.override(120)
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
-    if aposong.D.ShutterState == 0 : aposong.louvers(True)
+    if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
     # cals
     #if cals :
@@ -565,6 +580,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
+        #if weather.conditionsok() :
+        #    aposong.override(120)
         try :
             # if dome has been closed by 3.5m but can now be opened again, do it
             if aposong.issafe() and aposong.D.ShutterStatus != 0 :
@@ -580,11 +597,10 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         except KeyboardInterrupt :
             return
 
-    # in case 3.5m has closed while we were waiting....
-    if aposong.D.ShutterStatus != 0 :
-        aposong.domeopen()
-        load_status('open')
-        aposong.louvers(True)
+    # full open in case 3.5m has closed while we were waiting or we've only opened dome....
+    aposong.domeopen()
+    load_status('open')
+    aposong.louvers(True)
 
     # fans off for observing?
     #aposong.fans_off()
@@ -1042,7 +1058,6 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
                 imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True,wav=wavs)
                 if f.find(b'thar')  >= 0 : continue
                 t,sn,t_orders,sn_orders=reduce.throughput(imec,ax,os.path.basename(f.decode()),red=red,orders=[34])
-                o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
                 reduced['request_pk'] = [o['request_pk']]
@@ -1089,6 +1104,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     fp.write('<A HREF=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png><IMG SRC=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png WIDTH=30%></A>'.format(mjd,mjd))
 
     fp.write('<p>Observed robotic requests: <BR>\n')
+    for o in obs :
+        for i,f in enumerate(o['files']) : 
+            o['files'][i] = os.path.basename(o['files'][i])
     obs['files'] = obs['files'].astype('<U')
     tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 
@@ -1104,3 +1122,6 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     except: pass
 
     return out
+
+def logtest() :
+    logger.info('robotic logtest')
