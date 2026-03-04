@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Button Logger</title>
+  <title>Delay Logger</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0a0a0f;
-      --surface:  #12121a;
-      --border:   #1e1e2e;
-      --accent:   #e8ff47;
-      --accent2:  #47ffe8;
-      --text:     #e8e8f0;
-      --muted:    #5a5a7a;
-      --danger:   #ff4747;
+      --bg:      #0a0a0f;
+      --surface: #12121a;
+      --border:  #1e1e2e;
+      --text:    #e8e8f0;
+      --muted:   #5a5a7a;
+      --c1:      #e8ff47;   /* 1h - yellow-green */
+      --c2:      #47c8ff;   /* 2h - cyan */
+      --c3:      #ff7847;   /* 3h - orange */
     }
 
     body {
@@ -29,271 +29,214 @@
       place-items: center;
       padding: 2rem;
       background-image:
-        radial-gradient(ellipse 60% 50% at 50% -10%, rgba(232,255,71,0.08) 0%, transparent 60%),
-        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px),
-        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.02) 39px, rgba(255,255,255,0.02) 40px);
+        radial-gradient(ellipse 60% 40% at 50% -5%, rgba(71,200,255,0.07) 0%, transparent 60%),
+        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
     }
 
     .container {
       width: 100%;
-      max-width: 560px;
+      max-width: 520px;
       display: flex;
       flex-direction: column;
       gap: 2rem;
     }
 
-    header {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
     header h1 {
       font-family: 'Syne', sans-serif;
-      font-size: clamp(2rem, 6vw, 3rem);
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
       font-weight: 800;
       letter-spacing: -0.02em;
       line-height: 1;
-      color: var(--accent);
+      color: var(--text);
     }
-
+    header h1 span { color: var(--c2); }
     header p {
-      font-size: 0.75rem;
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
       color: var(--muted);
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
-    .press-panel {
+    /* ── Button grid ── */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .delay-btn {
+      position: relative;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 4px;
-      padding: 2rem;
+      padding: 1.75rem 0.5rem 1.5rem;
+      cursor: pointer;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.5rem;
-    }
-
-    #press-btn {
-      position: relative;
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      border: 2px solid var(--accent);
-      background: transparent;
-      cursor: pointer;
-      font-family: 'Syne', sans-serif;
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--accent);
-      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+      gap: 0.5rem;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
       outline: none;
-      box-shadow: 0 0 0 0 rgba(232,255,71,0);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
     }
 
-    #press-btn::before {
-      content: '';
-      position: absolute;
-      inset: 8px;
-      border-radius: 50%;
-      border: 1px solid rgba(232,255,71,0.2);
-      transition: border-color 0.15s;
+    .delay-btn .hours {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+      transition: color 0.15s;
     }
-
-    #press-btn:hover {
-      background: rgba(232,255,71,0.07);
-      box-shadow: 0 0 32px rgba(232,255,71,0.2), 0 0 8px rgba(232,255,71,0.15);
-    }
-
-    #press-btn:active, #press-btn.firing {
-      transform: scale(0.95);
-      background: rgba(232,255,71,0.15);
-      box-shadow: 0 0 48px rgba(232,255,71,0.35);
-    }
-
-    #press-btn.error {
-      border-color: var(--danger);
-      color: var(--danger);
-      box-shadow: 0 0 32px rgba(255,71,71,0.25);
-    }
-
-    .status {
-      font-size: 0.72rem;
+    .delay-btn .label {
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
       color: var(--muted);
-      letter-spacing: 0.06em;
-      text-align: center;
-      min-height: 1.2em;
-      transition: color 0.2s;
+      font-family: 'IBM Plex Mono', monospace;
     }
 
-    .status.ok   { color: var(--accent2); }
-    .status.err  { color: var(--danger); }
+    .delay-btn[data-h="1"] .hours { color: var(--c1); }
+    .delay-btn[data-h="2"] .hours { color: var(--c2); }
+    .delay-btn[data-h="3"] .hours { color: var(--c3); }
 
-    /* ── History ────────────────────────── */
-    .history-panel {
+    .delay-btn[data-h="1"]:hover { border-color: var(--c1); box-shadow: 0 0 24px rgba(232,255,71,0.15); background: rgba(232,255,71,0.04); }
+    .delay-btn[data-h="2"]:hover { border-color: var(--c2); box-shadow: 0 0 24px rgba(71,200,255,0.15); background: rgba(71,200,255,0.04); }
+    .delay-btn[data-h="3"]:hover { border-color: var(--c3); box-shadow: 0 0 24px rgba(255,120,71,0.15); background: rgba(255,120,71,0.04); }
+
+    .delay-btn:active, .delay-btn.firing {
+      transform: scale(0.96);
+    }
+    .delay-btn[data-h="1"].firing { background: rgba(232,255,71,0.1); border-color: var(--c1); }
+    .delay-btn[data-h="2"].firing { background: rgba(71,200,255,0.1); border-color: var(--c2); }
+    .delay-btn[data-h="3"].firing { background: rgba(255,120,71,0.1); border-color: var(--c3); }
+
+    .delay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Result panel ── */
+    .result-panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 4px;
-      overflow: hidden;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
-    .history-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.7rem;
+    .result-label {
+      font-size: 0.65rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--muted);
     }
 
-    #count-badge {
-      background: var(--border);
-      color: var(--accent);
-      padding: 0.1rem 0.5rem;
-      border-radius: 2px;
-      font-size: 0.65rem;
+    #result-ts {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      min-height: 1.4em;
+      transition: color 0.3s;
     }
+    #result-ts.c1 { color: var(--c1); }
+    #result-ts.c2 { color: var(--c2); }
+    #result-ts.c3 { color: var(--c3); }
+    #result-ts.err { color: #ff4747; }
 
-    #log-list {
-      list-style: none;
-      max-height: 280px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-
-    #log-list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.6rem 1.25rem;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-      font-size: 0.72rem;
-      opacity: 0;
-      transform: translateY(-6px);
-      animation: slideIn 0.25s forwards;
-    }
-
-    #log-list li:last-child { border-bottom: none; }
-
-    #log-list li .id   { color: var(--muted); }
-    #log-list li .ts   { color: var(--accent2); font-size: 0.68rem; }
-
-    #log-list .empty {
+    #status {
+      font-size: 0.68rem;
       color: var(--muted);
-      padding: 1.5rem;
-      text-align: center;
-      opacity: 1;
-      transform: none;
-      animation: none;
-    }
-
-    @keyframes slideIn {
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .new-row {
-      background: rgba(232,255,71,0.04);
+      min-height: 1em;
     }
   </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>BUTTON LOGGER</h1>
-    <p>Records each press to PostgreSQL with a UTC timestamp</p>
+    <h1>DELAY <span>LOGGER</span></h1>
+    <p>Writes current time + offset to row #1 in Postgres</p>
   </header>
 
-  <div class="press-panel">
-    <button id="press-btn" onclick="pressButton()">PRESS</button>
-    <div class="status" id="status">— ready —</div>
+  <div class="btn-grid">
+    <button class="delay-btn" data-h="1" onclick="pressButton(1)">
+      <span class="hours">+1</span>
+      <span class="label">hour</span>
+    </button>
+    <button class="delay-btn" data-h="2" onclick="pressButton(2)">
+      <span class="hours">+2</span>
+      <span class="label">hours</span>
+    </button>
+    <button class="delay-btn" data-h="3" onclick="pressButton(3)">
+      <span class="hours">+3</span>
+      <span class="label">hours</span>
+    </button>
   </div>
 
-  <div class="history-panel">
-    <div class="history-header">
-      <span>Recent Presses</span>
-      <span id="count-badge">0</span>
-    </div>
-    <ul id="log-list">
-      <li class="empty">No presses yet.</li>
-    </ul>
+  <div class="result-panel">
+    <div class="result-label">Stored timestamp</div>
+    <div id="result-ts">—</div>
+    <div id="status">loading current value…</div>
   </div>
 </div>
 
 <script>
-  const btn    = document.getElementById('press-btn');
-  const status = document.getElementById('status');
-  const list   = document.getElementById('log-list');
-  const badge  = document.getElementById('count-badge');
+  const colorClass = { 1: 'c1', 2: 'c2', 3: 'c3' };
 
-  async function pressButton() {
+  async function pressButton(hours) {
+    const btn    = document.querySelector(`.delay-btn[data-h="${hours}"]`);
+    const tsEl   = document.getElementById('result-ts');
+    const statEl = document.getElementById('status');
+
+    document.querySelectorAll('.delay-btn').forEach(b => b.disabled = true);
     btn.classList.add('firing');
-    btn.disabled = true;
-    status.className = 'status';
-    status.textContent = 'logging…';
+    statEl.textContent = `writing +${hours}h…`;
 
     try {
-      const res  = await fetch('/press', { method: 'POST' });
+      const res  = await fetch(`/press/${hours}`, { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      status.className = 'status ok';
-      status.textContent = `✓ logged at ${formatTs(data.pressed_at)}`;
-
-      prependRow(data.id, data.pressed_at, true);
+      tsEl.className = colorClass[hours];
+      tsEl.textContent = formatTs(data.pressed_at);
+      statEl.textContent = `✓ row #1 updated with +${hours}h offset`;
     } catch (e) {
-      btn.classList.add('error');
-      status.className = 'status err';
-      status.textContent = `✗ ${e.message}`;
-      setTimeout(() => btn.classList.remove('error'), 1500);
+      tsEl.className = 'err';
+      tsEl.textContent = `Error: ${e.message}`;
+      statEl.textContent = '';
     } finally {
-      setTimeout(() => { btn.classList.remove('firing'); btn.disabled = false; }, 300);
+      btn.classList.remove('firing');
+      document.querySelectorAll('.delay-btn').forEach(b => b.disabled = false);
     }
   }
 
-  function prependRow(id, ts, isNew = false) {
-    const empty = list.querySelector('.empty');
-    if (empty) empty.remove();
-
-    const li   = document.createElement('li');
-    if (isNew) li.classList.add('new-row');
-    li.innerHTML = `<span class="id">#${id}</span><span class="ts">${formatTs(ts)}</span>`;
-    list.prepend(li);
-
-    badge.textContent = list.querySelectorAll('li:not(.empty)').length;
-  }
-
   function formatTs(iso) {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
+    return new Date(iso).toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false
+      hour12: false, timeZoneName: 'short'
     });
   }
 
-  // Load history on page load
-  async function loadHistory() {
+  // Load the current stored value on page load
+  async function loadCurrent() {
+    const statEl = document.getElementById('status');
+    const tsEl   = document.getElementById('result-ts');
     try {
-      const res  = await fetch('/history');
-      const rows = await res.json();
-      if (rows.length) {
-        list.innerHTML = '';
-        rows.forEach(r => prependRow(r.id, r.pressed_at));
-        // reverse so newest is on top
-        [...list.children].reverse().forEach(c => list.prepend(c));
-        badge.textContent = rows.length;
+      const res  = await fetch('/current');
+      const data = await res.json();
+      if (data.pressed_at) {
+        tsEl.textContent = formatTs(data.pressed_at);
+        statEl.textContent = 'current value loaded from db';
+      } else {
+        statEl.textContent = 'no value in db yet — press a button';
       }
-    } catch (_) {}
+    } catch (_) {
+      statEl.textContent = 'could not load current value';
+    }
   }
 
-  loadHistory();
+  loadCurrent();
 </script>
 </body>
 </html>
