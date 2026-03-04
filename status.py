@@ -501,6 +501,7 @@ if __name__ == '__main__' :
         except : pass
         try :
             d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
+            motors['spectrograph_foc'] = [aposong.specfoc()]
             motors['ins_at' ] = [Time.now().fits]
             d.ingest('public.motors',motors,onconflict='update',constraintname='motors_id')
             d.close()
