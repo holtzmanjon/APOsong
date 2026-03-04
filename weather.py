@@ -27,6 +27,14 @@ def getapo() :
     exec(stuff,globals(),ldict)
     return ldict
 
+def conditions_ok() :
+    wdict=getapo()
+    if (float(wdict['winds']) < 25 and float(wdict['winds2'])< 25 and float(wdict['gusts']<30) and 
+        float(wdict['humidity']) < 80 and (float(wdict['outside_airtemp'])-float(wdict['outside_dewpoint']))>3) :
+        return True
+    else :
+        return False
+
 
 def postgres_write(wdict) :
     """ Loads subset of weather quantities into table for postgres db loading

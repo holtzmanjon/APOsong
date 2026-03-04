@@ -24,19 +24,7 @@ import subprocess
 import logging
 import yaml
 import logging.config
-try :
-    with open('logging.yml', 'rt') as f:
-        logconfig = yaml.safe_load(f.read())
-    logging.config.dictConfig(logconfig)
-    for handler in logging.root.manager.loggerDict['aposong'].handlers :
-         if handler.name == 'daily' :
-             handler.atTime = datetime.time(hour=14)
-    logger=logging.getLogger('aposong')
-except FileNotFoundError :
-    #trap for readthedocs
-    print('logging.yml not found')
-except :
-    print('error with logging')
+logger=logging.getLogger(__name__)
 
 from astropy.coordinates import SkyCoord, EarthLocation, Angle
 import astropy.units as u
@@ -1052,12 +1040,12 @@ def domehome() :
     D.FindHome()
 
 def domeopen(dome=True,covers=True,fans=True,louvers=False) :
-    """ Open dome and mirror covers
+    """ Open dome, mirror covers, louvers and start fans, as requested
     """
-    if dome : 
+    if dome and D.ShutterStatus.name != 'shutterOpen' :
         logger.info('opening shutter...')
         D.OpenShutter()
-    if covers : 
+    if covers and Covers.CoverState.name != 'Open': 
         # Wait for shutter open before opening mirror covers
         logger.info('waiting for shutter to open...')
         while D.ShutterStatus.name != 'shutterOpen' :
@@ -1069,6 +1057,9 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if fans :
         logger.info('turning fans on...')
         fans_on()
+    if louvers :
+        logger.info('opening louvers...')
+        louvers(True)
 
 def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
@@ -1361,8 +1352,25 @@ def isccdok(ok,loggers=None,recipients=None) :
             alert('CCD temperature=0',loggers=loggers,recipients=recipients)
         return False
 
+def logtest() :
+    logger.info('logging test')
+
 
 if __name__ == '__main__' :
+
+    try :
+        with open('logging.yml', 'rt') as f:
+            logconfig = yaml.safe_load(f.read())
+        logging.config.dictConfig(logconfig)
+        for handler in logging.root.manager.loggerDict['aposong'].handlers :
+             if handler.name == 'daily' :
+                 handler.atTime = datetime.time(hour=12)
+        logger=logging.getLogger('aposong')
+    except FileNotFoundError :
+        #trap for readthedocs
+        print('logging.yml not found')
+    except :
+        print('error with logging')
 
     from aposong import *
     import robotic
