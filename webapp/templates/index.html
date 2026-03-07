@@ -50,14 +50,25 @@
       letter-spacing: -0.02em;
       line-height: 1;
       color: var(--text);
+      text-transform: uppercase;
     }
     header h1 span { color: var(--c2); }
+    header h2 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+    header h2 span { color: var(--c2); }
     header p {
+      font-family: 'IBM Plex Sans', monospace;
       margin-top: 0.35rem;
       font-size: 0.72rem;
-      color: var(--muted);
+      /*color: var(--muted); */
       letter-spacing: 0.08em;
-      text-transform: uppercase;
+      /*text-transform: uppercase;*/
     }
 
     /* ── Button grid ── */
@@ -160,11 +171,18 @@
 <body>
 <div class="container">
   <header>
-    <h1>DELAY <span>LOGGER</span></h1>
-    <p>Writes current time + offset to row #1 in Postgres</p>
+	  <h2>1m dome open overide </h2>
+	  <p> Selecting a time below will allow the 1m dome to open robotically, even if 3.5m and 2.5m are not open.
+	  <p> The override will stay in place for the selected amount of time from when you click the button. Select only the duration you are confident that the weather conditions will remain acceptable. No need to select a period beyond which you expect to open the 3.5m or 2.5m, after which the override is no longer needed.
+	  <p> Select RESET to immediately clear the override. If open, the 1m dome should close within several minutes.
+	  <p> Note that selecting an override MAY NOT cause the dome to open, depending on whether the robotic software is running, and also on weather criteria from the weather station.
   </header>
 
   <div class="btn-grid">
+    <button class="delay-btn" data-h="c" onclick="clearButton()">
+      <span class="hours">RESET</span>
+      <span class="label">now</span>
+    </button>
     <button class="delay-btn" data-h="1" onclick="pressButton(1)">
       <span class="hours">+1</span>
       <span class="label">hour</span>
@@ -176,10 +194,6 @@
     <button class="delay-btn" data-h="3" onclick="pressButton(3)">
       <span class="hours">+3</span>
       <span class="label">hours</span>
-    </button>
-      <button class="delay-btn" data-h="c" onclick="clearButton()">
-      <span class="hours">CLEAR</span>
-      <span class="label">now</span>
     </button>
   </div>
 
