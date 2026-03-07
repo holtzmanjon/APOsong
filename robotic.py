@@ -541,8 +541,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
-        #if weather.conditionsok() and (Time.now()< sunset+1*u.hour) :
-        #    aposong.override(120)
         logger.info('waiting for issafe()')
         time.sleep(60)
 
@@ -568,8 +566,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
-        #if weather.conditionsok() and (Time.now()< sunset+1*u.hour) :
-        #    aposong.override(120)
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
     if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
@@ -580,8 +576,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
-        #if weather.conditionsok() :
-        #    aposong.override(120)
         try :
             # if dome has been closed by 3.5m but can now be opened again, do it
             if aposong.issafe() and aposong.D.ShutterStatus != 0 :

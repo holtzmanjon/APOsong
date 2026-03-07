@@ -1014,11 +1014,14 @@ def issafe() :
     """
     return S.IsSafe
 
-def override(t) :
+def override(t,verbose=True) :
     """ Set override to allow open
     """
     try :
-        resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        if verbose :
+            resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        else :
+            resp = 'y'
         if resp != 'n' and resp != 'N' :
             S.Action('override',int(t))
             print('override in place for {:d} seconds'.format(int(t)))

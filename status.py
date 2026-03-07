@@ -319,6 +319,15 @@ if __name__ == '__main__' :
         global niter
         niter=(niter+1)%60
         try :
+            # check for weather manual override
+            try :
+                override = weather.manual_override()
+                if override>0 :
+                    aposong.override(override,verbose=False)
+                else :
+                    aposong.override(0,verbose=False)
+            except :
+                aposong.override(0,verbose=False)
             # weather status to influxDB
             if niter%10 == 1 :
                 wdict=weather.getapo()
