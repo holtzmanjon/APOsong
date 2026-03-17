@@ -568,6 +568,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
+        if aposong.D.ShutterStatus != 0 :
+            logger.info('closing with domeclose')
+            aposong.domeclose()
     if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
     # cals
@@ -585,6 +588,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 aposong.louvers(True)
             elif aposong.D.ShutterStatus != 0 :
                 load_status('closed')
+                logger.info('closing with domeclose')
+                aposong.domeclose()
             logger.info('waiting for nautical twilight+dt_nautical: {:.3f}'.format(
                         (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
             time.sleep(60)
@@ -657,8 +662,10 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             # observe best object!
             if usesong : best,header=getsong(dt_focus=dt_focus[nfocus])
             else : best=None
-            if best is None :
-                best,header=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
+            best_local,header_local=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
+            if best_local is not None and (best is None or (best_local['priority'] > best['priority'])) :
+                best=copy.copy(best_local)
+                header=copy.copy(header_local)
                 if best is not None :
                     nightlogger.info('observe: LOCAL, {:s}'.format(best['targname']))
                 req_no = -1
