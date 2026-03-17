@@ -1048,11 +1048,11 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if dome and D.ShutterStatus.name != 'shutterOpen' :
         logger.info('opening shutter...')
         D.OpenShutter()
-    if covers and Covers.CoverState.name != 'Open': 
         # Wait for shutter open before opening mirror covers
         logger.info('waiting for shutter to open...')
         while D.ShutterStatus.name != 'shutterOpen' :
             time.sleep(1)
+    if covers and Covers.CoverState.name != 'Open': 
         mirror_covers(True) 
         logger.info('waiting for mirror covers to open...')
         while Covers.CoverState.value != 3 :
