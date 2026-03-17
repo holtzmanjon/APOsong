@@ -6,11 +6,11 @@ app = Flask(__name__, template_folder="templates")
 
 # ─── DATABASE CONFIG ────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     "localhost",
+    "host":     "YOUR_HOST",
     "port":     5432,
-    "dbname":   "apo",
-    "user":     "song",
-    "password": "singSONG!",
+    "dbname":   "YOUR_DATABASE",
+    "user":     "YOUR_USER",
+    "password": "YOUR_PASSWORD",
 }
 # ────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,8 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS button_presses (
-                    id         INTEGER PRIMARY KEY,
+                    id         SERIAL PRIMARY KEY,
+                    hours      INTEGER NOT NULL,
                     pressed_at TIMESTAMPTZ NOT NULL
                 );
             """)
@@ -38,50 +39,42 @@ def index():
 
 @app.route("/press/<int:hours>", methods=["POST"])
 def press(hours):
-    if hours not in (1, 2, 3):
-        return jsonify({"error": "hours must be 1, 2, or 3"}), 400
+    if hours not in (0, 1, 2, 3):
+        return jsonify({"error": "hours must be 0, 1, 2, or 3"}), 400
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                INSERT INTO button_presses (id, pressed_at)
-                VALUES (1, NOW() + %s * INTERVAL '1 hour')
-                ON CONFLICT (id) DO UPDATE
-                    SET pressed_at = EXCLUDED.pressed_at
-                RETURNING id, pressed_at;
-            """, (hours,))
+                INSERT INTO button_presses (hours, pressed_at)
+                VALUES (%s, NOW() + %s * INTERVAL '1 hour')
+                RETURNING id, hours, pressed_at;
+            """, (hours, hours))
             row = cur.fetchone()
         conn.commit()
-    return jsonify({"id": row["id"], "pressed_at": row["pressed_at"].isoformat()})
+    return jsonify({
+        "id":        row["id"],
+        "hours":     row["hours"],
+        "pressed_at": row["pressed_at"].isoformat()
+    })
 
 
-@app.route("/current")
-def current():
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, pressed_at FROM button_presses WHERE id = 1;")
-            row = cur.fetchone()
-    if row:
-        return jsonify({"pressed_at": row["pressed_at"].isoformat()})
-    return jsonify({"pressed_at": None})
-
-
-@app.route("/clear", methods=["POST"])
-def clear():
+@app.route("/history")
+def history():
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                INSERT INTO button_presses (id, pressed_at)
-                VALUES (1, NOW())
-                ON CONFLICT (id) DO UPDATE
-                    SET pressed_at = EXCLUDED.pressed_at
-                RETURNING id, pressed_at;
+                SELECT id, hours, pressed_at
+                FROM button_presses
+                ORDER BY pressed_at DESC
+                LIMIT 50;
             """)
-            row = cur.fetchone()
-        conn.commit()
-    return jsonify({"id": row["id"], "pressed_at": row["pressed_at"].isoformat()})
+            rows = cur.fetchall()
+    return jsonify([
+        {"id": r["id"], "hours": r["hours"], "pressed_at": r["pressed_at"].isoformat()}
+        for r in rows
+    ])
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(host='0.0.0.0', debug=True, port=9000)
+    app.run(host="0.0.0.0", debug=True, port=5000)
