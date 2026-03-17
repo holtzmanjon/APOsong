@@ -6,12 +6,13 @@ app = Flask(__name__, template_folder="templates")
 
 # ─── DATABASE CONFIG ────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     "YOUR_HOST",
+    "host":     "localhost",
     "port":     5432,
-    "dbname":   "YOUR_DATABASE",
-    "user":     "YOUR_USER",
-    "password": "YOUR_PASSWORD",
+    "dbname":   "apo",
+    "user":     "song",
+    "password": "singSONG!",
 }
+
 # ────────────────────────────────────────────────────────────────
 
 def get_conn():
@@ -66,7 +67,7 @@ def history():
                 SELECT id, hours, pressed_at
                 FROM button_presses
                 ORDER BY pressed_at DESC
-                LIMIT 50;
+                LIMIT 10;
             """)
             rows = cur.fetchall()
     return jsonify([
@@ -77,4 +78,4 @@ def history():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", debug=True, port=5000)
+    app.run(host="0.0.0.0", debug=True, port=9000)

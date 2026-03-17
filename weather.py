@@ -30,8 +30,8 @@ def getapo() :
 
 def manual_override() :
     d=database.DBSession(host='song1m.apo.nmsu.edu',database='apo',user='song')
-    out=d.query('public.button_presses')
-    override_time=datetime.fromisoformat(out[0][1])
+    out=d.query(sql='SELECT pressed_at FROM public.button_presses ORDER BY id DESC LIMIT 1')
+    override_time=datetime.fromisoformat(out[0][0])
     now=pytz.timezone('America/Denver').localize(datetime.now())
     if override_time> now :
         return int((override_time-now).total_seconds())

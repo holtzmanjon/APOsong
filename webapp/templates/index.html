@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Delay Logger</title>
+  <title>1m dome open override</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
@@ -37,7 +37,7 @@
 
     .container {
       width: 100%;
-      max-width: 520px;
+      max-width: 600px;
       display: flex;
       flex-direction: column;
       gap: 2rem;
@@ -52,13 +52,24 @@
       color: var(--text);
     }
     header h1 span { color: var(--c2); }
-    header p {
-      margin-top: 0.35rem;
-      font-size: 0.72rem;
-      color: var(--muted);
-      letter-spacing: 0.08em;
+    header h2 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--text);
       text-transform: uppercase;
     }
+    header h2 span { color: var(--c2); }
+    header p {
+      font-family: 'IBM Plex Sans', monospace;
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      /*color: var(--muted); */
+      letter-spacing: 0.08em;
+      /*text-transform: uppercase;*/
+    }
+
 
     .btn-grid {
       display: grid;
@@ -192,11 +203,19 @@
 <body>
 <div class="container">
   <header>
-    <h1>DELAY <span>LOGGER</span></h1>
-    <p>Appends each press to Postgres with a UTC timestamp</p>
+    <h2>1m Dome open override </h2>
+    <p>Selecting a time below will allow the 1m dome to open robotically, even if 3.5m and 2.5m are not open.
+    <p>The override will stay in place for the selected amount of time from when you click the button. Select only the duration you are confident that the weather conditions will remain acceptable. No need to select a period beyond which you expect to open the 3.5m or 2.5m, after which the override is no longer needed.
+    <p>Select CANCEL to immediately clear the override. If open, the 1m dome should close within several minutes.
+    <p>Note that selecting an override MAY NOT cause the dome to open, depending on whether the robotic software is running, and also on weather criteria from the weather station.
+    </p>
   </header>
 
   <div class="btn-grid">
+    <button class="delay-btn" data-h="0" onclick="pressButton(0)">
+      <span class="hours">CANCEL</span>
+      <span class="label">now</span>
+    </button>
     <button class="delay-btn" data-h="1" onclick="pressButton(1)">
       <span class="hours">+1</span>
       <span class="label">hour</span>
@@ -209,15 +228,11 @@
       <span class="hours">+3</span>
       <span class="label">hours</span>
     </button>
-    <button class="delay-btn" data-h="0" onclick="pressButton(0)">
-      <span class="hours">CLEAR</span>
-      <span class="label">now</span>
-    </button>
   </div>
 
   <div class="history-panel">
     <div class="history-header">
-      <span>Press Log</span>
+      <span>Override set until</span>
       <span id="count-badge">0</span>
     </div>
     <ul id="log-list">
