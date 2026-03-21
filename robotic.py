@@ -560,14 +560,14 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # open if not already open (e.g., from previous robotic.observe invocation same night)
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
-        load_status('open')
     logger.info('open at: {:s}'.format(Time.now().to_string()))
     nightlogger.info('open at: {:s}'.format(Time.now().to_string()))
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
-        time.sleep(60)
+        # need to sleep longer than dome close time
+        time.sleep(120)
         if aposong.D.ShutterStatus != 0 :
             logger.info('closing with domeclose')
             aposong.domeclose()
@@ -584,7 +584,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             if aposong.issafe() and aposong.D.ShutterStatus != 0 :
                 logger.info('reopening dome')
                 aposong.domeopen()
-                load_status('open')
                 aposong.louvers(True)
             elif aposong.D.ShutterStatus != 0 :
                 load_status('closed')
@@ -592,7 +591,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 aposong.domeclose()
             logger.info('waiting for nautical twilight+dt_nautical: {:.3f}'.format(
                         (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
-            time.sleep(60)
+            time.sleep(120)
         except KeyboardInterrupt :
             return
 
@@ -669,7 +668,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
                 if best is not None :
                     nightlogger.info('observe: LOCAL, {:s}'.format(best['targname']))
                 req_no = -1
-            else :
+            elif best is not None :
                 req_no = best['req_no']
                 nightlogger.info('observe: SONG {:d}, {:s}, {:s}'.format(req_no, best['targname'], best['project_name']))
             if best is None :
