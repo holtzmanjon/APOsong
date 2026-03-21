@@ -66,7 +66,7 @@ def history():
             cur.execute("""
                 SELECT id, hours, pressed_at
                 FROM button_presses
-                ORDER BY pressed_at DESC
+                ORDER BY Id DESC
                 LIMIT 10;
             """)
             rows = cur.fetchall()

@@ -196,6 +196,22 @@
     #status-bar.ok  { color: #47ffb0; }
     #status-bar.err { color: #ff4747; }
 
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.6rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #refresh-btn:hover { color: var(--c2); border-color: var(--c2); }
+    #refresh-btn.spinning { color: var(--c2); border-color: var(--c2); opacity: 0.6; }
+
+
     @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
     .new-row { background: rgba(255,255,255,0.02); }
   </style>
@@ -233,12 +249,17 @@
   <div class="history-panel">
     <div class="history-header">
       <span>Override set until</span>
-      <span id="count-badge">0</span>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <span id="count-badge">0</span>
+        <button id="refresh-btn" onclick="refreshHistory()">↻ refresh</button>
+      </div>
     </div>
     <ul id="log-list">
       <li class="empty">No presses yet.</li>
     </ul>
   </div>
+
+
 
   <div id="status-bar">— ready —</div>
 </div>
@@ -295,15 +316,29 @@
     });
   }
 
+  async function refreshHistory() {
+    const btn = document.getElementById('refresh-btn');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    await loadHistory();
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  }
+
   async function loadHistory() {
     try {
       const rows = await fetch('/history').then(r => r.json());
       if (rows.length) {
-        document.getElementById('log-list').innerHTML = '';
-        rows.forEach(r => prependRow(r.id, r.hours, r.pressed_at));
-        // newest first — reverse re-prepend order
         const list = document.getElementById('log-list');
-        [...list.children].reverse().forEach(c => list.prepend(c));
+        list.innerHTML = '';
+        rows.forEach(r => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <span class="row-id">#${r.id}</span>
+            <span class="row-tag tag-${r.hours}">${tagLabel[r.hours]}</span>
+            <span class="row-ts">${formatTs(r.pressed_at)}</span>`;
+          list.appendChild(li);
+        });
         document.getElementById('count-badge').textContent = rows.length;
       }
     } catch (_) {}
