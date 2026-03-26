@@ -30,21 +30,13 @@ import focus as dofocus
 import reduce
 import mail
 
-#try:
-#    with open('logging.yml', 'rt') as f:
-#        config = yaml.safe_load(f.read())
-#    logging.config.dictConfig(config)
-#    for handler in logging.root.manager.loggerDict['aposong'].handlers :
-#        if handler.name == 'daily' :
-#            handler.atTime = datetime.time(hour=14)
-#except:
-#    print("can't open logging.yml")
-
 logger=logging.getLogger(__name__)
 
 import aposong 
 import cal
 import database
+
+last_thar_time = datetime.datetime.now()
 
 class Target() :
     def __init__(self,name,ra,dec,mag=99.999,epoch=2000.) :
@@ -111,6 +103,7 @@ class Sequence() :
         return tot
 
     def observe(self,name,display=None,fact=1,nfact=1,header=None,req_no=-1) :
+        global last_thar_time
         names = []
         # start back at foc0
         aposong.foc(foc0)
@@ -125,11 +118,12 @@ class Sequence() :
                 logger.info('Focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, foc1: {:.0f}'.format(alt,foc0,adjustedfoc,foc1))
                 aposong.foc(adjustedfoc-foc1,relative=True)
                 foc1=copy.copy(adjustedfoc)
-                if filt == 'thar' :
+                if filt == 'thar' and ((datetime.datetime.now()-last_thar_time).total_seconds() > 300) :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp,filt,bin))
                     aposong.guide('pause')
                     time.sleep(10)
                     calnames=cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
+                    last_thar_time = datetime.datetime.now()
                     names.extend(calnames)
                     aposong.guide('resume')
                     time.sleep(30)
@@ -257,7 +251,7 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
               header['PROJECT'] = request['project_name'][0]
               header['PROJ-ID'] = request['project_id'][0]
               header['REQ_NO'] = request['req_no'][0]
-              pk=loadrequest('song_{:d}'.format(request['req_no'][0]),request['targname'][0],'song','song',priority)
+              pk=loadrequest('song_{:d}'.format(request['req_no'][0]),request['targname'][0],'song','song','robotic.request',priority)
               loadtarg(request['targname'][0],request['ra'][0],request['dec'][0],epoch=request['epoch'][0],mag=request['magnitude'][0]) 
               request['request_pk'] = [pk]
               return request[0], header
@@ -573,9 +567,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.domeclose()
     if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
-    # cals
-    #if cals :
-    #    cal.cals()
+    # evening cals
+    if cals :
+        header={}
+        header['OBS-MODE'] = 'cal'
+        header['PROJECT'] = 'No-Proj'
+        header['PROJ-ID'] = 'No-Proj'
+        cal.cals(header=header,flats=3,iodineflats=3)
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -899,6 +897,16 @@ def createrequest(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_e
     request['bin'] = bin if isinstance(bin,list) else [bin]
     request['camera'] = camera if isinstance(camera,list) else [camera]
     return request
+
+def query(table) :
+
+    tables=['robotic.target','robotic.schedule','robotic.sequence','robotic.request']
+    if table not in tables :
+        print('table must be one of',tables)
+        return
+    d=database.DBSession()
+    out=d.query(table,fmt='table')
+    out.pprint_all()
 
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
