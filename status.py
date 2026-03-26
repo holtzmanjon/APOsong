@@ -486,7 +486,7 @@ if __name__ == '__main__' :
             telframe.alt.set('ERROR')
             telframe.rot.set('ERROR')
             telframe.port.set('ERROR')
-            telframe.focus.set('{:d}'.format(aposong.foc(port=2)))
+            telframe.focus.set('ERROR')
 
         try :
             domestat = aposong.domestatus()
