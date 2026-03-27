@@ -19,8 +19,8 @@ Dome server.
 
 Local requests are drawn from a Postgres robotic schema that includes a 
 database table (requests) that gives a target (defined in target table), observing schedule
-constraints (defined in schedule table) , and observing sequence
-(defined in squence table). The getbest() routine selects the best
+constraints (defined in schedule table), and observing sequence
+(defined in sequence table). The getbest() routine selects the best
 object to observed given the constraints and length of observing
 sequence based on either a criterion to observe objects before they
 set (default), or to observe objects that will be available for the
@@ -39,17 +39,23 @@ Once an object is selected, it is acquired, guiding started, and then the
 exposure sequence executed. Completed sequences are logged back into the Postgres
 database in the observed table.
 
+Calibration sequences can also be obtained automatically.
+
+At the end of the night, web pages, focus curves, and guider movies for the
+night are constructed.
+
 The contents of the database tables for local requests is shown below:
 
 .. image:: robotic_schema.png
   :width: 600
   :alt: robotic schema
 
-Calibration sequences can also be obtained automatically.
-
-At the end of the night, web pages, focus curves, and guider movies for the
-night are constructed.
-
+To add a local observation request, use the loadrequest() function. This
+requires specifying a target, sequence, schedule, from the respective
+database tables, as well as a integer priority (larger number is higher
+priority). You can retrieve existing entries in the tables using the
+query() function, and can add new entries using loadtarg(), loadsched(),
+and loadseq() functions. See docstrings (using help or ?) for details.
 
 Module functions
 ++++++++++++++++
