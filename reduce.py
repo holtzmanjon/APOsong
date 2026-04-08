@@ -301,7 +301,8 @@ def guider(i1,i2,red=None,sat=65000,title='') :
 def getobs(targ) :
 
     d=database.DBSession()
-    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
+    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk',
+                skip=['throughput_orders','sn_orders'])
     obslist=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk',fmt='list')
     d.close()
 
