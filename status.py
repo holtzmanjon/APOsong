@@ -393,7 +393,7 @@ if __name__ == '__main__' :
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
-            if float(temp1)>float(tset1)+20 or float(temp2)>float(tset2)+20 :
+            if float(temp1)>float(tset1)+20 : #or float(temp2)>float(tset2)+20 :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0)
 
@@ -409,8 +409,12 @@ if __name__ == '__main__' :
 
             # load into influx database
             iodine_dict={}
-            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
-                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
+            # without second channel, don't load 99.999 into influx database
+            #for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
+            #               [temp1,temp2,volt1,volt2,curr1,curr2]) :
+            #    iodine_dict[k] = float(v)
+            for k,v in zip(['temp1','volt1','curr1'],
+                           [temp1,volt1,curr1]) :
                 iodine_dict[k] = float(v)
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
         except : print('error with iodine')

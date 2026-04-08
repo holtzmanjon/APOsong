@@ -8,15 +8,26 @@ import pdb
 
 def getlamps() :
     state = ['Off','On']
+    iswitch =  aposong.getswitch('K8056')
     for dev in range(4):
-        print(dev,aposong.SW[1].GetSwitchName(dev),state[aposong.SW[1].GetSwitch(dev)])
+        print(dev,aposong.SW[iswitch].GetSwitchName(dev),state[aposong.SW[iswitch].GetSwitch(dev)])
 
 def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
     """ Send commands to remote socket for eShel calibration control
     """
+    iswitch =  aposong.getswitch('K8056')
     for dev,state in enumerate([quartz,thar,led,mirror]) :
-        if aposong.SW[1].GetSwitch(dev) != state :
-            aposong.SW[1].SetSwitch(dev,state)
+        if aposong.SW[iswitch].GetSwitch(dev) != state :
+            aposong.SW[iswitch].SetSwitch(dev,state)
+
+def shutter(openshutter=False) :
+    """ Command shutter in direct calibration feed
+    """
+    iswitch =  aposong.getswitch('LCUS')
+    if openshutter :
+        aposong.SW[iswitch].SetSwitch(0,True)
+    else :
+        aposong.SW[iswitch].SetSwitch(0,False)
   
 def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_exptime=60,thar_exptime=120,
          cam=3,bin=2,root='',calstage=True,mirror=False,header=None) :

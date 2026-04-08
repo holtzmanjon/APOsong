@@ -167,6 +167,21 @@ def getfocuser(focuser) :
         if focuser in c.Name :
             return index
     print('no such focuser!')
+    return -1
+
+def getswitch(switch) :
+    """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
+         switch='TC300' : Thorlabs temperature controller
+         switch='K8056' : relay for Shelyak calibration control
+         switch='LCUS' : LCUS relay for calibration shutter
+         switch='Yocto' : Relay for power to QHY600 on spectrograph
+         switch='Wanderer' : Wanderer PowerBox for spectrograph focuser USB reset
+    """
+    for index,c in enumerate(SW) :
+        if switch in c.Name :
+            return index
+    print('no such switch!')
+    return -1
 
 def wait_moving(Foc) :
     """ Check if input Focuser is stil moving
@@ -179,17 +194,6 @@ def wait_moving(Foc) :
             break
         time.sleep(1)
     return
-
-def getswitch(switch) :
-    """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
-         switch=0 : TC300
-         switch=1 : LTS250
-    """
-    for index,sw in enumerate(SW) :
-        if sw.device_number == switch : 
-            return index 
-    print('no such switch!')
-    return -1
 
 # Camera commands
 def qck(exptime,filt='current') :
@@ -354,9 +358,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         i2pos = 4
     else : 
         i2pos = 0
-    temp1,temp2 = iodine_tget().split()[2:]
+    #temp1,temp2 = iodine_tget().split()[2:]
+    temp1 = iodine_tget().split()[2:][0]
+    temp2=99.999
     fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
-                   calstage_position(),SW[1],filt)
+                   calstage_position(),SW[getswitch('K8056')],filt)
     #fitsheader.weather(hdu)
     #fitsheader.sunmoon(hdu)
     fitsheader.time(hdu,t)
@@ -364,11 +370,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     tab=Table()
     cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
              'HOR_BIN','VER_BIN','RA','DEC','AZ','ALT','ROT',
-             'SPECFOC','I_POS','I_TEMP1','I_TEMP2',
+             'SPECFOC','I_POS','I_TEMP1', 'I_TEMP2',
              'CAL_POS','TUNGSTEN','LED','THAR'] 
     cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp',
             'xbin','ybin','ra','dec','az','alt','rot',
-            'specfoc','iodine_position','iodine_temp1','iodine_temp2',
+            'specfoc','iodine_position','iodine_temp1', 'iodine_temp2',
             'calstage_position','tungsten','led','thar'] 
     for card,col in zip(cards,cols) :
         try : tab[col] = [hdu.header[card]]
@@ -819,32 +825,37 @@ def specfoc(val=None) :
         wait_moving(F[index]) 
     return F[index].Position
 
-def iodine_tset(val=None,tmax=65) :
+def iodine_tset(val=None,tmax=66) :
     """ Get/set iodine cell set temperature and (re)enable heaters
     """
+    iswitch = getswitch('TC300')
     if val is not None :
         if val > tmax :
             print('values > {:d} must be explicitly allowed with tmax= keyword'.format(tmax))
             return
-        SW[0].SetSwitchValue(0,val)
-        SW[0].SetSwitchValue(1,val)
+        SW[iswitch].SetSwitchValue(0,val)
+        SW[iswitch].SetSwitchValue(1,0)  # no second channel on new iodine cell
         iodine_set('enable',1)
 
-    tset1 = SW[0].Action('get_tset',0)
-    tset2 = SW[0].Action('get_tset',1)
+    tset1 = SW[iswitch].Action('get_tset',0)
+    tset2 = SW[iswitch].Action('get_tset',1)
     return f'set temperature: {tset1} {tset2}'
 
 def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
-    tact1 = SW[0].GetSwitchValue(0)
-    tact2 = SW[0].GetSwitchValue(1)
+    iswitch = getswitch('TC300')
+    tact1 = SW[iswitch].GetSwitchValue(0)
+    tact2 = SW[iswitch].GetSwitchValue(1)
     return f'actual temperature: {tact1} {tact2}'
 
 def iodine_set(quantity,val) :
+    """  Miscellaneous TC300 commands: enable, dark, light
+    """
+    iswitch = getswitch('TC300')
     if quantity in ['enable','dark','light'] :
-        q1 = SW[0].Action('set_{:s}'.format(quantity),0,val)
-        q2 = SW[0].Action('set_{:s}'.format(quantity),1,val)
+        q1 = SW[iswitch].Action('set_{:s}'.format(quantity),0,val)
+        q2 = SW[iswitch].Action('set_{:s}'.format(quantity),1,val)
         return f'{q1} {q2}'
     else :
         print('unknown quantity')
@@ -852,9 +863,10 @@ def iodine_set(quantity,val) :
 def iodine_get(quantity) :
     """ Get iodine cell quantity
     """
+    iswitch = getswitch('TC300')
     if quantity in ['tset','voltage','current','enable','dark','light'] :
-        q1 = SW[0].Action('get_{:s}'.format(quantity),0)
-        q2 = SW[0].Action('get_{:s}'.format(quantity),1)
+        q1 = SW[iswitch].Action('get_{:s}'.format(quantity),0)
+        q2 = SW[iswitch].Action('get_{:s}'.format(quantity),1)
         return f'{q1} {q2}'
     else :
         print('unknown quantity')
@@ -1186,6 +1198,7 @@ def commands() :
     print("  cal.getlamps() : get eShel lamp status")
     print("  cal.lamps() : control eShel lamps")
     print("  cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
+    print("  cal.shutter() : open/close shutter in direct calibration feed")
     print()
     print("Use help(command) for more details")
 
