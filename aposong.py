@@ -358,9 +358,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         i2pos = 4
     else : 
         i2pos = 0
-    #temp1,temp2 = iodine_tget().split()[2:]
-    temp1 = iodine_tget().split()[2:][0]
-    temp2=99.999
+    temp1,temp2 = iodine_tget().split()[2:]
     fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
                    calstage_position(),SW[getswitch('K8056')],filt)
     #fitsheader.weather(hdu)
@@ -1189,6 +1187,8 @@ def commands() :
     print("  iodine_home() : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
+    print("  iodine_get(quantity): get various TC300 values (tset,voltage,current,enable,dark,light)")
+
     print()
     print("Calibration commands")
     print("  calstage_in() : move calibration stage into beam, and adjust focus (if needed)")
