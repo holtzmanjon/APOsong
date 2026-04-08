@@ -73,6 +73,7 @@ Focal plane unit commands :
   - iodine_home : home iodine stage
   - iodine_tset(val) : set iodine temperature (both channels)
   - iodine_tget(): get actual iodine temperatures
+  - iodine_get(quantity): get various TC300 values (tset,voltage,current,enable,dark,light)
 
 Calibration commands :
   - calstage_in() : move calibration stage into beam, and adjust focus (if needed)"
@@ -82,6 +83,7 @@ Calibration commands :
   - cal.getlamps() : get eShel lamp status
   - cal.lamps() : control eShel lamps
   - cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off
+  - cal.shutter() : open/close shutter in direct calibration feed
 
 Alpyca devices
 ++++++++++++++
