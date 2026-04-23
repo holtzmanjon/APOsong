@@ -1,0 +1,1 @@
+vlc --width=300 --no-qt-video-autoresize --video-x=500 --video-y=-0 'rtsp://song:singSONG!@video1m.apo.nmsu.edu:554'
