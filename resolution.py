@@ -1,6 +1,11 @@
 from holtztools import plots 
+import glob, pdb
+from pyvista import spectra
+from pyvista.dataclass import Data
+import matplotlib.pyplot as plt
 
-def plot(wav,waves) :
+def plot(wav) :
+    waves=wav.wave(image=wav.spectrum.shape)
     fig,ax=plots.multi(1,2,hspace=0.001)
     pix=wav.pix[wav.weights>0].astype(int)
     y=wav.y[wav.weights>0]
@@ -16,4 +21,22 @@ def plot(wav,waves) :
     cbar_ax = fig.add_axes([0.82, 0.15, 0.05, 0.7])
     fig.colorbar(im, cax=cbar_ax)
     cbar_ax.set_ylabel('X pixel')
+    fig.suptitle(wav.dateobs)
+
+def all(dataroot='/home/1m/rereduced') :
+    files=glob.glob(dataroot+'/*/*thar*ec*.fits')
+    dates = []
+    for file in files :
+        dates.append(file.split('/')[4])
+    dates = sorted(set(dates))
+
+    for date in dates[::10] :
+        tharfiles = sorted(glob.glob('{:s}/{:s}/thar*.fits'.format(dataroot,date)) )
+        print(date,tharfiles[0])
+        a=Data.read(tharfiles[0])
+        wav=spectra.WaveCal(tharfiles[0].replace('_ec','_wav'))
+        wav.identify(a,thresh=50)
+        plot(wav,wav.wave(image=wav.spectrum.shape))
+        plt.draw()
+
 
