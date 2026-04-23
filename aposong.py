@@ -176,6 +176,7 @@ def getswitch(switch) :
          switch='LCUS' : LCUS relay for calibration shutter
          switch='Yocto' : Relay for power to QHY600 on spectrograph
          switch='Wanderer' : Wanderer PowerBox for spectrograph focuser USB reset
+         switch='TCube' : TCube chiller
     """
     for index,c in enumerate(SW) :
         if switch in c.Name :
@@ -434,6 +435,18 @@ def settemp(temp,cam=0) :
     icam=getcam(cam)
     C[icam].SetCCDTemperature = temp
     C[icam].CoolerOn = True
+
+def chiller(temp=None) :
+    """ Get/set chiller temperature
+    """
+    if temp is not None :
+        SW[getswitch('TCube')].Action('tset',temp)
+    return SW[getswitch('TCube')].Action('get_tact')
+
+def chiller_fault(temp=None) :
+    """ Get chiller fault status
+    """
+    return SW[getswitch('TCube')].Action('get_fault')
 
 def cooler(state=True,cam=0) :
     """ Set detector cooler state on/off
