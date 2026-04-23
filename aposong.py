@@ -440,13 +440,13 @@ def chiller(temp=None) :
     """ Get/set chiller temperature
     """
     if temp is not None :
-        SW[getswitch('TCube')].Action('tset',temp)
-    return SW[getswitch('TCube')].Action('get_tact')
+        SW[getswitch('TCube')].Action('tset',0,temp)
+    return float(SW[getswitch('TCube')].Action('get_tact',0))
 
 def chiller_fault(temp=None) :
     """ Get chiller fault status
     """
-    return SW[getswitch('TCube')].Action('get_fault')
+    return SW[getswitch('TCube')].Action('get_fault',0)
 
 def cooler(state=True,cam=0) :
     """ Set detector cooler state on/off
@@ -1192,6 +1192,8 @@ def commands() :
     print("  focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions")
     print("  settemp(temp): set camera temperature set point")
     print("  cooler(state): set camera cooler state on (True) or off (False)")
+    print("  chiller([temp]): get/set chiller temperature")
+    print("  chiller_fault(): get chiller fault status")
     print()
     print("Iodine commands")
     print("  iodine_in() : move iodine cell into beam, and adjust focus")

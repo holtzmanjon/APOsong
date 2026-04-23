@@ -65,6 +65,9 @@ Camera commands :
   - focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
+  - chiller([temp]): get/set chiller temperature
+  - chiller_fault(): get chiller fault status
+
 
 Focal plane unit commands :
   - iodine_position([val]) : get or set (with val) iodine stage position

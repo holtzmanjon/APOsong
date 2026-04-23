@@ -112,31 +112,29 @@ class CameraWgt(ttk.Frame) :
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="FILTER",width=8).grid(column=1,row=1,sticky=(W))
-        self.filter = StringVar()
-        ttk.Label(self, textvariable=self.filter).grid(column=2,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="BINNING",width=8).grid(column=3,row=1,sticky=(W))
-        self.binning = StringVar()
-        ttk.Label(self, textvariable=self.binning).grid(column=4,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="STATE",width=8).grid(column=5,row=1,sticky=(W))
-        self.state = StringVar()
-        ttk.Label(self, textvariable=self.state).grid(column=6,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="TEMP",width=8).grid(column=1,row=2,sticky=(W))
+        ttk.Label(self,text="GCAM TEMP",width=9).grid(column=1,row=1,sticky=(W))
         self.temperature = StringVar()
-        ttk.Label(self, textvariable=self.temperature).grid(column=2,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=2,sticky=(W))
+        ttk.Label(self, textvariable=self.temperature).grid(column=2,row=1,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=1,sticky=(W))
         self.cooler = StringVar()
-        ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
+        self.cooler_label = ttk.Label(self, textvariable=self.cooler)
+        self.cooler_label.grid(column=4,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="TEMP",width=8).grid(column=5,row=2,sticky=(W))
+        ttk.Label(self,text="SCAM TEMP",width=9).grid(column=5,row=1,sticky=(W))
         self.spec_temp = StringVar()
-        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=2,sticky=(W))
+        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=1,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=1,sticky=(W))
         self.spec_cooler = StringVar()
-        ttk.Label(self, textvariable=self.spec_cooler).grid(column=8,row=2,sticky=(W,E),padx=10)
+        self.spec_cooler_label = ttk.Label(self, textvariable=self.spec_cooler)
+        self.spec_cooler_label.grid(column=8,row=1,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="CHILLER",width=8).grid(column=5,row=2,sticky=(W))
+        self.chiller_temp = StringVar()
+        ttk.Label(self, textvariable=self.chiller_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self,text="CHILLER FAULT",width=15).grid(column=7,row=2,sticky=(W))
+        self.chiller_fault = StringVar()
+        self.chiller_fault_label = ttk.Label(self, textvariable=self.chiller_fault)
+        self.chiller_fault_label.grid(column=8,row=2,sticky=(W,E),padx=10)
 
 class IodineWgt(ttk.Frame) :
 
@@ -353,13 +351,24 @@ if __name__ == '__main__' :
                     except : 
                         print('error with camera: ',i)
                         continue
-                #camframe.filter.set('{:s}'.format(aposong.filtname()))
-                #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-                #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
                 camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
                 camframe.cooler.set('{:.1f}'.format(ccd_dict['camera_0_power']))
+                if ccd_dict['camera_0_power'] < 0.1 or ccd_dict['camera_0_power'] > 98:
+                    camframe.cooler_label.config(foreground='red')    
+                else :
+                    camframe.cooler_label.config(foreground='black')    
                 camframe.spec_temp.set('{:.1f}'.format(ccd_dict['camera_3_temp']))
                 camframe.spec_cooler.set('{:.1f}'.format(ccd_dict['camera_3_power']))
+                if ccd_dict['camera_3_power'] < 0.1 or ccd_dict['camera_3_power'] > 98:
+                    camframe.spec_cooler_label.config(foreground='red')    
+                else :
+                    camframe.spec_cooler_label.config(foreground='black')    
+                ctemp = aposong.chiller()
+                camframe.chiller_temp.set('{:.1f}'.format(ctemp))
+                cfault = aposong.chiller_fault()
+                camframe.chiller_fault.set('{:d}'.format(cfault))
+                if cfault != 0 : camframe.chiller_fault_label.config(foreground='red')
+                else :camframe.chiller_fault_label.config(foreground='green3')
         except : print('Error with camera')
 
         try :
