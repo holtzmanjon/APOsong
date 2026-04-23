@@ -335,9 +335,9 @@ def getobs(targ) :
     return tab
 
 def process_thar(pars,outdir='rereduced',clobber=False) :
-    specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber)
+    specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber,cr=False)
 
-def process(pars,outdir='rereduced',clobber=True) :
+def process(pars,outdir='rereduced',clobber=False) :
     specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber,wav=pars[2])
  
 def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
@@ -378,9 +378,10 @@ def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
     pars=[]
     for date in dates :
         wavfiles = glob.glob('{:s}/{:s}/{:s}/thar_wav*.fits'.format(dataroot,outdir,date))
+        if len(wavfiles) < 1 : continue
         wavs=[]
         for wavfile in wavfiles :
-            wavs.append(spectra.Wavecal(wavfile))
+            wavs.append(spectra.WaveCal(wavfile))
         files = sorted(glob.glob('{:s}/{:s}/{:s}*.fits'.format(dataroot,date,obj)) )
         for file in files :
             pars.append((file,red,wavs))
