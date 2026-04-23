@@ -8,15 +8,26 @@ import pdb
 
 def getlamps() :
     state = ['Off','On']
+    iswitch =  aposong.getswitch('K8056')
     for dev in range(4):
-        print(dev,aposong.SW[1].GetSwitchName(dev),state[aposong.SW[1].GetSwitch(dev)])
+        print(dev,aposong.SW[iswitch].GetSwitchName(dev),state[aposong.SW[iswitch].GetSwitch(dev)])
 
 def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
     """ Send commands to remote socket for eShel calibration control
     """
+    iswitch =  aposong.getswitch('K8056')
     for dev,state in enumerate([quartz,thar,led,mirror]) :
-        if aposong.SW[1].GetSwitch(dev) != state :
-            aposong.SW[1].SetSwitch(dev,state)
+        if aposong.SW[iswitch].GetSwitch(dev) != state :
+            aposong.SW[iswitch].SetSwitch(dev,state)
+
+def shutter(openshutter=False) :
+    """ Command shutter in direct calibration feed
+    """
+    iswitch =  aposong.getswitch('LCUS')
+    if openshutter :
+        aposong.SW[iswitch].SetSwitch(0,True)
+    else :
+        aposong.SW[iswitch].SetSwitch(0,False)
   
 def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_exptime=60,thar_exptime=120,
          cam=3,bin=2,root='',calstage=True,mirror=False,header=None) :
@@ -56,19 +67,22 @@ def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_ex
     names=[]
     if flats>0 :
         for i in range(flats) :
-            exp=aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'flat',imagetyp='FLAT',header=header)
+            exp=aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,
+                               name=root+'flat',imagetyp='FLAT',targ='FLAT',header=header)
             names.append(exp.name)
     if iodineflats>0 :
         aposong.iodine_in()
         for i in range(iodineflats) :
-            exp=aposong.expose(iodineflat_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'iodineflat',imagetyp='FLATI2',header=header)
+            exp=aposong.expose(iodineflat_exptime,filt=None,bin=bin,display=display,cam=cam,
+                               name=root+'iodineflat',imagetyp='FLATI2',targ='FLATI2',header=header)
             names.append(exp.name)
         aposong.iodine_out()
     if thar>0 :
         lamps(mirror=mirror,thar=True)
         time.sleep(3)
         for i in range(thar) :
-            exp=aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,name=root+'thar',imagetyp='THAR',header=header)
+            exp=aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,
+                               name=root+'thar',imagetyp='THAR',targ='THAR',header=header)
             names.append(exp.name)
     lamps()
     time.sleep(3)
@@ -85,7 +99,7 @@ def dark(exptime,ccdtemp=None,cam=0,n=5,bin=1,filt=None,name=None) :
         aposong.settemp(ccdtemp,cam=cam)
         time.sleep(300)
     for i in range(n) :
-        aposong.expose(exptime,cam=cam,light=False,bin=bin,filt=filt,name=name,imagetyp='DARK')
+        aposong.expose(exptime,cam=cam,light=False,bin=bin,filt=filt,name=name,imagetyp='DARK',targ='DARK')
 
 def darks(temps=[-10,-5,-15],bins=[2],exps=[30,60,120,180,240,300,600],cam=3,n=11,filt=None) :
     """ Take multiple series of darks at different temps, bins, exptimes

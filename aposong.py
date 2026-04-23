@@ -24,19 +24,7 @@ import subprocess
 import logging
 import yaml
 import logging.config
-try :
-    with open('logging.yml', 'rt') as f:
-        logconfig = yaml.safe_load(f.read())
-    logging.config.dictConfig(logconfig)
-    for handler in logging.root.manager.loggerDict['aposong'].handlers :
-         if handler.name == 'daily' :
-             handler.atTime = datetime.time(hour=14)
-    logger=logging.getLogger('aposong')
-except FileNotFoundError :
-    #trap for readthedocs
-    print('logging.yml not found')
-except :
-    print('error with logging')
+logger=logging.getLogger(__name__)
 
 from astropy.coordinates import SkyCoord, EarthLocation, Angle
 import astropy.units as u
@@ -179,6 +167,22 @@ def getfocuser(focuser) :
         if focuser in c.Name :
             return index
     print('no such focuser!')
+    return -1
+
+def getswitch(switch) :
+    """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
+         switch='TC300' : Thorlabs temperature controller
+         switch='K8056' : relay for Shelyak calibration control
+         switch='LCUS' : LCUS relay for calibration shutter
+         switch='Yocto' : Relay for power to QHY600 on spectrograph
+         switch='Wanderer' : Wanderer PowerBox for spectrograph focuser USB reset
+         switch='TCube' : TCube chiller
+    """
+    for index,c in enumerate(SW) :
+        if switch in c.Name :
+            return index
+    print('no such switch!')
+    return -1
 
 def wait_moving(Foc) :
     """ Check if input Focuser is stil moving
@@ -191,17 +195,6 @@ def wait_moving(Foc) :
             break
         time.sleep(1)
     return
-
-def getswitch(switch) :
-    """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
-         switch=0 : TC300
-         switch=1 : LTS250
-    """
-    for index,sw in enumerate(SW) :
-        if sw.device_number == switch : 
-            return index 
-    print('no such switch!')
-    return -1
 
 # Camera commands
 def qck(exptime,filt='current') :
@@ -368,7 +361,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         i2pos = 0
     temp1,temp2 = iodine_tget().split()[2:]
     fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
-                   calstage_position(),SW[1],filt)
+                   calstage_position(),SW[getswitch('K8056')],filt)
     #fitsheader.weather(hdu)
     #fitsheader.sunmoon(hdu)
     fitsheader.time(hdu,t)
@@ -376,11 +369,11 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     tab=Table()
     cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
              'HOR_BIN','VER_BIN','RA','DEC','AZ','ALT','ROT',
-             'SPECFOC','I_POS','I_TEMP1','I_TEMP2',
+             'SPECFOC','I_POS','I_TEMP1', 'I_TEMP2',
              'CAL_POS','TUNGSTEN','LED','THAR'] 
     cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp',
             'xbin','ybin','ra','dec','az','alt','rot',
-            'specfoc','iodine_position','iodine_temp1','iodine_temp2',
+            'specfoc','iodine_position','iodine_temp1', 'iodine_temp2',
             'calstage_position','tungsten','led','thar'] 
     for card,col in zip(cards,cols) :
         try : tab[col] = [hdu.header[card]]
@@ -442,6 +435,18 @@ def settemp(temp,cam=0) :
     icam=getcam(cam)
     C[icam].SetCCDTemperature = temp
     C[icam].CoolerOn = True
+
+def chiller(temp=None) :
+    """ Get/set chiller temperature
+    """
+    if temp is not None :
+        SW[getswitch('TCube')].Action('tset',0,temp)
+    return float(SW[getswitch('TCube')].Action('get_tact',0))
+
+def chiller_fault(temp=None) :
+    """ Get chiller fault status
+    """
+    return SW[getswitch('TCube')].Action('get_fault',0)
 
 def cooler(state=True,cam=0) :
     """ Set detector cooler state on/off
@@ -514,7 +519,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
             f=foc(int(bestfoc))
             best=besthf
     except :
-        bestfitfoc, bestfithf,  bestfoc, besthf = -1, -1, -1, -1
+        bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1., -1, -1., -1.
         logger.exception('focus failed')
         f=foc(foc0)
 
@@ -831,32 +836,37 @@ def specfoc(val=None) :
         wait_moving(F[index]) 
     return F[index].Position
 
-def iodine_tset(val=None,tmax=65) :
+def iodine_tset(val=None,tmax=66) :
     """ Get/set iodine cell set temperature and (re)enable heaters
     """
+    iswitch = getswitch('TC300')
     if val is not None :
         if val > tmax :
             print('values > {:d} must be explicitly allowed with tmax= keyword'.format(tmax))
             return
-        SW[0].SetSwitchValue(0,val)
-        SW[0].SetSwitchValue(1,val)
+        SW[iswitch].SetSwitchValue(0,val)
+        SW[iswitch].SetSwitchValue(1,0)  # no second channel on new iodine cell
         iodine_set('enable',1)
 
-    tset1 = SW[0].Action('get_tset',0)
-    tset2 = SW[0].Action('get_tset',1)
+    tset1 = SW[iswitch].Action('get_tset',0)
+    tset2 = SW[iswitch].Action('get_tset',1)
     return f'set temperature: {tset1} {tset2}'
 
 def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
-    tact1 = SW[0].GetSwitchValue(0)
-    tact2 = SW[0].GetSwitchValue(1)
+    iswitch = getswitch('TC300')
+    tact1 = SW[iswitch].GetSwitchValue(0)
+    tact2 = SW[iswitch].GetSwitchValue(1)
     return f'actual temperature: {tact1} {tact2}'
 
 def iodine_set(quantity,val) :
+    """  Miscellaneous TC300 commands: enable, dark, light
+    """
+    iswitch = getswitch('TC300')
     if quantity in ['enable','dark','light'] :
-        q1 = SW[0].Action('set_{:s}'.format(quantity),0,val)
-        q2 = SW[0].Action('set_{:s}'.format(quantity),1,val)
+        q1 = SW[iswitch].Action('set_{:s}'.format(quantity),0,val)
+        q2 = SW[iswitch].Action('set_{:s}'.format(quantity),1,val)
         return f'{q1} {q2}'
     else :
         print('unknown quantity')
@@ -864,14 +874,15 @@ def iodine_set(quantity,val) :
 def iodine_get(quantity) :
     """ Get iodine cell quantity
     """
+    iswitch = getswitch('TC300')
     if quantity in ['tset','voltage','current','enable','dark','light'] :
-        q1 = SW[0].Action('get_{:s}'.format(quantity),0)
-        q2 = SW[0].Action('get_{:s}'.format(quantity),1)
+        q1 = SW[iswitch].Action('get_{:s}'.format(quantity),0)
+        q2 = SW[iswitch].Action('get_{:s}'.format(quantity),1)
         return f'{q1} {q2}'
     else :
         print('unknown quantity')
 
-def iodine_in(val=None,focoffset=-4625) :
+def iodine_in(val=None,focoffset=-4600) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -883,7 +894,7 @@ def iodine_in(val=None,focoffset=-4625) :
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
-def iodine_out(val=None,focoffset=4625) :
+def iodine_out(val=None,focoffset=4600) :
     """ Move iodine cell out of beam
     """
     # don't move if already there, to avoid extra focus change`
@@ -1026,15 +1037,19 @@ def issafe() :
     """
     return S.IsSafe
 
-def override(t) :
+def override(t,verbose=True) :
     """ Set override to allow open
     """
     try :
-        resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        if verbose :
+            resp = input("Are you sure you to override 3.5m/2.5m dome opening requirement? CTRL-C to abort: ")
+        else :
+            resp = 'y'
         if resp != 'n' and resp != 'N' :
-            S.Action('override',t)
+            S.Action('override',int(t))
+            print('override in place for {:d} seconds'.format(int(t)))
     except :
-        print('override aborted')
+        print('override aborted',resp)
 
 def domestatus() :
     """ Return dome azimuth and shutter status
@@ -1051,16 +1066,16 @@ def domehome() :
     D.FindHome()
 
 def domeopen(dome=True,covers=True,fans=True,louvers=False) :
-    """ Open dome and mirror covers
+    """ Open dome, mirror covers, louvers and start fans, as requested
     """
-    if dome : 
+    if dome and D.ShutterStatus.name != 'shutterOpen' :
         logger.info('opening shutter...')
         D.OpenShutter()
-    if covers : 
         # Wait for shutter open before opening mirror covers
         logger.info('waiting for shutter to open...')
         while D.ShutterStatus.name != 'shutterOpen' :
             time.sleep(1)
+    if covers and Covers.CoverState.name != 'Open': 
         mirror_covers(True) 
         logger.info('waiting for mirror covers to open...')
         while Covers.CoverState.value != 3 :
@@ -1068,6 +1083,9 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if fans :
         logger.info('turning fans on...')
         fans_on()
+    if louvers :
+        logger.info('opening louvers...')
+        louvers(True)
 
 def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
     """ Close mirror covers and dome
@@ -1087,7 +1105,8 @@ def domeclose(dome=True,covers=True,fans=True, closelouvers=True) :
         D.CloseShutter()
     # put this at end in case guider has died and this won't return
     logger.info('stopping guider...')
-    guide('stop')
+    try : guide('stop')
+    except : pass
 
 def domesync(dosync=True,manual=False) :
     """ Start/stop domesync thread
@@ -1173,6 +1192,8 @@ def commands() :
     print("  focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions")
     print("  settemp(temp): set camera temperature set point")
     print("  cooler(state): set camera cooler state on (True) or off (False)")
+    print("  chiller([temp]): get/set chiller temperature")
+    print("  chiller_fault(): get chiller fault status")
     print()
     print("Iodine commands")
     print("  iodine_in() : move iodine cell into beam, and adjust focus")
@@ -1181,6 +1202,8 @@ def commands() :
     print("  iodine_home() : home iodine stage")
     print("  iodine_tset(val) : set iodine temperature (both channels)")
     print("  iodine_tget(): get actual iodine temperatures")
+    print("  iodine_get(quantity): get various TC300 values (tset,voltage,current,enable,dark,light)")
+
     print()
     print("Calibration commands")
     print("  calstage_in() : move calibration stage into beam, and adjust focus (if needed)")
@@ -1190,6 +1213,7 @@ def commands() :
     print("  cal.getlamps() : get eShel lamp status")
     print("  cal.lamps() : control eShel lamps")
     print("  cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off")
+    print("  cal.shutter() : open/close shutter in direct calibration feed")
     print()
     print("Use help(command) for more details")
 
@@ -1359,8 +1383,25 @@ def isccdok(ok,loggers=None,recipients=None) :
             alert('CCD temperature=0',loggers=loggers,recipients=recipients)
         return False
 
+def logtest() :
+    logger.info('logging test')
+
 
 if __name__ == '__main__' :
+
+    try :
+        with open('logging.yml', 'rt') as f:
+            logconfig = yaml.safe_load(f.read())
+        logging.config.dictConfig(logconfig)
+        for handler in logging.root.manager.loggerDict['aposong'].handlers :
+             if handler.name == 'daily' :
+                 handler.atTime = datetime.time(hour=12)
+        logger=logging.getLogger('aposong')
+    except FileNotFoundError :
+        #trap for readthedocs
+        print('logging.yml not found')
+    except :
+        print('error with logging')
 
     from aposong import *
     import robotic

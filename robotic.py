@@ -8,6 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from pyvista import imred,tv,spectra
 from holtztools import html, plots
+import weather
 
 import copy
 import glob
@@ -29,23 +30,17 @@ import focus as dofocus
 import reduce
 import mail
 
-try:
-    with open('logging.yml', 'rt') as f:
-        config = yaml.safe_load(f.read())
-    logging.config.dictConfig(config)
-    for handler in logging.root.manager.loggerDict['aposong'].handlers :
-        if handler.name == 'daily' :
-            handler.atTime = datetime.time(hour=14)
-except:
-    print("can't open logging.yml")
-
-logger=logging.getLogger('aposong')
+logger=logging.getLogger(__name__)
 
 import aposong 
 import cal
 import database
 
+last_thar_time = datetime.datetime.now()
+
 class Target() :
+    """ Defines a target and how to acquire it
+    """
     def __init__(self,name,ra,dec,mag=99.999,epoch=2000.) :
         self.name=name
         self.ra=ra
@@ -68,17 +63,22 @@ class Target() :
         aposong.slew(self.ra,self.dec)
 
         ret = aposong.guide('start')
-        if ret : time.sleep(30)
+        if ret : 
+            time.sleep(30)
+        else :
+            logger.info('guider failed in aquire')
+            nightlogger.info('guider failed in aquire')
         return ret
 
 class Schedule() :
-    def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.,nsequence=1) :
+    """ Defines an observing schedule
+    """
+    def __init__(self,name,min_airmass=1.005,max_airmass=1.8,nvisits=1,dt_visit=1.) :
         self.name=name
         self.min_airmass=min_airmass
         self.max_airmass=max_airmass
         self.nvisits=nvisits
         self.dt_visit=dt_visit
-        self.nsequence=nsequence
 
     def table(self) :
         tab =Table()
@@ -87,10 +87,11 @@ class Schedule() :
         tab['max_airmass'] = [self.max_airmass]
         tab['nvisits'] = [self.nvisits]
         tab['dt_visit'] = [self.dt_visit]
-        tab['nsequence'] = [self.nsequence]
         return tab
 
 class Sequence() :
+    """ Defines an exposure sequence, and a method of executing it
+    """
     def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0],bin=[1,1,1,1,1]) :
         self.name=name
         self.n_exp=n_exp
@@ -106,6 +107,7 @@ class Sequence() :
         return tot
 
     def observe(self,name,display=None,fact=1,nfact=1,header=None,req_no=-1) :
+        global last_thar_time
         names = []
         # start back at foc0
         aposong.foc(foc0)
@@ -120,11 +122,12 @@ class Sequence() :
                 logger.info('Focus adjustment: alt {:.0f} foc0: {:.0f} adjusted_foc: {:.0f}, foc1: {:.0f}'.format(alt,foc0,adjustedfoc,foc1))
                 aposong.foc(adjustedfoc-foc1,relative=True)
                 foc1=copy.copy(adjustedfoc)
-                if filt == 'thar' :
+                if filt == 'thar' and ((datetime.datetime.now()-last_thar_time).total_seconds() > 300) :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp,filt,bin))
                     aposong.guide('pause')
                     time.sleep(10)
                     calnames=cal.cals(thar=nexp,flats=0,thar_exptime=texp,display=display)
+                    last_thar_time = datetime.datetime.now()
                     names.extend(calnames)
                     aposong.guide('resume')
                     time.sleep(30)
@@ -150,14 +153,6 @@ class Sequence() :
         tab['bin'] = [self.bin]
         return tab
 
-class Observation() :
-    def __init__(self,target,schedule,sequence,mjd,files) :
-        self.target = target    
-        self.schedule = schedule
-        self.sequence = sequence
-        self.mjd = mjd
-        self.files = files
-
 def hamax(dec,airmax,lat) :
     """ Determine maximum hour angle given maximum airmass, declination, and latitude
     """
@@ -172,6 +167,8 @@ def secz(ha,dec,lat) :
     return secz
 
 def getrequests() :
+    """ Get observing parameters for all requests by joining target, sequence, and schedule
+    """
     d=database.DBSession()
     tab=d.query(sql='SELECT request_pk,priority, targ.*,sched.*,seq.* FROM robotic.request as req  \
          JOIN robotic.target as targ on req.targname = targ.targname \
@@ -181,7 +178,8 @@ def getrequests() :
     return tab
 
 def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
-
+    """ Try to get observing request from SONG database
+    """
     apo=EarthLocation.of_site(site)
     if t is None :
         t = Time(Time.now(),location=apo)
@@ -205,34 +203,45 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
           ha = t.sidereal_time('mean') - c.ra
           ha.wrap_at(12*u.hourangle,inplace=True)
           am = secz(ha,c.dec,apo.lat)
-          seq = Sequence(request['targname'],filt=['none'],n_exp=[request['no_exp']],t_exp=[request['exp_time']],camera=3,bin=2)
-          length=seq.length()
-          haend=ha+(length/3600.)*u.hourangle
-          ham=hamax(c.dec,max_airmass,apo.lat).to(u.hourangle)
-          dt=ham-haend
-          hamid=ha+(length/3600./2.)*u.hourangle
+          while True :
+              # if length of sequence will bring us above airmass limit, trim number of exposures
+              seq = Sequence(request['targname'],filt=['none'],n_exp=[request['no_exp']],t_exp=[request['exp_time']],camera=3,bin=2)
+              length=seq.length()
+              haend=ha+(length/3600.)*u.hourangle
+              ham=hamax(c.dec,max_airmass,apo.lat).to(u.hourangle)
+              dt=ham-haend
+              if dt > 0 or request['no_exp'] < 1: break
+              request['no_exp'] -= 1
+          if request['no_exp'] < 1 : 
+              if verbose: logger.info('{:d}, {:s} not enough time for an exposure: {:.2f}, hamax-haend: {:.2f}'.format(request['req_no'],request['targname'],am,dt))
+              continue
+
           if am < 1.0 or am > max_airmass or dt<0 : 
               if verbose: logger.info('{:d}, {:s} out of airmass range {:.2f}, hamax-haend: {:.2f}'.format(request['req_no'],request['targname'],am,dt))
               continue
           if t < Time(request['start_window']) or t > Time(request['stop_window']) :
               if verbose: logger.info('{:d}, {:s} out of window {:s} {:s}'.format(request['req_no'],request['targname'],request['start_window'],request['stop_window']))
+              if t > Time(request['stop_window']) :
+                  # if we've passed observing window set status to abort  
+                  load_song_status(request['req_no'],'abort')
               continue
           else :
-              n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus else int(dt_focus/request['exp_time'])
-              logger.info('n_exp: {:d} no_exp: {:d}'.format(n_exp,request['no_exp']))
+              n_exp = request['no_exp'] if request['no_exp']*request['exp_time'] < dt_focus*3600 else int(dt_focus*3600/request['exp_time'])
+              if n_exp != request['no_exp'] :
+                  logger.info('reducing to n_exp: {:d} from no_exp: {:d} because of dt_focus'.format(n_exp,request['no_exp']))
               if request['obs_mode'] == 'iodine' :
                   request=Table(request)
                   request['filter'] = [['iodine']]
                   request['bin'] = [[2]]
                   request['camera'] = [[3]]
-                  request['n_exp'] = [[request[0]['no_exp']]]
+                  request['n_exp'] = [[n_exp]]
                   request['t_exp'] = [[request[0]['exp_time']]]
               elif request['obs_mode'] == 'thar' or request['obs_mode'] == 'none-iodine' :
                   request=Table(request)
                   request['filter'] = [['thar','none','thar']]
                   request['bin'] = [[2,2,2]]
                   request['camera'] = [[3,3,3]]
-                  request['n_exp'] = [[request[0]['no_thar_exp'],request[0]['no_exp'],request[0]['no_thar_exp']]]
+                  request['n_exp'] = [[request[0]['no_thar_exp'],n_exp,request[0]['no_thar_exp']]]
                   request['t_exp'] = [[120,request[0]['exp_time'],120]]
               header={}
               header['OBSERVER'] = request['observer'][0]
@@ -240,15 +249,14 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
               header['PROJECT'] = request['project_name'][0]
               header['PROJ-ID'] = request['project_id'][0]
               header['REQ_NO'] = request['req_no'][0]
-              pk=loadrequest('song_{:d}'.format(request['req_no'][0]),request['targname'][0],'song','song',priority)
+              pk=loadrequest(request['targname'][0],'song','song',priority)
               loadtarg(request['targname'][0],request['ra'][0],request['dec'][0],epoch=request['epoch'][0],mag=request['magnitude'][0]) 
               request['request_pk'] = [pk]
               return request[0], header
     return None, None
 
 def getlocal(t=None, requests=None, site='APO', criterion='setting',mindec=-90,maxdec=90,skip=None,verbose=True) :
-    """ 
-    Get best request from local database table of requests and time
+    """ Get best request from local database table of requests and time
     """
     apo=EarthLocation.of_site(site)
     if t is None :
@@ -431,7 +439,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1) :
+        criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -525,27 +533,44 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
-        time.sleep(30)
+        time.sleep(60)
 
     # if we haven't opened by morning twilight, we're done for the night!
-    if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : continue
+    if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : 
+        logger.info('Never opened before morning twilight')
+        nightlogger.info('Never opened before morning twilight')
+        subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+        message=nightlogger_string.getvalue()
+        mail.send(aposong.config['mail_recipients'],subject=subject,
+                  message=message.replace('\n','<br>'), snapshot=True,html=True)
+        # remove MJD file to indicate successful completion
+        try :os.remove('{:d}'.format(int(nautical.mjd)))
+        except : print('no MJD file to remove?')
+        continue
 
     # open if not already open (e.g., from previous robotic.observe invocation same night)
     if aposong.D.ShutterStatus != 0 :
         aposong.domeopen()
-        load_status('open')
     logger.info('open at: {:s}'.format(Time.now().to_string()))
     nightlogger.info('open at: {:s}'.format(Time.now().to_string()))
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
         logger.info('waiting for sunset for louvers: {:.3f} '.format((sunset-Time.now()).to(u.hour).value,' hours'))
-        time.sleep(60)
-    aposong.louvers(True)
+        # need to sleep longer than dome close time
+        time.sleep(120)
+        if aposong.D.ShutterStatus != 0 :
+            logger.info('closing with domeclose')
+            aposong.domeclose()
+    if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
-    # cals
-    #if cals :
-    #    cal.cals()
+    # evening cals
+    if cals :
+        header={}
+        header['OBS-MODE'] = 'cal'
+        header['PROJECT'] = 'No-Proj'
+        header['PROJ-ID'] = 'No-Proj'
+        cal.cals(header=header,flats=3,iodineflats=3)
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -554,19 +579,21 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             if aposong.issafe() and aposong.D.ShutterStatus != 0 :
                 logger.info('reopening dome')
                 aposong.domeopen()
-                load_status('open')
+                aposong.louvers(True)
             elif aposong.D.ShutterStatus != 0 :
                 load_status('closed')
+                logger.info('closing with domeclose')
+                aposong.domeclose()
             logger.info('waiting for nautical twilight+dt_nautical: {:.3f}'.format(
                         (nautical+dt_nautical*u.hour-Time.now()).to(u.hour).value,' hours'))
-            time.sleep(60)
+            time.sleep(120)
         except KeyboardInterrupt :
             return
 
-    # in case 3.5m has closed while we were waiting....
-    if aposong.D.ShutterStatus != 0 :
-        aposong.domeopen()
-        load_status('open')
+    # full open in case 3.5m has closed while we were waiting or we've only opened dome....
+    aposong.domeopen()
+    load_status('open')
+    aposong.louvers(True)
 
     # fans off for observing?
     #aposong.fans_off()
@@ -574,7 +601,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
+        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=True)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -583,10 +610,11 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     skiptarg=None
     closed = False
     nfocus = 0
+    nerror = 0
 
     # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
-      load_status('ready')
+      if usesong : load_status('ready')
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
@@ -621,21 +649,26 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.guide('stop')
             #foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             load_status('focus')
-            foc0=focus(foc0=foc0,display=display,iodine=False)
+            foc0=focus(foc0=foc0,display=display,iodine=True)
             foctime=tnow
             oldtarg=''
         else :
             # observe best object!
-            best,header=getsong()
-            if best is None :
-                best,header=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
+            if usesong : best,header=getsong(dt_focus=dt_focus[nfocus])
+            else : best=None
+            best_local,header_local=getlocal(criterion=criterion,maxdec=maxdec,skip=skiptarg)
+            if best_local is not None and (best is None or (best_local['priority'] > best['priority'])) :
+                best=copy.copy(best_local)
+                header=copy.copy(header_local)
+                if best is not None :
+                    nightlogger.info('observe: LOCAL, {:s}'.format(best['targname']))
                 req_no = -1
-            else :
+            elif best is not None :
                 req_no = best['req_no']
+                nightlogger.info('observe: SONG {:d}, {:s}, {:s}'.format(req_no, best['targname'], best['project_name']))
             if best is None :
                 time.sleep(300)
             else :
-                print(best)
                 nightlogger.info('observe: {:s}'.format(best['targname']))
                 logger.info('observe: {:s}'.format(best['targname']))
                 load_status('observing')
@@ -670,6 +703,12 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
  
       except:
           logger.exception('observe error!')
+          nerror += 1
+          if nerror > 3 : 
+              logger.exception('too many errors: turning off usesong')
+              nightlogger.exception('too many errors: turning off usesong')
+              usesong=False
+          time.sleep(300)
 
     # close
     try: aposong.guide('stop')
@@ -687,31 +726,31 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['PROJ-ID'] = 'No-Proj'
         cal.cals(header=header,flats=3,iodineflats=3)
 
-    # night log
-    mkhtml()
-
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
+    subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+
+    # night log
+    try :
+        mkhtml()
+    except :
+        logger.info('FAILED web / auto-reduction')
+        nightlogger.info('FAILED web / auto-reduction')
+        subject+=', web/reduction FAILED'
+
+    # send completion email and start sync to NMSU via APOsong/copy
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
-    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+'astronomy.nmsu.edu web page</A><P>'
+    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
     message+=nightlogger_string.getvalue()
     attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
-    mail.send(aposong.config['mail_recipients'],
-              subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd)),
+    mail.send(aposong.config['mail_recipients'],subject=subject,
               message=message.replace('\n','<br>'), snapshot=True,attachment=attachments,html=True)
     subprocess.run('copy {:s}'.format(ut),shell=True)
 
+    # remove MJD file to indicate successful completion
     try :os.remove('{:d}'.format(int(nautical.mjd)))
     except : print('no MJD file to remove?')
-
-    # restart display
-    try :
-        if display is not None :
-            matplotlib.use('TkAgg') 
-            plt.close('all')
-            print('you will need to restart display window with disp=disp_init() if you use display=disp in robotic.observe()')
-    except NameError : pass
 
 def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
     """ Do focus run for object on meridian
@@ -726,7 +765,7 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
         if iodine :
             foc0_0=copy.copy(foc0)
             aposong.iodine_in()
-            f,focvals,best=aposong.focrun(foc0-4625,delta,n,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
+            f,focvals,best=aposong.focrun(foc0-4600,delta,n,exptime=5,filt=None,bin=1,thresh=50,display=display,max=5000)
             alt = aposong.T.Altitude
             logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
@@ -737,8 +776,8 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
                 foc0=copy.copy(f)
                 f,focvals,best=aposong.focrun(foc0-delta,delta,n+1,exptime=3,filt=None,bin=1,thresh=100,display=display,max=5000)
                 alt = aposong.T.Altitude
-                logger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
-                nightlogger.info('iodine focus: {:d}  foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
+                nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             aposong.iodine_out()
             foc0=copy.copy(foc0_0)
 
@@ -759,15 +798,6 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
 
     return f
        
-def test() :
-    t = Time.now()
-    while True :
-        best,am,dt = getlocal(t)
-        print(t,am,dt)
-        print(best)
-        tab.remove_row
-        t += 5400*u.s
-
 def loadtargs(file,schedule='rv',sequence='UBVRI',insert=False) :
     """ Load database tables from old 1m input file
     """
@@ -794,7 +824,26 @@ def loadtargs(file,schedule='rv',sequence='UBVRI',insert=False) :
 
 def loadtarg(targname,ra,dec,epoch=2000,mag=99) :
     """ Load a single target into robotic.target
+
+    Parameters
+    ==========
+    targname : str
+               Name of target, must be unique in table
+    ra : str
+         RA (J2000) in hh:mm:ss
+    dec : str
+         DEC (J2000) in hh:mm:ss
+    mag : float, optional, default=99
+         magnitude of target, used to compute throughput in reduction
     """
+    out=query('target')
+    j=np.where(out['targname'] == targname)[0]
+    if len(j) > 0 :
+        print('target already exists in database with entry: ')
+        out[j].pprint()
+        resp=input('Do you want to overwrite (y or Y)?')
+        if resp not in ['y','Y'] : return
+
     tab=Table()
     tab['targname'] = [targname]
     tab['ra'] = [ra]
@@ -804,20 +853,72 @@ def loadtarg(targname,ra,dec,epoch=2000,mag=99) :
     d=database.DBSession()
     d.ingest('robotic.target',tab,onconflict='update')
     d.close()
+    print('target table updated')
 
 def loadsched(name,min_airmass=1.0,max_airmass=2,nvisits=1,dt_visit=0) :
     """ Load a single schedule into robotic.schedule
+
+    Parameters
+    ==========
+    name : str
+           name for schedule, must be unique in table
+    min_airmass : float, optional, default=1
+           minimum airmass
+    max_airmass : float, optional, default=2
+           maximum airmass
+    nvisits : int, optional, default=1
+           number of requested visits, set to -1 to keep repeating
+    dt_visit : float, optional, default=0
+           minimum amount of time between visits in days
     """
-    d=database.DBSession()
-    tab=Table()
+    out=query('schedule')
+    j=np.where(out['schedname'] == name)[0]
+    if len(j) > 0 :
+        print('schedule already exists in database with entry: ')
+        out[j].pprint()
+        resp=input('Do you want to overwrite (y or Y)?')
+        if resp not in ['y','Y'] : return
+
     d=database.DBSession()
     schedule=Schedule(name,min_airmass=float(min_airmass),max_airmass=float(max_airmass),nvisits=int(nvisits),dt_visit=float(dt_visit))
     d.ingest('robotic.schedule',schedule.table(),onconflict='update')
     d.close()
+    print('schedule table updated')
 
 def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=[1]) :
     """ Load a single sequence into robotic.sequence
+
+
+    Parameters
+    ==========
+    name : str
+           Unique name for observing sequence
+    t_exp : list 
+           Exposure times
+    n_exp : list of int
+           Number of exposures, must have same number of entries as t_exp
+    filt : list of str
+           Filters ('open' or 'iodine'), must have same number of entries as t_exp
+    camera : list of int
+           Camera to use (should be 3 for SONG spectrograph), must have same number of entries as t_exp
+    bin : list of int
+           Binning to use (should be 2 for SONG spectrograph), must have same number of entries as t_exp
+
+    Example
+    =======
+            loadseq('my_sequence',t_exp=[200,500],n_exp=[1,5],filt=['open','iodine'],camera=[3,3],bin=[3,3])
+
+            would load a sequence called my_sequence that would consist of 1 200s exposure without iodine,
+            then 5 500s exposures with iodine.
     """
+    out=query('sequence')
+    j=np.where(out['sequencename'] == name)[0]
+    if len(j) > 0 :
+        print('sequence already exists in database with entry: ')
+        out[j].pprint()
+        resp=input('Do you want to overwrite (y or Y)?')
+        if resp not in ['y','Y'] : return
+
     for var in t_exp, n_exp, filt, camera, bin :
         if len(var) < 5 :
             for i in range(len(var),5) :
@@ -829,10 +930,44 @@ def loadseq(name,t_exp=[1],n_exp=[1],filt=['V'],camera=[0],bin=[1]) :
     sequence=Sequence(name,filt=filt,t_exp=t_exp,n_exp=n_exp,camera=camera,bin=bin)
     d.ingest('robotic.sequence',sequence.table(),onconflict='update')
     d.close()
-    return sequence.table()
+    print('sequence table updated')
 
-def loadrequest(name,targname,seqname,schedname,priority) :
+def loadrequest(targname,seqname,schedname,priority) :
+    """ Load a request in local robotic database
+
+    A request consists of a target (with pointing information), a sequence (with
+    a specified sequence of exposures), a schedule (saying what is required to
+    execute the sequence, and how many times to execute it), and a priority which
+    sets the priority relative to other requests that might also meet their
+    observability requirements. Targets, sequences, and schedules are loaded into
+    their own database tables, and can be used by multiple requests. You can
+    see the loaded values using robotic.query()
+
+    Parameters
+    ==========
+    targname :  str
+                Target name, must exist in robotic.target table
+    seqname :  str
+                Sequence name, must exist in robotic.sequence table
+    schedname :  str
+                Schedule name, must exist in robotic.schedule table
+    priority : int
+               Priority, higher number is higher priority
+    """
     d=database.DBSession()
+    out=query('target')
+    if targname not in out['targname'] :
+        print('no target {:s} in target table, add it using loadtarg()'.format(targname))
+        return
+    out=query('sequence')
+    if seqname not in out['sequencename'] :
+        print('no sequence {:s} in sequence table, add it using loadseq()'.format(seqname))
+        return
+    out=query('schedule')
+    if schedname not in out['schedulename'] :
+        print('no schedule {:s} in schedule table, add it using loadsched()'.format(schedname))
+        return
+
     tab=Table()
     tab['targname'] = [targname]
     tab['sequencename'] = [seqname]
@@ -843,7 +978,9 @@ def loadrequest(name,targname,seqname,schedname,priority) :
     d.close()
     return pk
 
-def createrequest(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_exp=[60],camera=3) :
+def create_request(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_exp=[60],camera=3) :
+    """ Creates an observing request for interactive observing with observe_object()
+    """
     request={}
     request['targname'] = targname
     request['ra'] = ra
@@ -855,6 +992,30 @@ def createrequest(targname,ra,dec,epoch=2000,filter=['none'],bin=2,n_exp=[1],t_e
     request['bin'] = bin if isinstance(bin,list) else [bin]
     request['camera'] = camera if isinstance(camera,list) else [camera]
     return request
+
+def query(table=None) :
+    """
+    Shows current entries in target, schedule, sequence, or request database table
+
+    Parameters
+    ==========
+    table : string
+            Table to query, must be one of 'target', 'schedule', 'sequence', or 'request'
+
+    Returns
+    =======
+    astropy Table
+            with database entries
+    """
+
+    tables=['target','schedule','sequence','request']
+    if table not in tables :
+        print('table must be one of',tables)
+        return
+    d=database.DBSession()
+    out=d.query('robotic.{:s}'.format(table),fmt='table')
+    d.close()
+    return out
 
 def mkhtml(mjd=None) :
     """ Make HTML pages for a night of observing
@@ -897,8 +1058,6 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     grid=[]
     row=[]
     for i,seq in enumerate(seqs):
-        try: plt.close('all')
-        except: pass
         t=tv.TV()
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
@@ -910,6 +1069,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
             grid.append(row)
             row=[]
         row.append('guide/{:d}.mp4'.format(seq[0]))
+        plt.close(t.fig)
     for ii in range(i%5+1,5) :
         row.append('')
     grid.append(row)
@@ -1003,7 +1163,8 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
                 imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
                 file=imec.header['FILE'].split('.')
                 outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(f.decode()).replace('1m/','1m/reduced/'),file[0],file[-2])
-                wavs.append(spectra.WaveCal(outfile))
+                try: wavs.append(spectra.WaveCal(outfile))
+                except: pass
 
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
@@ -1014,7 +1175,6 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
                 imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True,wav=wavs)
                 if f.find(b'thar')  >= 0 : continue
                 t,sn,t_orders,sn_orders=reduce.throughput(imec,ax,os.path.basename(f.decode()),red=red,orders=[34])
-                o['files'][i] = os.path.basename(o['files'][i])
                 ind=np.where(np.char.find(out['file'],os.path.basename(f.decode()))>=0)[0]
                 reduced=Table()
                 reduced['request_pk'] = [o['request_pk']]
@@ -1061,6 +1221,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     fp.write('<A HREF=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png><IMG SRC=https://irsc.apo.nmsu.edu/graphArchive/{:d}graph.png WIDTH=30%></A>'.format(mjd,mjd))
 
     fp.write('<p>Observed robotic requests: <BR>\n')
+    for o in obs :
+        for i,f in enumerate(o['files']) : 
+            o['files'][i] = os.path.basename(o['files'][i])
     obs['files'] = obs['files'].astype('<U')
     tab = html.tab(obs['request','mjd','schedulename','sequencename','priority','files'],file=fp)
 

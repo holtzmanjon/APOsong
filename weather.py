@@ -1,5 +1,6 @@
 from socket import *
 import time
+import pytz
 from datetime import datetime, timezone
 from astropy.time import Time
 from astropy.table import Table
@@ -26,6 +27,33 @@ def getapo() :
     ldict={}
     exec(stuff,globals(),ldict)
     return ldict
+
+def manual_override() :
+    d=database.DBSession(host='song1m.apo.nmsu.edu',database='apo',user='song')
+    out=d.query(sql='SELECT pressed_at FROM public.button_presses ORDER BY id DESC LIMIT 1')
+    override_time=datetime.fromisoformat(out[0][0])
+    now=pytz.timezone('America/Denver').localize(datetime.now())
+    if override_time> now :
+        return int((override_time-now).total_seconds())
+    else :
+        return 0
+
+def conditions_ok() :
+    d=database.DBSession(host='song1m.apo.nmsu.edu',database='apo',user='song')
+    out=d.query('public.button_presses')
+    override_time=datetime.fromisoformat(out[0][1])
+    now=pytz.timezone('America/Denver').localize(datetime.now())
+    if now>override_time :
+        print('override not enabled!')
+        return False
+
+    wdict=getapo()
+    if (float(wdict['winds']) < 25 and float(wdict['winds2'])< 25 and float(wdict['gusts'])<30 and 
+        float(wdict['humidity']) < 80 and (float(wdict['outside_airtemp_35m'])-float(wdict['outside_dewpoint_35m']))>3) :
+        return True
+    else :
+        print('weather conditions not satisfied!')
+        return False
 
 
 def postgres_write(wdict) :

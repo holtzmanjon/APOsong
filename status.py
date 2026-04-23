@@ -112,31 +112,29 @@ class CameraWgt(ttk.Frame) :
     def __init__(self,container) :
         super().__init__(container) 
 
-        ttk.Label(self,text="FILTER",width=8).grid(column=1,row=1,sticky=(W))
-        self.filter = StringVar()
-        ttk.Label(self, textvariable=self.filter).grid(column=2,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="BINNING",width=8).grid(column=3,row=1,sticky=(W))
-        self.binning = StringVar()
-        ttk.Label(self, textvariable=self.binning).grid(column=4,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="STATE",width=8).grid(column=5,row=1,sticky=(W))
-        self.state = StringVar()
-        ttk.Label(self, textvariable=self.state).grid(column=6,row=1,sticky=(W,E),padx=10)
-
-        ttk.Label(self,text="TEMP",width=8).grid(column=1,row=2,sticky=(W))
+        ttk.Label(self,text="GCAM TEMP",width=9).grid(column=1,row=1,sticky=(W))
         self.temperature = StringVar()
-        ttk.Label(self, textvariable=self.temperature).grid(column=2,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=2,sticky=(W))
+        ttk.Label(self, textvariable=self.temperature).grid(column=2,row=1,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=1,sticky=(W))
         self.cooler = StringVar()
-        ttk.Label(self, textvariable=self.cooler).grid(column=4,row=2,sticky=(W,E),padx=10)
+        self.cooler_label = ttk.Label(self, textvariable=self.cooler)
+        self.cooler_label.grid(column=4,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="TEMP",width=8).grid(column=5,row=2,sticky=(W))
+        ttk.Label(self,text="SCAM TEMP",width=9).grid(column=5,row=1,sticky=(W))
         self.spec_temp = StringVar()
-        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=2,sticky=(W))
+        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=1,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=1,sticky=(W))
         self.spec_cooler = StringVar()
-        ttk.Label(self, textvariable=self.spec_cooler).grid(column=8,row=2,sticky=(W,E),padx=10)
+        self.spec_cooler_label = ttk.Label(self, textvariable=self.spec_cooler)
+        self.spec_cooler_label.grid(column=8,row=1,sticky=(W,E),padx=10)
+
+        ttk.Label(self,text="CHILLER",width=8).grid(column=5,row=2,sticky=(W))
+        self.chiller_temp = StringVar()
+        ttk.Label(self, textvariable=self.chiller_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self,text="CHILLER FAULT",width=15).grid(column=7,row=2,sticky=(W))
+        self.chiller_fault = StringVar()
+        self.chiller_fault_label = ttk.Label(self, textvariable=self.chiller_fault)
+        self.chiller_fault_label.grid(column=8,row=2,sticky=(W,E),padx=10)
 
 class IodineWgt(ttk.Frame) :
 
@@ -172,7 +170,7 @@ class calWgt(ttk.Frame) :
 
         ttk.Label(self,text="MIRROR",width=8).grid(column=1,row=2,sticky=(W))
         self.mirror = StringVar()
-        ttk.Label(self, textvariable=self.mirror).grid(column=2,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self, textvariable=self.mirror).grid(column=2,row=2,sticky=(E),padx=10)
 
         ttk.Label(self,text="QUARTZ",width=8).grid(column=3,row=2,sticky=(W))
         self.quartz = StringVar()
@@ -319,6 +317,15 @@ if __name__ == '__main__' :
         global niter
         niter=(niter+1)%60
         try :
+            # check for weather manual override
+            try :
+                override = weather.manual_override()
+                if override>0 :
+                    aposong.override(override,verbose=False)
+                else :
+                    aposong.override(0,verbose=False)
+            except :
+                aposong.override(0,verbose=False)
             # weather status to influxDB
             if niter%10 == 1 :
                 wdict=weather.getapo()
@@ -344,13 +351,24 @@ if __name__ == '__main__' :
                     except : 
                         print('error with camera: ',i)
                         continue
-                #camframe.filter.set('{:s}'.format(aposong.filtname()))
-                #camframe.binning.set('{:d}x{:d}'.format(C.BinX,C.BinY))
-                #camframe.state.set('{:s}'.format(camerastate[C.CameraState]))
                 camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
                 camframe.cooler.set('{:.1f}'.format(ccd_dict['camera_0_power']))
+                if ccd_dict['camera_0_power'] < 0.1 or ccd_dict['camera_0_power'] > 98:
+                    camframe.cooler_label.config(foreground='red')    
+                else :
+                    camframe.cooler_label.config(foreground='black')    
                 camframe.spec_temp.set('{:.1f}'.format(ccd_dict['camera_3_temp']))
                 camframe.spec_cooler.set('{:.1f}'.format(ccd_dict['camera_3_power']))
+                if ccd_dict['camera_3_power'] < 0.1 or ccd_dict['camera_3_power'] > 98:
+                    camframe.spec_cooler_label.config(foreground='red')    
+                else :
+                    camframe.spec_cooler_label.config(foreground='black')    
+                ctemp = aposong.chiller()
+                camframe.chiller_temp.set('{:.1f}'.format(ctemp))
+                cfault = aposong.chiller_fault()
+                camframe.chiller_fault.set('{:d}'.format(cfault))
+                if cfault != 0 : camframe.chiller_fault_label.config(foreground='red')
+                else :camframe.chiller_fault_label.config(foreground='green3')
         except : print('Error with camera')
 
         try :
@@ -384,7 +402,7 @@ if __name__ == '__main__' :
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
-            if float(temp1)>float(tset1)+20 or float(temp2)>float(tset2)+20 :
+            if float(temp1)>float(tset1)+20 : #or float(temp2)>float(tset2)+20 :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0)
 
@@ -400,8 +418,12 @@ if __name__ == '__main__' :
 
             # load into influx database
             iodine_dict={}
-            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
-                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
+            # without second channel, don't load 99.999 into influx database
+            #for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
+            #               [temp1,temp2,volt1,volt2,curr1,curr2]) :
+            #    iodine_dict[k] = float(v)
+            for k,v in zip(['temp1','volt1','curr1'],
+                           [temp1,volt1,curr1]) :
                 iodine_dict[k] = float(v)
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
         except : print('error with iodine')
@@ -414,7 +436,7 @@ if __name__ == '__main__' :
             else : calframe.calstage_label.config(foreground='yellow')
             # get eShel calibration status
             lamps=np.zeros(4,dtype=bool)
-            state=np.zeros(4,dtype=str)
+            state=np.zeros(4,dtype='U3')
             for i in range(4) : 
                 lamps[i] = aposong.SW[1].GetSwitch(i)
                 state[i] = 'On' if lamps[i] else 'Off'
@@ -477,7 +499,7 @@ if __name__ == '__main__' :
             telframe.alt.set('ERROR')
             telframe.rot.set('ERROR')
             telframe.port.set('ERROR')
-            telframe.focus.set('{:d}'.format(aposong.foc(port=2)))
+            telframe.focus.set('ERROR')
 
         try :
             domestat = aposong.domestatus()
@@ -501,6 +523,7 @@ if __name__ == '__main__' :
         except : pass
         try :
             d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
+            motors['spectrograph_foc'] = [aposong.specfoc()]
             motors['ins_at' ] = [Time.now().fits]
             d.ingest('public.motors',motors,onconflict='update',constraintname='motors_id')
             d.close()

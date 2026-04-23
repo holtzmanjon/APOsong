@@ -180,7 +180,7 @@ def throughput(spec,ax,name,mag=None,song=None,red=None,orders=[34]) :
 
     return t,sn,t_orders,sn_orders
 
-def throughput_all(mjd=None,hard=None) :
+def throughput_all(mjd=None,hard=None,iodine=True,open=True) :
     """ Make plot of throughput from database query
     """
 
@@ -215,11 +215,11 @@ def throughput_all(mjd=None,hard=None) :
     mag=np.array(mag)
 
     fig,ax=plots.multi(1,2,figsize=(10,8),hspace=0.001,sharex=True)
-    ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')
-    scat=ax[0].scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='no iodine')
+    if iodine: scat=ax[0].scatter(out['mjd'][i],out['throughput'][i],c=out['alt'][i],marker='+',label='iodine')
+    if open: scat=ax[0].scatter(out['mjd'][o],out['throughput'][o],c=out['alt'][o],marker='s',label='no iodine')
     plt.colorbar(scat)
-    ax[1].scatter(out['mjd'][i],out['sn'][i],c=mag[i],marker='+',label='iodine')
-    scat=ax[1].scatter(out['mjd'][o],out['sn'][o],c=mag[o],marker='s',label='no iodine')
+    if iodine: scat=ax[1].scatter(out['mjd'][i],out['sn'][i],c=mag[i],marker='+',label='iodine')
+    if open: scat=ax[1].scatter(out['mjd'][o],out['sn'][o],c=mag[o],marker='s',label='no iodine')
     oldtarg=''
     for oo in out :
         targ = os.path.basename(oo['file']).split('.')[0]
@@ -301,7 +301,8 @@ def guider(i1,i2,red=None,sat=65000,title='') :
 def getobs(targ) :
 
     d=database.DBSession()
-    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk')
+    out=d.query(sql='select * from obs.reduced as red join obs.exposure as exp on red.exp_pk = exp.exp_pk',
+                skip=['throughput_orders','sn_orders'])
     obslist=d.query(sql='select * from robotic.observed as obs join robotic.request as req on obs.request_pk = req.request_pk',fmt='list')
     d.close()
 

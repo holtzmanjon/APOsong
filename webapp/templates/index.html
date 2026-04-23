@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>1m dome open override</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0a0f;
+      --surface: #12121a;
+      --border:  #1e1e2e;
+      --text:    #e8e8f0;
+      --muted:   #5a5a7a;
+      --c1:      #e8ff47;
+      --c2:      #47c8ff;
+      --c3:      #ff7847;
+      --cc:      #a0a0c0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background-image:
+        radial-gradient(ellipse 60% 40% at 50% -5%, rgba(71,200,255,0.07) 0%, transparent 60%),
+        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--text);
+    }
+    header h1 span { color: var(--c2); }
+    header h2 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--text);
+      text-transform: uppercase;
+    }
+    header h2 span { color: var(--c2); }
+    header p {
+      font-family: 'IBM Plex Sans', monospace;
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      /*color: var(--muted); */
+      letter-spacing: 0.08em;
+      /*text-transform: uppercase;*/
+    }
+
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .delay-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.75rem 0.5rem 1.5rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+      outline: none;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+    }
+
+    .delay-btn .hours {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .delay-btn .label {
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .delay-btn[data-h="1"] .hours { color: var(--c1); }
+    .delay-btn[data-h="2"] .hours { color: var(--c2); }
+    .delay-btn[data-h="3"] .hours { color: var(--c3); }
+    .delay-btn[data-h="0"] .hours { color: var(--cc); font-size: 1.6rem; letter-spacing: 0.05em; }
+
+    .delay-btn[data-h="1"]:hover { border-color: var(--c1); box-shadow: 0 0 24px rgba(232,255,71,0.15);  background: rgba(232,255,71,0.04); }
+    .delay-btn[data-h="2"]:hover { border-color: var(--c2); box-shadow: 0 0 24px rgba(71,200,255,0.15);  background: rgba(71,200,255,0.04); }
+    .delay-btn[data-h="3"]:hover { border-color: var(--c3); box-shadow: 0 0 24px rgba(255,120,71,0.15);  background: rgba(255,120,71,0.04); }
+    .delay-btn[data-h="0"]:hover { border-color: var(--cc); box-shadow: 0 0 24px rgba(160,160,192,0.15); background: rgba(160,160,192,0.04); }
+
+    .delay-btn:active, .delay-btn.firing { transform: scale(0.96); }
+    .delay-btn[data-h="1"].firing { background: rgba(232,255,71,0.1);  border-color: var(--c1); }
+    .delay-btn[data-h="2"].firing { background: rgba(71,200,255,0.1);  border-color: var(--c2); }
+    .delay-btn[data-h="3"].firing { background: rgba(255,120,71,0.1);  border-color: var(--c3); }
+    .delay-btn[data-h="0"].firing { background: rgba(160,160,192,0.1); border-color: var(--cc); }
+
+    .delay-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── History ── */
+    .history-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #count-badge {
+      background: var(--border);
+      color: var(--c2);
+      padding: 0.1rem 0.5rem;
+      border-radius: 2px;
+      font-size: 0.65rem;
+    }
+
+    #log-list {
+      list-style: none;
+      max-height: 300px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    #log-list li {
+      display: grid;
+      grid-template-columns: 2.5rem 3rem 1fr;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 0.72rem;
+      opacity: 0;
+      transform: translateY(-6px);
+      animation: slideIn 0.25s forwards;
+    }
+    #log-list li:last-child { border-bottom: none; }
+    #log-list li .row-id  { color: var(--muted); }
+    #log-list li .row-tag { font-size: 0.62rem; font-weight: 600; padding: 0.15rem 0.35rem; border-radius: 2px; text-align: center; }
+    #log-list li .row-ts  { color: var(--text); font-size: 0.68rem; }
+
+    .tag-1 { background: rgba(232,255,71,0.12);  color: var(--c1); }
+    .tag-2 { background: rgba(71,200,255,0.12);  color: var(--c2); }
+    .tag-3 { background: rgba(255,120,71,0.12);  color: var(--c3); }
+    .tag-0 { background: rgba(160,160,192,0.12); color: var(--cc); }
+
+    #log-list .empty {
+      color: var(--muted); padding: 1.5rem; text-align: center;
+      opacity: 1; transform: none; animation: none;
+      grid-column: 1 / -1;
+    }
+
+    #status-bar {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-align: right;
+    }
+    #status-bar.ok  { color: #47ffb0; }
+    #status-bar.err { color: #ff4747; }
+
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.6rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #refresh-btn:hover { color: var(--c2); border-color: var(--c2); }
+    #refresh-btn.spinning { color: var(--c2); border-color: var(--c2); opacity: 0.6; }
+
+
+    @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
+    .new-row { background: rgba(255,255,255,0.02); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h2>1m Dome open override </h2>
+    <p>Selecting a time below will allow the 1m dome to open robotically, even if 3.5m and 2.5m are not open.
+    <p>The override will stay in place for the selected amount of time from when you click the button. Select only the duration you are confident that the weather conditions will remain acceptable. No need to select a period beyond which you expect to open the 3.5m or 2.5m, after which the override is no longer needed.
+    <p>Select CANCEL to immediately clear the override. If open, the 1m dome should close within several minutes.
+    <p>Note that selecting an override MAY NOT cause the dome to open, depending on whether the robotic software is running, and also on weather criteria from the weather station.
+    </p>
+  </header>
+
+  <div class="btn-grid">
+    <button class="delay-btn" data-h="0" onclick="pressButton(0)">
+      <span class="hours">CANCEL</span>
+      <span class="label">now</span>
+    </button>
+    <button class="delay-btn" data-h="1" onclick="pressButton(1)">
+      <span class="hours">+1</span>
+      <span class="label">hour</span>
+    </button>
+    <button class="delay-btn" data-h="2" onclick="pressButton(2)">
+      <span class="hours">+2</span>
+      <span class="label">hours</span>
+    </button>
+    <button class="delay-btn" data-h="3" onclick="pressButton(3)">
+      <span class="hours">+3</span>
+      <span class="label">hours</span>
+    </button>
+  </div>
+
+  <div class="history-panel">
+    <div class="history-header">
+      <span>Override set until</span>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <span id="count-badge">0</span>
+        <button id="refresh-btn" onclick="refreshHistory()">↻ refresh</button>
+      </div>
+    </div>
+    <ul id="log-list">
+      <li class="empty">No presses yet.</li>
+    </ul>
+  </div>
+
+
+
+  <div id="status-bar">— ready —</div>
+</div>
+
+<script>
+  const tagLabel = { 0: 'NOW', 1: '+1h', 2: '+2h', 3: '+3h' };
+
+  async function pressButton(hours) {
+    const btn    = document.querySelector(`.delay-btn[data-h="${hours}"]`);
+    const statEl = document.getElementById('status-bar');
+
+    document.querySelectorAll('.delay-btn').forEach(b => b.disabled = true);
+    btn.classList.add('firing');
+    statEl.className = '';
+    statEl.textContent = hours === 0 ? 'writing current time…' : `writing +${hours}h…`;
+
+    try {
+      const res  = await fetch(`/press/${hours}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      prependRow(data.id, data.hours, data.pressed_at, true);
+      statEl.className = 'ok';
+      statEl.textContent = `✓ row #${data.id} appended`;
+    } catch (e) {
+      statEl.className = 'err';
+      statEl.textContent = `✗ ${e.message}`;
+    } finally {
+      btn.classList.remove('firing');
+      document.querySelectorAll('.delay-btn').forEach(b => b.disabled = false);
+    }
+  }
+
+  function prependRow(id, hours, ts, isNew = false) {
+    const empty = document.querySelector('#log-list .empty');
+    if (empty) empty.remove();
+
+    const li = document.createElement('li');
+    if (isNew) li.classList.add('new-row');
+    li.innerHTML = `
+      <span class="row-id">#${id}</span>
+      <span class="row-tag tag-${hours}">${tagLabel[hours]}</span>
+      <span class="row-ts">${formatTs(ts)}</span>`;
+    document.getElementById('log-list').prepend(li);
+    document.getElementById('count-badge').textContent =
+      document.querySelectorAll('#log-list li:not(.empty)').length;
+  }
+
+  function formatTs(iso) {
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false, timeZoneName: 'short'
+    });
+  }
+
+  async function refreshHistory() {
+    const btn = document.getElementById('refresh-btn');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    await loadHistory();
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  }
+
+  async function loadHistory() {
+    try {
+      const rows = await fetch('/history').then(r => r.json());
+      if (rows.length) {
+        const list = document.getElementById('log-list');
+        list.innerHTML = '';
+        rows.forEach(r => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <span class="row-id">#${r.id}</span>
+            <span class="row-tag tag-${r.hours}">${tagLabel[r.hours]}</span>
+            <span class="row-ts">${formatTs(r.pressed_at)}</span>`;
+          list.appendChild(li);
+        });
+        document.getElementById('count-badge').textContent = rows.length;
+      }
+    } catch (_) {}
+  }
+
+  loadHistory();
+</script>
+</body>
+</html>

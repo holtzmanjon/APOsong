@@ -19,19 +19,14 @@ as needed. Individual devices can also be addressed using the Alpaca device
 instantiations and the standard ASCOM command sets for more experienced users
 if needed.
 
-It can be used to run an interactive Python client. To run the software, start 
-an ipython session on the song1m
+It can be used to run an interactive Python client. To run the software, simply issue
 
 .. code-block:: 
 
-    from aposong import *
+    aposong
 
-Several functions/commands have a disp= keyword for image display. To use these
-you should instantiate a pyvista TV tool, e.g.
-
-.. code-block::
-
-    disp=tv.TV(figsize=(9.5,6))
+This will start an ipython client, load appropriate modules and commands, and instantiate
+a pyvista TV tool into the variable, disp.
 
 Commands
 ++++++++
@@ -70,6 +65,9 @@ Camera commands :
   - focrun(cent,step,nsteps,exptime,filt,**kwargs): take series of exposures at different focus positions
   - settemp(temp): set camera temperature set point
   - cooler(state): set camera cooler state on (True) or off (False)
+  - chiller([temp]): get/set chiller temperature
+  - chiller_fault(): get chiller fault status
+
 
 Focal plane unit commands :
   - iodine_position([val]) : get or set (with val) iodine stage position
@@ -78,6 +76,7 @@ Focal plane unit commands :
   - iodine_home : home iodine stage
   - iodine_tset(val) : set iodine temperature (both channels)
   - iodine_tget(): get actual iodine temperatures
+  - iodine_get(quantity): get various TC300 values (tset,voltage,current,enable,dark,light)
 
 Calibration commands :
   - calstage_in() : move calibration stage into beam, and adjust focus (if needed)"
@@ -87,6 +86,7 @@ Calibration commands :
   - cal.getlamps() : get eShel lamp status
   - cal.lamps() : control eShel lamps
   - cal.cals() : turn lamps on, take sequences of flats and ThAr, turn lamps off
+  - cal.shutter() : open/close shutter in direct calibration feed
 
 Alpyca devices
 ++++++++++++++
