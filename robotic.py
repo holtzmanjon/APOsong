@@ -439,7 +439,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,ccdtemp=-10, initfoc=True, fact=1, nfact=1, usesong=True) :
+        criterion='best',maxdec=None,cals=True,gtemp=-5, stemp=-15, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -465,8 +465,10 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
          if given, maximum declination
   cals : bool, default=Ture
          if True take cals at end of night
-  ccdtemp : float, default=-10
-         set temperature for CCDs (guide and spectrograph)
+  gtemp : float, default=-5
+         set temperature for guide CCD
+  stemp : float, default=-15
+         set temperature for spectrograph CCD
   initfoc : boot, default=True
          True to take initial focus run, so can set False if restarting after focus has been done
   fact : float, default=1
@@ -519,8 +521,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     f.close()
 
     # set CCD temperatures
-    aposong.settemp(ccdtemp,cam=0)
-    aposong.settemp(ccdtemp,cam=3)
+    aposong.settemp(gtemp,cam=0)
+    aposong.settemp(stemp,cam=3)
 
     # open dome when safe after desired time relative to sunset
     opentime = sunset+dt_sunset*u.hour
