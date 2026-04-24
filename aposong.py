@@ -174,8 +174,8 @@ def getswitch(switch) :
          switch='TC300' : Thorlabs temperature controller
          switch='K8056' : relay for Shelyak calibration control
          switch='LCUS' : LCUS relay for calibration shutter
-         switch='Yocto' : Relay for power to QHY600 on spectrograph
-         switch='Wanderer' : Wanderer PowerBox for spectrograph focuser USB reset
+         switch='Yocto' : Thermocouples on QHY600
+         switch='Wanderer' : Wanderer PowerBox for spectrograph CCD and focuser USB reset
          switch='TCube' : TCube chiller
     """
     for index,c in enumerate(SW) :
@@ -188,12 +188,13 @@ def wait_moving(Foc) :
     """ Check if input Focuser is stil moving
     """ 
     while True :
+        time.sleep(1)
         try :
             if not Foc.IsMoving : break
         except : 
             logger.exception('error with F.IsMoving')
             break
-        time.sleep(1)
+    time.sleep(1)
     return
 
 # Camera commands
@@ -1406,4 +1407,5 @@ if __name__ == '__main__' :
     from aposong import *
     import robotic
     init()
+    from aposong import *
     disp=disp_init()
