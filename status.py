@@ -120,13 +120,13 @@ class CameraWgt(ttk.Frame) :
         self.cooler_label = ttk.Label(self, textvariable=self.cooler)
         self.cooler_label.grid(column=4,row=1,sticky=(W,E),padx=10)
 
-        ttk.Label(self,text="SCAM TEMP",width=9).grid(column=5,row=1,sticky=(W))
+        ttk.Label(self,text="SCAM TEMP",width=9).grid(column=1,row=2,sticky=(W))
         self.spec_temp = StringVar()
-        ttk.Label(self, textvariable=self.spec_temp).grid(column=6,row=1,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=7,row=1,sticky=(W))
+        ttk.Label(self, textvariable=self.spec_temp).grid(column=2,row=2,sticky=(W,E),padx=10)
+        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=2,sticky=(W))
         self.spec_cooler = StringVar()
         self.spec_cooler_label = ttk.Label(self, textvariable=self.spec_cooler)
-        self.spec_cooler_label.grid(column=8,row=1,sticky=(W,E),padx=10)
+        self.spec_cooler_label.grid(column=4,row=2,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="CHILLER",width=8).grid(column=5,row=2,sticky=(W))
         self.chiller_temp = StringVar()
@@ -229,8 +229,8 @@ def postgres_write(telstatus,domestatus) :
     tab['temp_amb'] = [None]
     tab['focuser_1_pos'] = [aposong.foc()]
     tab['focuser_1_moving'] = [postgres_bool(aposong.F[0].IsMoving)]
-    tab['focuser_2_pos'] = [aposong.specfoc()]
-    tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
+    #tab['focuser_2_pos'] = [aposong.specfoc()]
+    #tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
     tab['tel_lst'] = [telstatus.site.lmst_hours]
     tab['ins_at' ] = [Time.now().fits]
     d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
@@ -312,7 +312,6 @@ if __name__ == '__main__' :
         #guideok = aposong.isguideok(guideok,recipients=aposong.config['test_recipients'])
         domeok = aposong.isdomeok(domeok,recipients=aposong.config['test_recipients'])
         telescopeok = aposong.istelescopeok(telescopeok,recipients=aposong.config['test_recipients'])
-        ccdok = aposong.isccdok(ccdok,recipients=aposong.config['test_recipients'])
 
         global niter
         niter=(niter+1)%60
@@ -341,6 +340,7 @@ if __name__ == '__main__' :
 
         try :
             if niter%60 == 1 :
+                ccdok = aposong.isccdok(ccdok,recipients=aposong.config['test_recipients'])
                 ccd_dict={}
                 for i in [0,3] :
                     try :
@@ -373,8 +373,8 @@ if __name__ == '__main__' :
 
         try :
             dict={}
-            dict['qhy_thermocouple_1'] = aposong.SW[2].GetSwitchValue(0)
-            dict['qhy_thermocouple_2'] = aposong.SW[2].GetSwitchValue(1)
+            dict['qhy_thermocouple_1'] = aposong.SW[aposong.getswitch('Yocto')].GetSwitchValue(0)
+            dict['qhy_thermocouple_2'] = aposong.SW[aposong.getswitch('Yocto')].GetSwitchValue(1)
             influx.write(dict,bucket='ccdtemp',measurement='qhy_thermocouple')
         except  : pass
 
@@ -523,7 +523,7 @@ if __name__ == '__main__' :
         except : pass
         try :
             d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
-            motors['spectrograph_foc'] = [aposong.specfoc()]
+            #motors['spectrograph_foc'] = [aposong.specfoc()]
             motors['ins_at' ] = [Time.now().fits]
             d.ingest('public.motors',motors,onconflict='update',constraintname='motors_id')
             d.close()
