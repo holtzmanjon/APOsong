@@ -82,12 +82,18 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         utflat='UT251119'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251007_Trace_fiber2.fits')
         if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251007_WaveCal_fiber2.fits')
-    else :
+    elif Time(im.header['DATE-OBS']).mjd < 61153 :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT251119'
         utflat='UT251119'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT251119_Trace_fiber2.fits')
         if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT251119_WaveCal_fiber2.fits')
+    else :
+        darktimes=np.array([30,60,120,180,240,300,600])
+        utdark='UT260423'
+        utflat='UT260423'
+        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260423Trace_fiber2.fits')
+        if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT260423_WaveCal_fiber2.fits')
 
     if isinstance(wav,list) :
         mjd=[]
