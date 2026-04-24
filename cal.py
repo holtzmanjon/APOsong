@@ -2,9 +2,10 @@
 import aposong
 import time
 from holtztools import plots
-from pyvista import imred, spectra
+from pyvista import imred, spectra, image
 import matplotlib.pyplot as plt
 import pdb
+from astropy.table import Table
 
 def getlamps() :
     state = ['Off','On']
@@ -101,12 +102,12 @@ def dark(exptime,ccdtemp=None,cam=0,n=5,bin=1,filt=None,name=None) :
     for i in range(n) :
         aposong.expose(exptime,cam=cam,light=False,bin=bin,filt=filt,name=name,imagetyp='DARK',targ='DARK')
 
-def darks(temps=[-10,-5,-15],bins=[2],exps=[30,60,120,180,240,300,600],cam=3,n=11,filt=None) :
+def darks(temps=[-10,-5,-15],bins=[2],exps=[30,60,120,180,240,300,600],cam=3,n=11,filt=None,sleep=300) :
     """ Take multiple series of darks at different temps, bins, exptimes
     """
     for temp in temps :
         aposong.settemp(temp,cam=cam)
-        time.sleep(300)
+        time.sleep(sleep)
         for bin in bins :
             for exp in exps :
                name='dark_cam{:d}_temp{:d}_bin{:d}_t{:d}'.format(cam,temp,bin,exp)
@@ -159,4 +160,41 @@ def sfocrun(foc0=427500,red=None,trace=None,wav=None,display=None,plotonly=False
         lamps()
         aposong.calstage_out()
         aposong.specfoc(foc0)
+
+def focplot(im,thresh=10) :
+    """ Make 2D and 1D plots from a ThAr image
+
+        2D plots are for 5 ThAr lines from thar_lines.fits
+        1D plots are for extracted ThAr, as measured by wav.identify()
+
+        Parameters
+        ==========
+        im : str
+             ThAr file name
+        thresh : float, default=10
+             threshold to use for wav.identify()
+    """
+    tab=Table.read('thar_lines.fits')
+    ix=[2,0,1,0,2]
+    iy=[2,2,1,0,0]
+    red=imred.Reducer('SONG')
+    thar=red.reduce(im)
+    fig,ax=plots.multi(3,3,hspace=0.001,wspace=0.001)
+    try : specfoc=thar.header['SPECFOC']
+    except : specfoc=-1
+    fig.suptitle('{:s} {:d}'.format(im,specfoc))
+    for j,i in enumerate(range(5)) :
+        image.gfit2d(thar.data,tab[i]['x'],tab[i]['y'],plot=ax[iy[j],ix[j]],sub=False,size=11)
+    trace=spectra.Trace('/data/1m/cal/trace/UT260423_Trace_fiber2.fits')
+    wav=spectra.WaveCal('/data/1m/cal/wavecal/UT260423_WaveCal_fiber2.fits')
+    tec=trace.extract(thar)
+    wav.identify(tec,thresh=thresh)
+    fig,ax=plots.multi(1,2,hspace=0.001)
+    plots.plotc(ax[0],wav.waves,wav.fwhm,wav.pix,yr=[0,10],yt='FWHM',colorbar=True,zt='xpixel',cmap='viridis',size=50)
+    ax[0].set_ylim(0,10)
+    plots.plotc(ax[1],wav.waves,wav.waves/(wav.fwhm*(wav.wave(pixels=[wav.pix,wav.y])-wav.wave(pixels=[wav.pix+1,wav.y]))),wav.pix,
+               colorbar=True,yr=[60000,100000],xt='Wavelength',yt='R',zt='xpixel',size=50,cmap='viridis')
+    ax[0].grid()
+    ax[1].grid()
+    fig.suptitle('{:s} {:d}'.format(im,specfoc))
 
