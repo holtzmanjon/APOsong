@@ -114,6 +114,7 @@ def get() :
     labels[2,1] = 'camera'
     oids =  ["1.3.6.1.4.1.20916.1.7.1.1.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.2.2.0"]
 
+    alldict={}
     for i,host in enumerate(["10.75.0.18","10.75.0.25"]) :
         dict={}
         try :
@@ -122,4 +123,5 @@ def get() :
                 dict[labels[j,i].decode()]=ftoc(out[j])+offsets[j,i]
             influx.write(dict,bucket='spectemp',measurement=f'tempager_{i}')
         except : print('error')
-    return dict
+        alldict = alldict | dict
+    return alldict
