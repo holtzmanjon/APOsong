@@ -1,5 +1,7 @@
 from astropy.coordinates import Angle
 import astropy.units as u
+import spectemps
+import weather as weather_apo
 
 def camera(hdu,C,exptime,avg,light) :
 
@@ -26,6 +28,13 @@ def spectrograph(hdu,foc) :
     if foc is not None :
         hdu.header['CAMFOCS'] = (foc, 'Spectrograph camera focus')
         hdu.header['SPECFOC'] = (foc, 'Spectrograph camera focus')
+    sdict = spectemps.get()
+    hdu.header['TEMPA' ] = (float('{:.2f}'.format(sdict['tempagera'])), 'Temperature A outside of box')
+    hdu.header['TEMPB' ] = (float('{:.2f}'.format(sdict['tempagerb'])), 'Temperature B outside of box')
+    hdu.header['UPPER' ] = (float('{:.2f}'.format(sdict['uppertable'])), 'Temperature at upper table')
+    hdu.header['OAP1' ] = (float('{:.2f}'.format(sdict['OAP1'])), 'Temperature at OAP1')
+    hdu.header['GRATING' ] = (float('{:.2f}'.format(sdict['grating'])), 'Temperature at grating')
+    hdu.header['CAMERA' ] = (float('{:.2f}'.format(sdict['camera'])), 'Temperature at camera')
 
 def telescope(hdu,stat,foc,domeaz) :
     hdu.header['---TEL--'] = ('-----TELESCOPE----','-------------------------------------')
@@ -53,6 +62,13 @@ def fpu(hdu,pos,i2pos,temp1,temp2,calpos,SW,filt) :
 
 def weather(hdu) :
     hdu.header['---W----'] = ('-----WEATHER------','-------------------------------------')
+    wdict=weather_apo.getapo()
+    hdu.header['AIRTEMP'] = (float(wdict['airtemp']),'Air temperature from weather station')
+    hdu.header['HUMIDITY'] = (float(wdict['humidity']),'Humidity from weather station')
+    hdu.header['WIND'] = (float(wdict['winds']),'Wind speed from weather station')
+    hdu.header['WIND_DIR'] = (float(wdict['windd']),'Wind direction from weather station')
+    hdu.header['DEWPOINT'] = (float(wdict['dewpoint']),'Dewpoint from weather station')
+    hdu.header['PRESSURE'] = (float(wdict['pressure']),'Pressure from weather station')
 
 def sunmoon(hdu) :
     hdu.header['---SM---'] = ('-----SUN/MOON-----','-------------------------------------')
