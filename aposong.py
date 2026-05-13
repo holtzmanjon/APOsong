@@ -240,7 +240,7 @@ def sexp(*args,**kwargs) :
     return expose(*args, cam=3, filt=None, **kwargs)
 
 def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
-           min=None, max=None, cam=0, insert=True, targ=None, avg=1, imagetyp='unspecified', header=None) :
+           min=None, max=None, cam=0, insert=True, targ=None, avg=1, imagetyp='unspecified', header=None, fast=False) :
     """ Take an exposure with camera
 
     Parameters
@@ -346,40 +346,29 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     hdu.header['IMAGETYP'] = imagetyp
     hdu.header['IMFORM'] = 'FITS'
     hdu.header['DATATYPE'] = 'Counts'
-    fitsheader.camera(hdu,C[getcam(cam)],exptime,avg,light)
-    if header is not None : fitsheader.mixed(hdu,header)
-    fitsheader.object(hdu,targ)
-    try : focval = specfoc()
-    except : focval = None
-    fitsheader.spectrograph(hdu,focval)
-    try : focval = foc()
-    except : focval = None
-    fitsheader.telescope(hdu,pwi.status(),focval,D.Azimuth)
-    pos = iodine_position()
-    if abs(float(pos)-config['iodinestage_in_pos']) < 1. : 
-        i2pos = 4
-    else : 
-        i2pos = 0
-    temp1,temp2 = iodine_tget().split()[2:]
-    fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
-                   calstage_position(),SW[getswitch('K8056')],filt)
-    #fitsheader.weather(hdu)
-    #fitsheader.sunmoon(hdu)
-    fitsheader.time(hdu,t)
+    if not fast :
+       fitsheader.camera(hdu,C[getcam(cam)],exptime,avg,light)
+       if header is not None : fitsheader.mixed(hdu,header)
+       fitsheader.object(hdu,targ)
+       try : focval = specfoc()
+       except : focval = None
+       fitsheader.spectrograph(hdu,focval)
+       try : focval = foc()
+       except : focval = None
+       fitsheader.telescope(hdu,pwi.status(),focval,D.Azimuth)
+       pos = iodine_position()
+       if abs(float(pos)-config['iodinestage_in_pos']) < 1. : 
+           i2pos = 4
+       else : 
+           i2pos = 0
+       temp1,temp2 = iodine_tget().split()[2:]
+       fitsheader.fpu(hdu,iodine_position(),i2pos,temp1,temp2,
+                      calstage_position(),SW[getswitch('K8056')],filt)
+       fitsheader.weather(hdu)
+       #fitsheader.sunmoon(hdu)
+       fitsheader.time(hdu,t)
 
     tab=Table()
-    cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
-             'HOR_BIN','VER_BIN','RA','DEC','AZ','ALT','ROT',
-             'SPECFOC','I_POS','I_TEMP1', 'I_TEMP2',
-             'CAL_POS','TUNGSTEN','LED','THAR'] 
-    cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp',
-            'xbin','ybin','ra','dec','az','alt','rot',
-            'specfoc','iodine_position','iodine_temp1', 'iodine_temp2',
-            'calstage_position','tungsten','led','thar'] 
-    for card,col in zip(cards,cols) :
-        try : tab[col] = [hdu.header[card]]
-        except KeyError: print('no {:s} card found'.format(card))
-    tab['camera'] = [cam]
 
     # write file to disk  if name given
     if name is not None :
@@ -417,9 +406,21 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
     else :
         outname=''
         exposure = Exposure(hdu, None, exptime, filt)
-        tab['file'] = ''
+        tab['file'] = ['']
 
-    if insert :
+    if insert and not fast:
+        cards = ['DATE-OBS','MJD-DATE','EXPTIME','FILTER','FOCUS','CCD_TEMP',
+                 'HOR_BIN','VER_BIN','RA','DEC','AZ','ALT','ROT',
+                 'SPECFOC','I_POS','I_TEMP1', 'I_TEMP2',
+                 'CAL_POS','TUNGSTEN','LED','THAR'] 
+        cols = ['dateobs','mjd','exptime','filter','focus','ccdtemp',
+                'xbin','ybin','ra','dec','az','alt','rot',
+                'specfoc','iodine_position','iodine_temp1', 'iodine_temp2',
+                'calstage_position','tungsten','led','thar'] 
+        for card,col in zip(cards,cols) :
+            try : tab[col] = [hdu.header[card]]
+            except KeyError: print('no {:s} card found'.format(card))
+        tab['camera'] = [cam]
         # insert exposure into database
         try :
             d=database.DBSession()
@@ -857,9 +858,12 @@ def iodine_tget() :
     """ Get/set iodine cell actual temperature
     """
     iswitch = getswitch('TC300')
-    tact1 = SW[iswitch].GetSwitchValue(0)
-    tact2 = SW[iswitch].GetSwitchValue(1)
-    return f'actual temperature: {tact1} {tact2}'
+    try :
+        tact1 = SW[iswitch].GetSwitchValue(0)
+        tact2 = SW[iswitch].GetSwitchValue(1)
+        return f'actual temperature: {tact1} {tact2}'
+    except :
+        return f'actual temperature: -1 -1'
 
 def iodine_set(quantity,val) :
     """  Miscellaneous TC300 commands: enable, dark, light
@@ -883,11 +887,12 @@ def iodine_get(quantity) :
     else :
         print('unknown quantity')
 
-def iodine_in(val=None,focoffset=-4600) :
+def iodine_in(val=None,focoffset=None) :
     """ Move iodine cell into beam
     """
     # don't move if already there, to avoid extra focus change`
     if val is None : val = config['iodinestage_in_pos']
+    if focoffset is None : focoffset = config['df_iodine']
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
@@ -895,14 +900,15 @@ def iodine_in(val=None,focoffset=-4600) :
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
 
-def iodine_out(val=None,focoffset=4600) :
+def iodine_out(val=None,focoffset=None) :
     """ Move iodine cell out of beam
     """
     # don't move if already there, to avoid extra focus change`
     if val is None : val = config['iodinestage_out_pos']
+    if focoffset is None : focoffset = config['df_iodine']
     if abs(iodine_position()-val) > 0.1 :
         iodine_position(val)
-        foc(focoffset,relative=True,port=2)
+        foc(-1*focoffset,relative=True,port=2)
         time.sleep(5)
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
@@ -917,10 +923,13 @@ def iodine_position(val=None) :
     """ Get/set iodine stage position
     """
     index=getfocuser('Iodine')
-    if val is not None :
-        F[index].Move(int(val*1000.))
-        wait_moving(F[index])
-    return F[index].Position/1000.
+    try :
+        if val is not None :
+            F[index].Move(int(val*1000.))
+            wait_moving(F[index])
+        return F[index].Position/1000.
+    except :
+        return -1
 
 def calstage_home() :
     """ Send calibration stage to home
