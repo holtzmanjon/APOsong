@@ -767,7 +767,8 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
         if iodine :
             foc0_0=copy.copy(foc0)
             aposong.iodine_in()
-            f,focvals,best=aposong.focrun(foc0-4600,delta,n,exptime=5,filt=None,bin=1,thresh=50,display=display,max=5000)
+            df_iodine=aposong.config['df_iodine'] 
+            f,focvals,best=aposong.focrun(foc0+df_iodine,delta,n,exptime=5,filt=None,bin=1,thresh=50,display=display,max=5000)
             alt = aposong.T.Altitude
             logger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             nightlogger.info('iodine focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
@@ -1159,12 +1160,11 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
 
     # do ThAr first
     wavs=[]
-    for req,o in enumerate(obs) :
-        for i,f in enumerate(o['files']) : 
-            if f.find(b'thar') >=0 :
-                imec=reduce.specreduce(f.decode(),red=red,clobber=clobber,write=True)
+    for f in out['file'] :
+            if f.find('thar') >=0 :
+                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True)
                 file=imec.header['FILE'].split('.')
-                outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(f.decode()).replace('1m/','1m/reduced/'),file[0],file[-2])
+                outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
                 try: wavs.append(spectra.WaveCal(outfile))
                 except: pass
 
