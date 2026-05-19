@@ -290,6 +290,10 @@ def getlocal(t=None, requests=None, site='APO', criterion='setting',mindec=-90,m
         ha.wrap_at(12*u.hourangle,inplace=True)
         am = secz(ha,c.dec,apo.lat)
 
+        #remove iodine exposures
+        iodine=np.where(request['filter'] == 'iodine')
+        request['n_exp'][iodine] = 0
+
         seq = Sequence(request['targname'],filt=request['filter'],n_exp=request['n_exp'],
                        t_exp=request['t_exp'],camera=request['camera'],bin=request['bin'])
         length=seq.length()
@@ -439,7 +443,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,gtemp=-5, stemp=-15, initfoc=True, fact=1, nfact=1, usesong=True) :
+        criterion='best',maxdec=None,cals=True,gtemp=-5, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -463,7 +467,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
          criterion for choosing object to observe, 'setting', 'best' or 'longest'
   maxdec : float, default=None
          if given, maximum declination
-  cals : bool, default=Ture
+  cals : bool, default=True
          if True take cals at end of night
   gtemp : float, default=-5
          set temperature for guide CCD
@@ -572,7 +576,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=3)
+        cal.cals(header=header,flats=3,iodineflats=0,display=display)
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -603,7 +607,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=True)
+        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -651,7 +655,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.guide('stop')
             #foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             load_status('focus')
-            foc0=focus(foc0=foc0,display=display,iodine=True)
+            foc0=focus(foc0=foc0,display=display,iodine=False)
             foctime=tnow
             oldtarg=''
         else :
@@ -726,7 +730,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=3)
+        cal.cals(header=header,flats=3,iodineflats=0,display=display)
 
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
@@ -1162,7 +1166,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     wavs=[]
     for f in out['file'] :
             if f.find('thar') >=0 :
-                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True)
+                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=0.0035)
                 file=imec.header['FILE'].split('.')
                 outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
                 try: wavs.append(spectra.WaveCal(outfile))
