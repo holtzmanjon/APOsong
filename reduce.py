@@ -18,7 +18,7 @@ import robotic
 import aposong
 
 def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=False, response=None, 
-               write=False, outdir='reduced', display=None, clobber=False, twod=False) :
+               write=False, outdir='reduced', display=None, clobber=False, twod=False, wav_rmsmax=0.003) :
     """ Quick reduction
 
     Parameters
@@ -95,7 +95,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         utdark='UT260424'
         temp=-20
         utflat=None
-        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260423Trace_fiber2.fits')
+        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260423_Trace_fiber2.fits')
         if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT260423_WaveCal_fiber2.fits')
 
     if isinstance(wav,list) :
@@ -142,7 +142,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         if outfile.find('thar') >= 0 or imagetyp == 'THAR' :
             wav.identify(imec,thresh=20)
             ngd=len(np.where(wav.weights>0)[0])
-            if ngd>100 and wav.rms < 0.003 :
+            if ngd>100 and wav.rms < wav_rmsmax :
                 wav.write(outfile.replace('_ec','_wav'))
     return imec
 
