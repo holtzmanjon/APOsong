@@ -104,7 +104,7 @@ class Guider :
         cal.lamps(mirror=True,quartz=True)
         time.sleep(3)
         # expose
-        im=aposong.expose(0.01,bin=1,filt=None,cam=0,max=50000,display=self.disp,name='guide/hole')
+        im=aposong.expose(0.01,bin=1,filt=None,cam=0,max=50000,display=self.disp,name='guide/hole',fast=True)
         time.sleep(3)
         cal.lamps(close=False)
         time.sleep(3)
@@ -147,7 +147,8 @@ class Guider :
         """ Find brightest object, optimize exposure time, move object to desired position
         """
         if data is None :
-            exp=aposong.expose(self.exptime,avg=self.expavg,filt=self.filt,bin=self.bin,display=self.disp,name='guide/acquire',max=self.display_max)
+            exp=aposong.expose(self.exptime,avg=self.expavg,filt=self.filt,bin=self.bin,
+                               display=self.disp,name='guide/acquire',max=self.display_max,fast=True)
             hdu=exp.hdu
         else :
             hdu = data
@@ -175,7 +176,7 @@ class Guider :
                 else: self.exptime = np.max([self.exptime_min,np.min([self.exptime*50000/peak,10])])
                 logger.info('new exptime: {:.3f}'.format(self.exptime))
                 if self.exptime == oldexptime : break
-                exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp)
+                exp=aposong.expose(self.exptime,filt=self.filt,bin=self.bin,display=self.disp,fast=True)
                 hdu=exp.hdu
                 niter+=1
 
@@ -186,7 +187,7 @@ class Guider :
         self.navg = np.min([3,np.max([1,int(5/self.exptime)])])
 
         # take full frame acquisition image to save and offset to brightest object
-        exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,name='guide/acquire')
+        exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,name='guide/acquire',fast=True)
         mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
         objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/self.pixscale,brightest=1)
         x=objs[0]['x']
@@ -201,7 +202,7 @@ class Guider :
         """
         if data is None :
             exp=aposong.expose(self.exptime,avg=self.expavg,display=self.disp,filt=self.filt,bin=self.bin,
-                               box=self.box,name=name,max=self.display_max)
+                               box=self.box,name=name,max=self.display_max,fast=True)
             data = exp.hdu.data
         else :
             self.disp.tv(data,max=self.display_max)
