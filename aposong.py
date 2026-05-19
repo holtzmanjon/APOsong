@@ -893,7 +893,11 @@ def iodine_in(val=None,focoffset=None) :
     # don't move if already there, to avoid extra focus change`
     if val is None : val = config['iodinestage_in_pos']
     if focoffset is None : focoffset = config['df_iodine']
-    if abs(iodine_position()-val) > 0.1 :
+    ipos = iodine_position()
+    if ipos < 0 :
+        print("error with iodine stage")
+        return
+    if abs(ipos-val) > 0.1 :
         iodine_position(val)
         foc(focoffset,relative=True,port=2)
         time.sleep(5)
@@ -906,7 +910,11 @@ def iodine_out(val=None,focoffset=None) :
     # don't move if already there, to avoid extra focus change`
     if val is None : val = config['iodinestage_out_pos']
     if focoffset is None : focoffset = config['df_iodine']
-    if abs(iodine_position()-val) > 0.1 :
+    ipos = iodine_position()
+    if ipos < 0 :
+        print("error with iodine stage")
+        return
+    if abs(ipos-val) > 0.1 :
         iodine_position(val)
         foc(-1*focoffset,relative=True,port=2)
         time.sleep(5)
@@ -1034,8 +1042,10 @@ def louvers(open=False) :
     """ Open louvers
     """
     if open :
+        logger.info('opening louvers...')
         subprocess.run("ms on 9",shell=True)
     else :
+        logger.info('closing louvers...')
         subprocess.run("ms off 9",shell=True)
     subprocess.run("ms list 9",shell=True)
 
