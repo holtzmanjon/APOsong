@@ -3,9 +3,11 @@ import aposong
 import time
 from holtztools import plots
 from pyvista import imred, spectra, image
+from pyvista.dataclass import Data
 import matplotlib.pyplot as plt
 import pdb
 from astropy.table import Table
+from scipy import ndimage
 
 def getlamps() :
     state = ['Off','On']
@@ -30,7 +32,7 @@ def shutter(openshutter=False) :
     else :
         aposong.SW[iswitch].SetSwitch(0,False)
   
-def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_exptime=60,thar_exptime=120,
+def cals(display=None,flats=2,thar=1,flat_exptime=50,iodineflats=0,iodineflat_exptime=60,thar_exptime=120,thar2=0,
          cam=3,bin=2,root='',calstage=True,mirror=False,header=None) :
     """ Take series of eShel cals, flat and ThAr
 
@@ -84,6 +86,11 @@ def cals(display=None,flats=2,thar=2,flat_exptime=50,iodineflats=0,iodineflat_ex
         for i in range(thar) :
             exp=aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,
                                name=root+'thar',imagetyp='THAR',targ='THAR',header=header)
+            names.append(exp.name)
+            # do one with both fibers
+            if thar2>0 :
+                exp=aposong.expose(thar_exptime,filt=None,bin=bin,display=display,cam=cam,
+                                   name=root+'thar2fiber',imagetyp='THAR',targ='THAR',header=header,thar=thar2)
             names.append(exp.name)
     lamps()
     time.sleep(3)
@@ -197,4 +204,17 @@ def focplot(im,thresh=10) :
     ax[0].grid()
     ax[1].grid()
     fig.suptitle('{:s} {:d}'.format(im,specfoc))
+
+
+def pixflat() :
+    red=imred.Reducer('SONG',dir='/home/1m/UT260602')
+    red.log().pprint_all()
+    flat=red.mkflat(range(11,112))
+    flat.write('pixflat_UT260602.fits')
+    #smoothed_flat = ndimage.gaussian_filter(flat.data, sigma=25.0)
+    #smoothed= image.smooth(flat, [25,25])
+    #smoothed= image.smooth(flat, [15,35])
+    smoothed= image.smooth(flat, [5,35])
+    flat.divide(smoothed).multiply(5*35).write('pixflat_flat_UT260602.fits')
+    pixflat=Data.read('pixflat_flat_UT260602.fits')
 
