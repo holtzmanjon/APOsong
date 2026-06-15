@@ -349,6 +349,8 @@ if __name__ == '__main__' :
                         ccd_dict[f'camera_{i}_power'] = aposong.C[icam].CoolerPower
                         influx.write(ccd_dict,bucket='ccdtemp',measurement=f'ccd_{i}')
                     except : 
+                        ccd_dict[f'camera_{i}_temp'] = 0.
+                        ccd_dict[f'camera_{i}_power'] = 0.
                         print('error with camera: ',i)
                         continue
                 camframe.temperature.set('{:.1f}'.format(ccd_dict['camera_0_temp']))
@@ -419,12 +421,12 @@ if __name__ == '__main__' :
             # load into influx database
             iodine_dict={}
             # without second channel, don't load 99.999 into influx database
-            #for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
-            #               [temp1,temp2,volt1,volt2,curr1,curr2]) :
-            #    iodine_dict[k] = float(v)
-            for k,v in zip(['temp1','volt1','curr1'],
-                           [temp1,volt1,curr1]) :
+            for k,v in zip(['temp1','temp2','volt1','volt2','curr1','curr2'],
+                           [temp1,temp2,volt1,volt2,curr1,curr2]) :
                 iodine_dict[k] = float(v)
+            #for k,v in zip(['temp1','volt1','curr1'],
+            #               [temp1,volt1,curr1]) :
+            #    iodine_dict[k] = float(v)
             influx.write(iodine_dict,bucket='iodinetemp',measurement='my_measurement')
         except : print('error with iodine')
 
