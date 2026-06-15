@@ -92,10 +92,11 @@ class Schedule() :
 class Sequence() :
     """ Defines an exposure sequence, and a method of executing it
     """
-    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0],bin=[1,1,1,1,1]) :
+    def __init__(self,name,filt=['U','B','V','R','I'],n_exp=[1,1,1,1,1],t_exp=[1,1,1,1,1],camera=[0,0,0,0,0],bin=[1,1,1,1,1],thar_exp=[0,0,0,0,0]) :
         self.name=name
         self.n_exp=n_exp
         self.t_exp=t_exp
+        self.thar_exp=thar_exp
         self.filt=filt
         self.camera=camera
         self.bin=bin
@@ -113,7 +114,7 @@ class Sequence() :
         aposong.foc(foc0)
         foc1 = copy.copy(foc0)
         no_exp = 0
-        for filt,nexp,texp,cam,bin in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin) :
+        for filt,nexp,texp,cam,bin,thar_exp in zip(self.filt,self.n_exp,self.t_exp,self.camera,self.bin,self.thar_exp) :
             for iexp in range(nexp*nfact) :
                 # focus adjustment for altitude
                 alt = np.max([np.min([75,aposong.T.Altitude]),35])
@@ -133,7 +134,8 @@ class Sequence() :
                     time.sleep(30)
                 else :
                     logger.info('Expose camera: {:d} exptime: {:.2f} filt: {:s} bin: {:d}, '.format(cam,texp*fact,filt,bin))
-                    exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,targ=self.name,header=header,imagetyp='STAR')
+                    exp=aposong.expose(texp*fact,filt,name=name,display=display,cam=cam,bin=bin,
+                                       targ=self.name,header=header,imagetyp='STAR',thar=thar_exp)
                     names.append(exp.name)
                     no_exp+=1
                     load_song_status(req_no,'exec',no_exp=no_exp)
@@ -149,6 +151,7 @@ class Sequence() :
         tab['filter'] = [self.filt]
         tab['n_exp'] = [self.n_exp]
         tab['t_exp'] = [self.t_exp]
+        tab['thar_exp'] = [self.thar_exp]
         tab['camera'] = [self.camera]
         tab['bin'] = [self.bin]
         return tab
@@ -236,6 +239,7 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
                   request['camera'] = [[3]]
                   request['n_exp'] = [[n_exp]]
                   request['t_exp'] = [[request[0]['exp_time']]]
+                  request['thar_exp'] = [[0]]
               elif request['obs_mode'] == 'thar' or request['obs_mode'] == 'none-iodine' :
                   request=Table(request)
                   request['filter'] = [['thar','none','thar']]
@@ -243,6 +247,7 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
                   request['camera'] = [[3,3,3]]
                   request['n_exp'] = [[request[0]['no_thar_exp'],n_exp,request[0]['no_thar_exp']]]
                   request['t_exp'] = [[120,request[0]['exp_time'],120]]
+                  request['thar_exp'] = [[0,0,0]]
               header={}
               header['OBSERVER'] = request['observer'][0]
               header['OBS-MODE'] = request['obs_mode'][0]
@@ -290,12 +295,8 @@ def getlocal(t=None, requests=None, site='APO', criterion='setting',mindec=-90,m
         ha.wrap_at(12*u.hourangle,inplace=True)
         am = secz(ha,c.dec,apo.lat)
 
-        #remove iodine exposures
-        iodine=np.where(request['filter'] == 'iodine')
-        request['n_exp'][iodine] = 0
-
         seq = Sequence(request['targname'],filt=request['filter'],n_exp=request['n_exp'],
-                       t_exp=request['t_exp'],camera=request['camera'],bin=request['bin'])
+                       t_exp=request['t_exp'],camera=request['camera'],bin=request['bin'],thar_exp=request['thar_exp'])
         length=seq.length()
         haend=ha+(length/3600.)*u.hourangle
         ham=hamax(c.dec,request['max_airmass'],apo.lat).to(u.hourangle)
@@ -384,7 +385,7 @@ def observe_object(request,display=None,acquire=True,fact=1,nfact=1,header=None,
     try :
         # observe requested sequence
         seq = Sequence(request['targname'],filt=request['filter'],bin=request['bin'],
-                       n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'])
+                       n_exp=request['n_exp'],t_exp=request['t_exp'],camera=request['camera'],thar_exp=request['thar_exp'])
         t=Time.now()
         names=seq.observe(targ.name,display=display,fact=fact,nfact=nfact,header=header,req_no=req_no)
         return load_object(request,t.mjd,names)
@@ -443,7 +444,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,gtemp=-5, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
+        criterion='best',maxdec=None,cals=True,gtemp=0, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -576,7 +577,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=0,display=display)
+        cal.cals(header=header,flats=3,iodineflats=0,display=display,thar2=90)
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -607,7 +608,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0=focus(foc0=focstart,delta=75,n=15,display=display,iodine=False)
+        foc0,best=focus(foc0=focstart,delta=75,n=15,display=display,iodine=True)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -651,11 +652,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus[nfocus]*u.hour :
             # focus if it has been more than dt_focus since last focus
-            nfocus = nfocus+1 if nfocus+1<len(dt_focus) else len(dt_focus)-1
             aposong.guide('stop')
-            #foc0=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
+            #foc0,best=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             load_status('focus')
-            foc0=focus(foc0=foc0,display=display,iodine=False)
+            foc0,best=focus(foc0=foc0,display=display,iodine=True)
+            # if successful focus run, increment dt_focus index
+            if best > 0 :
+                nfocus = nfocus+1 if nfocus+1<len(dt_focus) else len(dt_focus)-1
             foctime=tnow
             oldtarg=''
         else :
@@ -730,7 +733,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=0,display=display)
+        cal.cals(header=header,flats=3,iodineflats=0,display=display,thar2=90)
 
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
@@ -803,7 +806,7 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
             logger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
             nightlogger.info('focus: {:d}  besthf: {:.2f} foc0: {:d}  alt: {:.1f}'.format(f,best,foc0,alt))
 
-    return f
+    return f, best
        
 def loadtargs(file,schedule='rv',sequence='UBVRI',insert=False) :
     """ Load database tables from old 1m input file
@@ -879,7 +882,7 @@ def loadsched(name,min_airmass=1.0,max_airmass=2,nvisits=1,dt_visit=0) :
            minimum amount of time between visits in days
     """
     out=query('schedule')
-    j=np.where(out['schedname'] == name)[0]
+    j=np.where(out['schedulename'] == name)[0]
     if len(j) > 0 :
         print('schedule already exists in database with entry: ')
         out[j].pprint()
@@ -1069,7 +1072,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
             #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
-            try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
+            try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out,text=False)
             except: pdb.set_trace()
 
         if i>0 and i%5 == 0 :
@@ -1122,7 +1125,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
+def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
@@ -1166,7 +1169,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False) :
     wavs=[]
     for f in out['file'] :
             if f.find('thar') >=0 :
-                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=0.0035)
+                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax)
                 file=imec.header['FILE'].split('.')
                 outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
                 try: wavs.append(spectra.WaveCal(outfile))
