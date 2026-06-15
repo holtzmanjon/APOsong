@@ -239,7 +239,7 @@ def sexp(*args,**kwargs) :
         kwargs['bin'] = 2
     return expose(*args, cam=3, filt=None, **kwargs)
 
-def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,
+def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,name=None,thar=0,
            min=None, max=None, cam=0, insert=True, targ=None, avg=1, imagetyp='unspecified', header=None, fast=False) :
     """ Take an exposure with camera
 
@@ -305,12 +305,31 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         C[icam].NumX = nx
         C[icam].NumY = ny
         t = Time.now()
+        # if using simultaneous ThAr, determine countdown times to start and stop
+        if thar > 0 :
+            thar_end = np.max([0,int(exptime/2-thar/2)])
+            thar_start = np.min([exptime,int(exptime/2+thar/2)])
+        else :
+            thar_start = 0
+            thar_end = 0
+        thar_off = True
         # if requested, average avg exposures
         for iavg in range(avg) :
             C[icam].StartExposure(exptime,light)
             if int(exptime) > 5 :
                 #print countdown
                 for i in range(int(exptime),0,-1) :
+                    if i<thar_start and thar_off :
+                        cal.lamps(thar=True)
+                        thar_off = False
+                        cal.shutter(True)
+                        logger.info('Turning ThAr on {:d}'.format(i))
+                        thar_start = -1  # don't let it restart after finishing!
+                    elif i<thar_end and not thar_off :
+                        cal.lamps(thar=False)
+                        thar_off = True
+                        cal.shutter(False)
+                        logger.info('Turning ThAr off {:d}'.format(i))
                     print('{:<4d}'.format(i),end='\r')
                     time.sleep(0.99)
             while not C[icam].ImageReady or C[icam].CameraState != 0:
@@ -328,6 +347,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             data = data.T/avg
             data=data.astype(np.uint16)
     except :
+        if thar>0 : cal.lamps()    # In case we failed with ThAr on
         logger.exception('ERROR : exposure failed')
         return exposure
 
@@ -847,7 +867,7 @@ def iodine_tset(val=None,tmax=66) :
             print('values > {:d} must be explicitly allowed with tmax= keyword'.format(tmax))
             return
         SW[iswitch].SetSwitchValue(0,val)
-        SW[iswitch].SetSwitchValue(1,0)  # no second channel on new iodine cell
+        SW[iswitch].SetSwitchValue(1,val) 
         iodine_set('enable',1)
 
     tset1 = SW[iswitch].Action('get_tset',0)
