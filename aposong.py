@@ -166,7 +166,7 @@ def getfocuser(focuser) :
     for index,c in enumerate(F) :
         if focuser in c.Name :
             return index
-    print('no such focuser!')
+    print(focuser,' focuser not available!')
     return -1
 
 def getswitch(switch) :
@@ -315,6 +315,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         thar_off = True
         # if requested, average avg exposures
         for iavg in range(avg) :
+            exp_start = time.time()
             C[icam].StartExposure(exptime,light)
             if int(exptime) > 5 :
                 #print countdown
@@ -334,6 +335,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
                     time.sleep(0.99)
             while not C[icam].ImageReady or C[icam].CameraState != 0:
                 time.sleep(0.25)
+                if time.time()-exp_start > exptime + 30 :
+                    raise Exception('camera not responding')
             if iavg == 0 :
                 if avg == 1 :
                     data = np.array(C[icam].ImageArray)
@@ -815,8 +818,11 @@ def park() :
     """
     domesync(False)
     D.Park()
-    try: T.Park()
-    except: logger.error('telescope.Park raised an exception')
+    try: 
+        #T.Park()  ASCOM Park isn't implemented asynchronously
+        stat=pwi.mount_park()
+    except: 
+        logger.error('telescope park raised an exception')
 
 def foc_home(port=None) :
     """ Send focus to home
