@@ -29,12 +29,16 @@ def spectrograph(hdu,foc) :
         hdu.header['CAMFOCS'] = (foc, 'Spectrograph camera focus')
         hdu.header['SPECFOC'] = (foc, 'Spectrograph camera focus')
     sdict = spectemps.get()
-    hdu.header['TEMPA' ] = (float('{:.2f}'.format(sdict['tempagera'])), 'Temperature A outside of box')
-    hdu.header['TEMPB' ] = (float('{:.2f}'.format(sdict['tempagerb'])), 'Temperature B outside of box')
-    hdu.header['UPPER' ] = (float('{:.2f}'.format(sdict['uppertable'])), 'Temperature at upper table')
-    hdu.header['OAP1' ] = (float('{:.2f}'.format(sdict['OAP1'])), 'Temperature at OAP1')
-    hdu.header['GRATING' ] = (float('{:.2f}'.format(sdict['grating'])), 'Temperature at grating')
-    hdu.header['CAMERA' ] = (float('{:.2f}'.format(sdict['camera'])), 'Temperature at camera')
+    try :
+        hdu.header['TEMPA' ] = (float('{:.2f}'.format(sdict['tempagera'])), 'Temperature A outside of box')
+        hdu.header['UPPER' ] = (float('{:.2f}'.format(sdict['uppertable'])), 'Temperature at upper table')
+        hdu.header['OAP1' ] = (float('{:.2f}'.format(sdict['OAP1'])), 'Temperature at OAP1')
+    except : pass
+    try :
+        hdu.header['TEMPB' ] = (float('{:.2f}'.format(sdict['tempagerb'])), 'Temperature B outside of box')
+        hdu.header['GRATING' ] = (float('{:.2f}'.format(sdict['grating'])), 'Temperature at grating')
+        hdu.header['CAMERA' ] = (float('{:.2f}'.format(sdict['camera'])), 'Temperature at camera')
+    except : pass
 
 def telescope(hdu,stat,foc,domeaz) :
     hdu.header['---TEL--'] = ('-----TELESCOPE----','-------------------------------------')
