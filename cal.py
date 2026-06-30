@@ -73,6 +73,13 @@ def cals(display=None,flats=2,thar=1,flat_exptime=50,iodineflats=0,iodineflat_ex
             exp=aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,
                                name=root+'flat',imagetyp='FLAT',targ='FLAT',header=header)
             names.append(exp.name)
+            # get a 2fiber flat if we're going to get a 2 fiber ThAr
+            if thar2>0 :
+                shutter(True)
+                exp=aposong.expose(flat_exptime,filt=None,bin=bin,display=display,cam=cam,
+                                   name=root+'flat2fiber',imagetyp='FLAT',targ='FLAT',header=header)
+                names.append(exp.name)
+                shutter(False)
     if iodineflats>0 :
         aposong.iodine_in()
         for i in range(iodineflats) :
