@@ -303,7 +303,11 @@
       <span class="row-id">#${id}</span>
       <span class="row-tag tag-${hours}">${tagLabel[hours]}</span>
       <span class="row-ts">${formatTs(ts)}</span>`;
-    document.getElementById('log-list').prepend(li);
+   /* document.getElementById('log-list').prepend(li); */
+    const list = document.getElementById('log-list');
+    list.prepend(li);
+    list.scrollTop = 0;
+
     document.getElementById('count-badge').textContent =
       document.querySelectorAll('#log-list li:not(.empty)').length;
   }
@@ -339,6 +343,7 @@
             <span class="row-ts">${formatTs(r.pressed_at)}</span>`;
           list.appendChild(li);
         });
+        list.scrollTop = 0;
         document.getElementById('count-badge').textContent = rows.length;
       }
     } catch (_) {}
