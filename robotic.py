@@ -255,7 +255,8 @@ def getsong(t=None,site='APO',verbose=True,max_airmass=2,dt_focus=10) :
               header['PROJ-ID'] = request['project_id'][0]
               header['REQ_NO'] = request['req_no'][0]
               pk=loadrequest(request['targname'][0],'song','song',priority)
-              loadtarg(request['targname'][0],request['ra'][0],request['dec'][0],epoch=request['epoch'][0],mag=request['magnitude'][0]) 
+              loadtarg(request['targname'][0],request['ra'][0],request['dec'][0],
+                       epoch=request['epoch'][0],mag=request['magnitude'][0],clobber=True) 
               request['request_pk'] = [pk]
               return request[0], header
     return None, None
@@ -484,6 +485,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
   global nautical_morn
   global foc0
   global nightlogger
+  global nighterror
 
   if not isinstance(dt_focus,list) : dt_focus=[dt_focus]
 
@@ -511,6 +513,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     nightlogger.addHandler(handler)
+    nighterror = ''
 
     nightlogger.info('Starting night!')
     logger.info('Starting night!')
@@ -540,14 +543,19 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
+        guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
         time.sleep(60)
 
     # if we haven't opened by morning twilight, we're done for the night!
     if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : 
         logger.info('Never opened before morning twilight')
         nightlogger.info('Never opened before morning twilight')
-        subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
-        message=nightlogger_string.getvalue()
+        if nighterror != '':
+            subject='APO SONG observing {:d} completed but with error(s)'.format(int(Time.now().mjd))
+            message='Errors: '+nighterror+'\n'+nightlogger_string.getvalue()
+        else :
+            subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+            message=nightlogger_string.getvalue()
         mail.send(aposong.config['mail_recipients'],subject=subject,
                   message=message.replace('\n','<br>'), snapshot=True,html=True)
         # remove MJD file to indicate successful completion
@@ -577,7 +585,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=0,display=display,thar2=90)
+        cal.cals(header=header,flats=1,iodineflats=1,display=display,thar2=90)
 
     # wait for nautical twilight
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
@@ -620,7 +628,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     nerror = 0
 
     # loop for objects until morning nautical twilight
-    while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
+    while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour and guideok and domeok and telescopeok : 
       if usesong : load_status('ready')
       try :
         tnow=Time.now()
@@ -643,11 +651,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.domeopen()
             load_status('open')
             closed = False
-
-        # check if guider, dome, telescope are responding, send text if not
-        guideok = aposong.isguideok(guideok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
-        domeok = aposong.isdomeok(domeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
-        telescopeok = aposong.istelescopeok(telescopeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
         if (tnow-foctime).to(u.hour) > dt_focus[nfocus]*u.hour :
@@ -719,6 +722,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
               usesong=False
           time.sleep(300)
 
+      # check if guider, dome, telescope are responding, send text if not
+      guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
+
     # close
     try: aposong.guide('stop')
     except: pass
@@ -733,11 +739,10 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
         header['PROJ-ID'] = 'No-Proj'
-        cal.cals(header=header,flats=3,iodineflats=0,display=display,thar2=90)
+        cal.cals(header=header,flats=1,iodineflats=1,display=display,thar2=90)
 
     logger.info('completed observing loop!')
     nightlogger.info('completed observing loop!')
-    subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
 
     # night log
     try :
@@ -745,14 +750,23 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     except :
         logger.info('FAILED web / auto-reduction')
         nightlogger.info('FAILED web / auto-reduction')
-        subject+=', web/reduction FAILED'
+        nighterror +='web/reduction FAILED '
 
     # send completion email and start sync to NMSU via APOsong/copy
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
-    message+=nightlogger_string.getvalue()
-    attachments = ['/data/1m/logs/daily.log','/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png']
+    if nighterror != '' :
+        subject='APO SONG observing {:d} completed but with error(s)'.format(int(Time.now().mjd))
+        message+='Errors: '+nighterror+'\n'+nightlogger_string.getvalue()
+    else :
+        subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
+        message+=nightlogger_string.getvalue()
+
+    attachments = ['/data/1m/logs/daily.log']
+    for attach in ['/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png'] :
+        if os.path.exists(attach) :
+            attachments.append(attach)
     mail.send(aposong.config['mail_recipients'],subject=subject,
               message=message.replace('\n','<br>'), snapshot=True,attachment=attachments,html=True)
     subprocess.run('copy {:s}'.format(ut),shell=True)
@@ -832,7 +846,7 @@ def loadtargs(file,schedule='rv',sequence='UBVRI',insert=False) :
         d.ingest('robotic.request',rtab,onconflict='update')
         d.close()
 
-def loadtarg(targname,ra,dec,epoch=2000,mag=99) :
+def loadtarg(targname,ra,dec,epoch=2000,mag=99,clabber=False) :
     """ Load a single target into robotic.target
 
     Parameters
@@ -851,8 +865,9 @@ def loadtarg(targname,ra,dec,epoch=2000,mag=99) :
     if len(j) > 0 :
         print('target already exists in database with entry: ')
         out[j].pprint()
-        resp=input('Do you want to overwrite (y or Y)?')
-        if resp not in ['y','Y'] : return
+        if not clobber :
+            resp=input('Do you want to overwrite (y or Y)?')
+            if resp not in ['y','Y'] : return
 
     tab=Table()
     tab['targname'] = [targname]
@@ -1073,7 +1088,10 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         if clobber or not os.path.isfile(out) :
             #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
             try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out,text=False)
-            except: pdb.set_trace()
+            except: 
+                logger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
+                nightlogger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
+                nighterror += ' mkmovie error, '
 
         if i>0 and i%5 == 0 :
             grid.append(row)
@@ -1175,6 +1193,11 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
                 try: wavs.append(spectra.WaveCal(outfile))
                 except: pass
 
+    if len(wavs) < 1 :
+        logger.error('No good ThAr frames? rms>rmsmax?')
+        nightlogger.error('No good ThAr frames? rms>rmsmax?')
+        nighterror += ' ThAr solution error, '
+
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
         for i,f in enumerate(o['files']) : 
@@ -1198,7 +1221,9 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
                 d.close()
             except :
                 print('error with ',f)
-                pdb.set_trace()
+                logger.error('Error reducing {:s}'.format(f))
+                nightlogger.error('Error reducing {:s}'.format(f))
+                nighterror += ' reduction error, '
                 pass
         for i in range(3) :
             lim = ax[i].get_ylim()
@@ -1248,3 +1273,16 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
     except: pass
 
     return out
+
+def check_connections(guideok,domeok,telescopeok) :
+    guideok = aposong.isguideok(guideok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+    if not guideok :
+        nighterror += ' guider connection error, '
+    domeok = aposong.isdomeok(domeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+    if not domeok :
+        nighterror += ' dome connection error, '
+    telescopeok = aposong.istelescopeok(telescopeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+    if not telescopeok :
+        nighterror += ' telescope connection error, '
+
+    return guideok, domeok, telescopeok
