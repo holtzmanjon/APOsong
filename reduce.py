@@ -71,7 +71,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     else :
         outfile='{:s}/{:s}_ec.{:s}.fits'.format(red.dir.replace('1m/','1m/'+outdir+'/'),file[0],file[-2])
 
-    # if alreadly done, read and return, unless clobber
+    # if already done, read and return, unless clobber
     if os.path.exists(outfile) and not clobber :
         return Data.read(outfile)
 
@@ -147,7 +147,8 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         try : imagetyp = imec.header['IMAGETYP']
         except : imagetyp = 'UNKNOWN'
         if outfile.find('thar') >= 0 or imagetyp == 'THAR' :
-            wav.identify(imec,thresh=20)
+            try: wav.identify(imec,thresh=20)
+            except : raise Exception('Error in wav.identify')
             ngd=len(np.where(wav.weights>0)[0])
             if ngd>100 and wav.rms < wav_rmsmax :
                 wav.write(outfile.replace('_ec','_wav'))
