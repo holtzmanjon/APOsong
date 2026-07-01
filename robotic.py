@@ -445,7 +445,7 @@ def load_object(request,mjd,names) :
     return True
 
 def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
-        criterion='best',maxdec=None,cals=True,gtemp=0, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
+        criterion='best',maxdec=None,cals=[True,True],gtemp=0, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
   Parameters
@@ -469,8 +469,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
          criterion for choosing object to observe, 'setting', 'best' or 'longest'
   maxdec : float, default=None
          if given, maximum declination
-  cals : bool, default=True
-         if True take cals at end of night
+  cals : bool, default=[True,True]
+         if True take cals at begin/end of night
   gtemp : float, default=-5
          set temperature for guide CCD
   stemp : float, default=-15
@@ -580,7 +580,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
     # evening cals
-    if cals :
+    if isinstance(cals,bool) : cals=[cals,cals]
+    if cals[0] :
         header={}
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
@@ -734,7 +735,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     load_status('closed')
 
     # morning cals
-    if cals :
+    if cals[1] :
         header={}
         header['OBS-MODE'] = 'cal'
         header['PROJECT'] = 'No-Proj'
@@ -846,7 +847,7 @@ def loadtargs(file,schedule='rv',sequence='UBVRI',insert=False) :
         d.ingest('robotic.request',rtab,onconflict='update')
         d.close()
 
-def loadtarg(targname,ra,dec,epoch=2000,mag=99,clabber=False) :
+def loadtarg(targname,ra,dec,epoch=2000,mag=99,clobber=False) :
     """ Load a single target into robotic.target
 
     Parameters
@@ -985,7 +986,7 @@ def loadrequest(targname,seqname,schedname,priority) :
         print('no target {:s} in target table, add it using loadtarg()'.format(targname))
         return
     out=query('sequence')
-    if seqname not in out['sequencename'] :
+    if seqname != 'song' and seqname not in out['sequencename'] :
         print('no sequence {:s} in sequence table, add it using loadseq()'.format(seqname))
         return
     out=query('schedule')
@@ -1143,7 +1144,7 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
+def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035,display=None) :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
@@ -1187,7 +1188,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035) :
     wavs=[]
     for f in out['file'] :
             if f.find('thar') >=0 :
-                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax)
+                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax,display=display)
                 file=imec.header['FILE'].split('.')
                 outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
                 try: wavs.append(spectra.WaveCal(outfile))
