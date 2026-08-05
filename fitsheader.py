@@ -59,9 +59,9 @@ def fpu(hdu,pos,i2pos,temp1,temp2,calpos,SW,filt) :
     hdu.header['I_TEMP1'] = (float(temp1), 'First iodine temperature')
     hdu.header['I_TEMP2'] = (float(temp2), 'Second iodine temperature')
     hdu.header['CAL_POS'] = (calpos, 'Calibration stage position')
-    hdu.header['TUNGSTEN'] = (int(SW.GetSwitch(0)),'Calibration source tungstenThAr on/off')
-    hdu.header['LED'] = (int(SW.GetSwitch(2)),'Calibration stage LEDThAr on/off')
-    hdu.header['THAR'] = (int(SW.GetSwitch(1)),'Calibration stage ThAr on/off')
+    hdu.header['TUNGSTEN'] = (int(SW.GetSwitch(0)),'Calibration source tungsten on/off')
+    hdu.header['LED'] = (int(SW.GetSwitch(2)),'Calibration source LED on/off')
+    hdu.header['THAR'] = (int(SW.GetSwitch(1)),'Calibration source ThAr on/off')
     hdu.header['FILTER'] = (filt,'Filter')
 
 def weather(hdu) :
