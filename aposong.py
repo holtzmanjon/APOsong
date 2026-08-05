@@ -166,7 +166,7 @@ def getfocuser(focuser) :
     for index,c in enumerate(F) :
         if focuser in c.Name :
             return index
-    print(focuser,' focuser not available!')
+    if focuser != 'PLL' : print(focuser,' focuser not available!')
     return -1
 
 def getswitch(switch) :
@@ -327,7 +327,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
                         logger.info('Turning ThAr on {:d}'.format(i))
                         thar_start = -1  # don't let it restart after finishing!
                     elif i<thar_end and not thar_off :
-                        cal.lamps(thar=False)
+                        if imagetyp != 'THAR' : cal.lamps(thar=False)
                         thar_off = True
                         cal.shutter(False)
                         logger.info('Turning ThAr off {:d}'.format(i))
@@ -350,7 +350,9 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             data = data.T/avg
             data=data.astype(np.uint16)
     except :
-        if thar>0 : cal.lamps()    # In case we failed with ThAr on
+        if thar>0 : 
+            cal.lamps()    # In case we failed with ThAr on
+            cal.shutter(False)
         logger.exception('ERROR : exposure failed')
         return exposure
 
@@ -710,7 +712,7 @@ def guide(cmd,verbose=True, **kwargs) :
             out = s.recv(16, socket.MSG_DONTWAIT | socket.MSG_PEEK)
             print('out: ', out)
         except BlockingIOError :
-            print('blockingIOError')
+            #print('blockingIOError')
             pass
         except : 
             print('recv failed')
@@ -1001,7 +1003,7 @@ def calstage_find(display=None) :
     """
     calstage_in()
     cal.lamps(quartz=True,led=True)
-    im=gexp(0.002,display=display,max=60000).hdu.data
+    im=gexp(0.01,display=display,max=60000).hdu.data
     y0,x0=np.unravel_index(np.argmax(im),im.shape)
     mask=np.zeros_like(im)
     yg,xg=np.mgrid[0:mask.shape[0],0:mask.shape[1]]
@@ -1013,8 +1015,11 @@ def calstage_find(display=None) :
     if display is not None : 
         display.tvclear()
         display.tvcirc(cent.x,cent.y,50)
-    config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
-    gexp(0.002,display=display,max=60000).hdu.data
+    if abs(cent.y-config['hole_pos'][0]) < 50 :
+        config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
+    else :
+        print('spot center too far off, not modifying')
+    gexp(0.01,display=display,max=60000).hdu.data
     cal.lamps()
     calstage_in()
     return config['calstage_in_pos']
@@ -1391,7 +1396,7 @@ def isdomeok(ok,loggers=None,recipients=None) :
 def istelescopeok(ok,loggers=None,recipients=None) :
     try :
         stat=telescope_status()
-        if stat.RightAscension != 0 or stat.Declination != 0 : 
+        if (stat.RightAscension != 0 or stat.Declination != 0) and stat.mount.axis0.is_enabled and stat.mount.axis1.is_enabled : 
             if not ok :
                 # if dome had changed state, log and alert
                 alert('telescope OK, resuming operations',loggers=loggers,recipients=recipients)
