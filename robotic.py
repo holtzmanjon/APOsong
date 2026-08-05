@@ -142,7 +142,7 @@ class Sequence() :
                 if (Time.now()-nautical_morn).to(u.hour) > 0*u.hour or not aposong.issafe(): 
                     logger.info('breaking sequence for twilight or not safe')
                     break
-        aposong.iodine_out()
+        #aposong.iodine_out()
         return names
 
     def table(self) :
@@ -485,7 +485,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
   global nautical_morn
   global foc0
   global nightlogger
-  global nighterror
+  global nighterror 
 
   if not isinstance(dt_focus,list) : dt_focus=[dt_focus]
 
@@ -617,7 +617,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0,best=focus(foc0=focstart,delta=75,n=15,display=display,iodine=True)
+        foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=True)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -659,7 +659,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
             aposong.guide('stop')
             #foc0,best=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
             load_status('focus')
-            foc0,best=focus(foc0=foc0,display=display,iodine=True)
+            foc0,best=focus(foc0=foc0,display=display,iodine=False)
             # if successful focus run, increment dt_focus index
             if best > 0 :
                 nfocus = nfocus+1 if nfocus+1<len(dt_focus) else len(dt_focus)-1
@@ -1060,6 +1060,7 @@ def mkhtml(mjd=None) :
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     dofocus.mksum(mjd,hard='/data/1m/'+ut+'/focus.png')
     out=reduce.throughput_all(mjd=mjd,hard='/data/1m/'+ut+'/throughput.png')
+    subprocess.run('copy {:s}'.format(ut),shell=True)
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
@@ -1088,7 +1089,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
             #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
-            try : red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out,text=False)
+            try : red.movie(range(seq[0],seq[1]-1),display=t,max=10000,out=out,text=False)
             except: 
                 logger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
                 nightlogger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
@@ -1144,9 +1145,12 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
     dir=files[seq][0].split('/')[0]
     html.htmltab(grid,file=root+dir+'/focus.html',size=250)
 
-def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035,display=None) :
+def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=None) :
     """ Makes master log page for specified MJD with observed table, exposure table, and links
     """
+    try : print(nighterror)
+    except : nighterror = ''
+
     y,m,d,hr,mi,se = Time(mjd,format='mjd').ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
 
@@ -1188,16 +1192,25 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035,display=N
     wavs=[]
     for f in out['file'] :
             if f.find('thar') >=0 :
-                imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax,display=display)
-                file=imec.header['FILE'].split('.')
-                outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
-                try: wavs.append(spectra.WaveCal(outfile))
-                except: pass
+                try :
+                    imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax,display=display)
+                    file=imec.header['FILE'].split('.')
+                    outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
+                    try: wavs.append(spectra.WaveCal(outfile))
+                    except: pass
+                except :
+                    logger.error('Failed ThAr reduce: {:s}'.format(f))
+                    try : 
+                        nightlogger.error('Failed ThAr reduce: {:s}'.format(f))
+                        nighterror += ' ThAr solution error, '
+                    except : pass
 
     if len(wavs) < 1 :
         logger.error('No good ThAr frames? rms>rmsmax?')
-        nightlogger.error('No good ThAr frames? rms>rmsmax?')
-        nighterror += ' ThAr solution error, '
+        try :
+            nightlogger.error('No good ThAr frames? rms>rmsmax?')
+            nighterror += ' no ThAr solutions, '
+        except : pass
 
     for req,o in enumerate(obs) :
         fig,ax=plots.multi(1,3,figsize=(8,4),hspace=0.001)
@@ -1223,8 +1236,10 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0035,display=N
             except :
                 print('error with ',f)
                 logger.error('Error reducing {:s}'.format(f))
-                nightlogger.error('Error reducing {:s}'.format(f))
-                nighterror += ' reduction error, '
+                try : 
+                    nightlogger.error('Error reducing {:s}'.format(f))
+                    nighterror += ' reduction error, '
+                except : pass
                 pass
         for i in range(3) :
             lim = ax[i].get_ylim()
