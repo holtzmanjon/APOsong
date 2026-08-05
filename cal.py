@@ -66,7 +66,7 @@ def cals(display=None,flats=2,thar=1,flat_exptime=50,iodineflats=0,iodineflat_ex
         aposong.calstage_in()
     lamps(mirror=mirror,quartz=True,led=True)
     time.sleep(3)
-    aposong.gexp(0.001,display=display,name=root+'guide',max=20000)
+    aposong.gexp(0.01,display=display,name=root+'guide',max=20000)
     names=[]
     if flats>0 :
         for i in range(flats) :
