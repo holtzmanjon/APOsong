@@ -57,7 +57,7 @@ class Guider :
 
     def __init__(self,x0=aposong.config['hole_pos'][1],y0=aposong.config['hole_pos'][0],findhole=True,
                  exptime=5,expavg=1,filt=None, bin=1,rad=25,skyrad=[35,50],mask=None,maskrad=6,sat=65000,
-                 display=True,nintegral=10, prop=0.5,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=0.05) :
+                 display=True,nintegral=10, prop=0.8,ki=0.2,nint=10,settle=1,pixscale=1.,exptime_min=0.05) :
         x0=float(x0)
         y0=float(y0)
         findhole=int(findhole)
@@ -183,7 +183,7 @@ class Guider :
             x=objs[0]['x']
             y=objs[0]['y']
 
-        if self.exptime < 1 : self.expavg = round(1/self.exptime)
+        if self.exptime < 0.5 : self.expavg = round(0.5/self.exptime)
         self.navg = np.min([3,np.max([1,int(5/self.exptime)])])
 
         # take full frame acquisition image to save and offset to brightest object
