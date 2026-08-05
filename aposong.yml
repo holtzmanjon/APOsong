@@ -13,14 +13,13 @@ devices :
 
 dataroot : /data/1m
 updatecamera : True
-calstage_in_pos : 44.95
+calstage_in_pos : 45
 calstage_out_pos : 150.
-calstage_focus : 18700   # 34300
-#iodinestage_in_pos : 76.
-iodinestage_in_pos : 25.
-iodinestage_out_pos : 150.
-df_iodine : -4500  #  -5300    # -4600
-hole_pos : [502,806]  # [509,778]
+calstage_focus : 19200 # 18700   # 34300
+iodinestage_in_pos : 12 # 25. # 76
+iodinestage_out_pos : 120 # 150.
+df_iodine : -4600  #  -5300    # -4600
+hole_pos : [491,811] # [510,805]  # [509,778]
 text_recipients : ['5756217380@tmomail.net','5054313557@tmomail.net']
 mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu','madsfa@phys.au.dk','fgj@phys.au.dk']
 test_recipients : ['holtz@nmsu.edu','bknj5hzjuj@mail.signl4.com']
