@@ -102,8 +102,10 @@ def get() :
     labels=np.zeros([3,2],dtype='S12')
     offsets[0,0]= 0.972 - 0.06
     labels[0,0] = 'tempagera'
-    offsets[1,0]= 0.972-1.367 - 0.06
-    labels[1,0] = 'uppertable'
+    offsets[1,0] = offsets[0,0]
+    labels[1,0] = labels[0,0]
+    #offsets[1,0]= 0.972-1.367 - 0.06
+    #labels[1,0] = 'uppertable'
     offsets[2,0]= 0. - 0.06
     labels[2,0] = 'OAP1'
     offsets[0,1]= 0.967 + 0.06
@@ -116,6 +118,10 @@ def get() :
 
     alldict={}
     for i,host in enumerate(["10.75.0.18","10.75.0.25"]) :
+        if i == 0 :
+            oids =  ["1.3.6.1.4.1.20916.1.7.1.1.1.2.0","1.3.6.1.4.1.20916.1.7.1.1.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.2.2.0"]
+        else :
+            oids =  ["1.3.6.1.4.1.20916.1.7.1.1.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.1.2.0","1.3.6.1.4.1.20916.1.7.1.2.2.2.0"]
         dict={}
         try :
             snmpget(oids,host)

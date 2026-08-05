@@ -31,7 +31,7 @@ def spectrograph(hdu,foc) :
     sdict = spectemps.get()
     try :
         hdu.header['TEMPA' ] = (float('{:.2f}'.format(sdict['tempagera'])), 'Temperature A outside of box')
-        hdu.header['UPPER' ] = (float('{:.2f}'.format(sdict['uppertable'])), 'Temperature at upper table')
+        #hdu.header['UPPER' ] = (float('{:.2f}'.format(sdict['uppertable'])), 'Temperature at upper table')
         hdu.header['OAP1' ] = (float('{:.2f}'.format(sdict['OAP1'])), 'Temperature at OAP1')
     except : pass
     try :
