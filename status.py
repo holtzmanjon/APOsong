@@ -492,6 +492,11 @@ if __name__ == '__main__' :
             
             telframe.focus.set('{:d}'.format(aposong.foc()))
 
+            tel_dict={}
+            tel_dict['az_rms'] = stat.mount.axis0.rms_error_arcsec
+            tel_dict['alt_rms'] = stat.mount.axis1.rms_error_arcsec
+            influx.write(tel_dict,bucket='telescope',measurement='rms')
+
         except : 
             telframe.ra.set('ERROR')
             telframe.dec.set('ERROR')
