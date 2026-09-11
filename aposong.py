@@ -850,6 +850,9 @@ def foc(val=None, relative=False, port=None) :
     else :
         index = getfocuser('Zaber')
     if val is not None :
+        if port != 1 and val > 45000 :
+            raise Exception('zaber focus should be kept <45000 unless manually commanded')
+            return F[index].Position
         if relative :
             if val == 0 : return F[index].Position
             val += F[index].Position
@@ -926,8 +929,8 @@ def iodine_in(val=None,focoffset=None) :
         print("error with iodine stage")
         return
     if abs(ipos-val) > 0.1 :
-        iodine_position(val)
         foc(focoffset,relative=True,port=2)
+        iodine_position(val)
         time.sleep(5)
     else :
         print('iodine stage already at desired postion, no motion or focus offset done')
@@ -1066,8 +1069,8 @@ def mirror_covers(open=False) :
         Covers.OpenCover()
     elif not open and current != 1 :
         Covers.CloseCover()
-        logger.info('waiting 20 seconds for mirror covers to close...')
-        time.sleep(20)
+        logger.info('waiting 40 seconds for mirror covers to close...')
+        time.sleep(40)
 
 def louvers(open=False) :
     """ Open louvers
@@ -1129,8 +1132,11 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if covers and Covers.CoverState.name != 'Open': 
         mirror_covers(True) 
         logger.info('waiting for mirror covers to open...')
-        while Covers.CoverState.value != 3 :
-            time.sleep(1)
+        time.sleep(20)
+        #while Covers.CoverState.value != 3 :
+        #    time.sleep(1)
+        if Covers.CoverState.value != 3 :
+            logger.error('Mirror covers did not all open in 20s!') 
     if fans :
         logger.info('turning fans on...')
         fans_on()
@@ -1404,19 +1410,19 @@ def istelescopeok(ok,loggers=None,recipients=None) :
         else : 
             if ok :
                 # if telescope has changed state, log and alert
-                msg='telescope failed 1, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
+                msg='telescope failed: az_enabled: {:d}, alt_enabled: {:d}\n suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'.format(stat.mount.axis0.is_enabled, stat.mount.axis1.is_enabled)
                 alert(msg,loggers=loggers,recipients=recipients)
             return False
     except :
         if ok :
             # if telescope has changed state, log and alert
-            msg='telescope failed 2, suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
+            msg='telescope failed 2: az_enabled: {:d}, alt_enabled: {:d}\n suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'.format(stat.mount.axis0.is_enabled, stat.mount.axis1.is_enabled)
             alert(msg,loggers=loggers,recipients=recipients)
         return False
 
 def isccdok(ok,loggers=None,recipients=None) :
     try :
-        temp=C[2].CCDTemperature
+        temp=C[getcam(3)].CCDTemperature
         if temp != 0 :
             if not ok :
                 # if CCD has changed state, log and alert
