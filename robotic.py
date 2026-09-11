@@ -19,7 +19,7 @@ import numpy as np
 import time
 import threading
 import subprocess
-import requests
+import requests as webrequests
 import datetime
 
 import logging
@@ -444,7 +444,7 @@ def load_object(request,mjd,names) :
 
     return True
 
-def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,dt_nautical=-0.2,obs='apo',tz='US/Mountain',
+def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,dt_nautical=-0.5,obs='apo',tz='US/Mountain',
         criterion='best',maxdec=None,cals=[True,True],gtemp=0, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
@@ -506,6 +506,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
     if not aposong.istelescopeok(telescopeok) :
         print('telescope not responding, restart it!')
         return
+    logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
 
     nightlogger=logging.getLogger('night_logger')
     nightlogger_string = io.StringIO()
@@ -545,6 +546,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         logger.info('waiting for issafe()')
         guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
         time.sleep(60)
+    logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
 
     # if we haven't opened by morning twilight, we're done for the night!
     if (Time.now()-(nautical_morn+dt_nautical*u.hour)).to(u.hour) > 0*u.hour : 
@@ -556,8 +558,10 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         else :
             subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
             message=nightlogger_string.getvalue()
+        snapshot()
+        attachments = ['webcam_snapshot.jpg']
         mail.send(aposong.config['mail_recipients'],subject=subject,
-                  message=message.replace('\n','<br>'), snapshot=True,html=True)
+                  message=message.replace('\n','<br>'), html=True)
         # remove MJD file to indicate successful completion
         try :os.remove('{:d}'.format(int(nautical.mjd)))
         except : print('no MJD file to remove?')
@@ -764,12 +768,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=0,d
         subject='APO SONG observing {:d} completed successfully'.format(int(Time.now().mjd))
         message+=nightlogger_string.getvalue()
 
-    attachments = ['/data/1m/logs/daily.log']
+    snapshot()
+    attachments = ['webcam_snapshot.jpg','/data/1m/logs/daily.log']
     for attach in ['/data/1m/'+ut+'/focus.png','/data/1m/'+ut+'/throughput.png'] :
         if os.path.exists(attach) :
             attachments.append(attach)
     mail.send(aposong.config['mail_recipients'],subject=subject,
-              message=message.replace('\n','<br>'), snapshot=True,attachment=attachments,html=True)
+              message=message.replace('\n','<br>'), attachment=attachments,html=True)
     subprocess.run('copy {:s}'.format(ut),shell=True)
 
     # remove MJD file to indicate successful completion
@@ -1105,7 +1110,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     grid.append(row)
     html.htmltab(grid,file=root+ut+'/guide.html',video=True)
 
-def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
+def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False,hard=True) :
     """ Make focus plot from focus sequences from database for specified MJD
     """
     d=database.DBSession()
@@ -1129,8 +1134,8 @@ def mkfocusplots(mjd,display=None,root='/data/1m/',clobber=False) :
         print(files[seq])
         try : 
             if clobber or not os.path.isfile(root+files[seq][0].replace('.fits','.png')) :
-                dofocus.focus(files[seq],display=display,root=root,plot=True,hard=True,
-                              pixscale=aposong.pixscale(0))
+                dofocus.focus(files[seq],display=display,root=root,plot=True,hard=hard,
+                              pixscale=aposong.pixscale(0),thresh=25)
             if i>0 and i%5 == 0 :
                 grid.append(row)
                 row=[]
@@ -1302,3 +1307,14 @@ def check_connections(guideok,domeok,telescopeok) :
         nighterror += ' telescope connection error, '
 
     return guideok, domeok, telescopeok
+
+def snapshot(file='webcam_snapshot.jpg') :
+    """ Get a JPG snapshot from webcam
+    """
+    auth = webrequests.auth.HTTPDigestAuth('snapshot',os.environ['VIDEOPASS'])
+    response=webrequests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",stream=True,auth=auth)
+    try : os.remove(file)
+    except : pass
+    fimg=open(file,'wb')
+    fimg.write(response.content)
+    fimg.close()
