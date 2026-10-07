@@ -1111,7 +1111,8 @@ def domestatus() :
     out=subprocess.run("ms list 3",shell=True,capture_output=True,text=True)
     if 'On' in out.stdout : light = True
     else : light = False
-    stat = DomeStatus(D.ShutterStatus.value,D.Azimuth,D.Slewing,light)
+    try: stat = DomeStatus(D.ShutterStatus.value,D.Azimuth,D.Slewing,light)
+    except :stat = DomeStatus(-1,-1.,False,light)
     return stat
 
 def domehome() :
@@ -1416,7 +1417,7 @@ def istelescopeok(ok,loggers=None,recipients=None) :
     except :
         if ok :
             # if telescope has changed state, log and alert
-            msg='telescope failed 2: az_enabled: {:d}, alt_enabled: {:d}\n suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'.format(stat.mount.axis0.is_enabled, stat.mount.axis1.is_enabled)
+            msg='telescope failed 2\n suspending operations. Check pwi1m desktop: is PWI4 running and connected? Is ASCOM remote running?'
             alert(msg,loggers=loggers,recipients=recipients)
         return False
 
