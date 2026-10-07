@@ -5,6 +5,7 @@ import subprocess
 import yaml
 import mail
 import time
+import robotic
 
 #ensure louvers are closed
 subprocess.run("ms off 9",shell=True)
@@ -17,5 +18,6 @@ mjd=int(Time.now().mjd)
 if os.path.exists('/home/song/APOsong/{:d}'.format(mjd)) :
     mail.send(config['mail_recipients'],subject='APO Song observing {:d} FAILED to complete'.format(mjd),message='ALERT: aposong script did not complete! ',snapshot=True)
     os.remove('/home/song/APOsong/{:d}'.format(mjd))
+    robotic.load_status('robotic failed')
 
 
