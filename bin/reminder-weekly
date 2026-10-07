@@ -1,0 +1,2 @@
+
+~/tools/bin/reminder --ndays 8 --broadcast astro-song --header 'Observing schedule for this week, make sure all dates are covered! \n' --subject 'weekly SONG observing schedule' --datecol 'Start date' --emailcol 'Email' --messagecols 'Start date' 'Responsible party' --messagefmt '{:30s}' '{:30s}' --addr 'https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE'

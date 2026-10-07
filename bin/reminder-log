@@ -1,0 +1,2 @@
+~/tools/bin/reminder --ndays -1 --header 'Reminder to check and log SONG 1m observing (link to spreadsheet below)!! \n' --subject 'Check and log SONG!!' --datecol 'Start date' --emailcol 'Email' --messagecols 'Start date' 'Responsible party' --messagefmt '{:30s}' '{:30s}' --addr 'https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE' --individual
+
