@@ -8,6 +8,7 @@ import tkinter.font
 import numpy as np
 import yaml
 from numpy.random import randint
+import psycopg2
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation, SkyCoord
@@ -20,6 +21,7 @@ import spectemps
 import influx
 import aposong
 import database
+import robotic
 
 class TelescopeWgt(ttk.Frame) :
 
@@ -34,10 +36,14 @@ class TelescopeWgt(ttk.Frame) :
         self.az = StringVar()
         ttk.Label(self, textvariable=self.az).grid(column=4,row=row,sticky=(E),padx=15) 
 
-        ttk.Label(self,text="UT").grid(column=5,row=row,sticky=(W))
-        self.ut = StringVar()
-        ttk.Label(self, textvariable=self.ut).grid(column=6,row=row,sticky=(E),padx=10)
+        ttk.Label(self,text="AZ_RMS").grid(column=5,row=row,sticky=(W))
+        self.az_rms = StringVar()
+        self.az_rms_label =ttk.Label(self, textvariable=self.az_rms)
+        self.az_rms_label.grid(column=6,row=row,sticky=(E),padx=15) 
 
+        ttk.Label(self,text="UT").grid(column=7,row=row,sticky=(W))
+        self.ut = StringVar()
+        ttk.Label(self, textvariable=self.ut).grid(column=8,row=row,sticky=(E),padx=10)
 
         row+=1
         ttk.Label(self,text="DEC").grid(column=1,row=row,sticky=(W))
@@ -48,9 +54,15 @@ class TelescopeWgt(ttk.Frame) :
         self.alt = StringVar()
         ttk.Label(self, textvariable=self.alt).grid(column=4,row=row,sticky=(E),padx=15)
 
-        ttk.Label(self,text="LST").grid(column=5,row=row,sticky=(W))
+        ttk.Label(self,text="ALT_RMS").grid(column=5,row=row,sticky=(W))
+        self.alt_rms = StringVar()
+        self.alt_rms_label=ttk.Label(self, textvariable=self.alt_rms)
+        self.alt_rms_label.grid(column=6,row=row,sticky=(E),padx=15) 
+
+
+        ttk.Label(self,text="LST").grid(column=7,row=row,sticky=(W))
         self.lst = StringVar()
-        ttk.Label(self, textvariable=self.lst).grid(column=6,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.lst).grid(column=8,row=row,sticky=(E),padx=10)
 
         row+=1
         ttk.Label(self,text="PA").grid(column=1,row=row,sticky=(W))
@@ -61,9 +73,9 @@ class TelescopeWgt(ttk.Frame) :
         self.rot = StringVar()
         ttk.Label(self, textvariable=self.rot).grid(column=4,row=row,sticky=(E),padx=15)
 
-        ttk.Label(self,text="MJD").grid(column=5,row=row,sticky=(W))
+        ttk.Label(self,text="MJD").grid(column=7,row=row,sticky=(W))
         self.mjd = StringVar()
-        ttk.Label(self, textvariable=self.mjd).grid(column=6,row=row,sticky=(E),padx=10)
+        ttk.Label(self, textvariable=self.mjd).grid(column=8,row=row,sticky=(E),padx=10)
 
         row+=1
         ttk.Label(self,text="HA").grid(column=1,row=row,sticky=(W))
@@ -74,9 +86,9 @@ class TelescopeWgt(ttk.Frame) :
         self.focus = StringVar()
         ttk.Label(self, textvariable=self.focus).grid(column=4,row=row,sticky=(E),padx=15) 
 
-        ttk.Label(self,text="PORT").grid(column=5,row=row,sticky=(W))
+        ttk.Label(self,text="PORT").grid(column=7,row=row,sticky=(W))
         self.port = StringVar()
-        ttk.Label(self, textvariable=self.port).grid(column=6,row=row,sticky=(E),padx=15) 
+        ttk.Label(self, textvariable=self.port).grid(column=8,row=row,sticky=(E),padx=15) 
 
 
 class DomeWgt(ttk.Frame) :
@@ -99,7 +111,8 @@ class DomeWgt(ttk.Frame) :
         row+=1
         ttk.Label(self,text="MIRROR COVERS").grid(column=1,row=row,sticky=(W))
         self.coverstate = StringVar()
-        ttk.Label(self, textvariable=self.coverstate).grid(column=2,row=row,sticky=(E),padx=10) 
+        self.coverstate_label=ttk.Label(self, textvariable=self.coverstate)
+        self.coverstate_label.grid(column=2,row=row,sticky=(E),padx=10) 
 
         ttk.Label(self,text="35M/25M").grid(column=3,row=row,sticky=(W))
         self.stat35m = StringVar()
@@ -115,7 +128,8 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self,text="GCAM TEMP",width=9).grid(column=1,row=1,sticky=(W))
         self.temperature = StringVar()
         ttk.Label(self, textvariable=self.temperature).grid(column=2,row=1,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=1,sticky=(W))
+        self.cooler_title=ttk.Label(self,text="COOLER POWER",width=15)
+        self.cooler_title.grid(column=3,row=1,sticky=(W))
         self.cooler = StringVar()
         self.cooler_label = ttk.Label(self, textvariable=self.cooler)
         self.cooler_label.grid(column=4,row=1,sticky=(W,E),padx=10)
@@ -123,7 +137,8 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self,text="SCAM TEMP",width=9).grid(column=1,row=2,sticky=(W))
         self.spec_temp = StringVar()
         ttk.Label(self, textvariable=self.spec_temp).grid(column=2,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="COOLER POWER",width=15).grid(column=3,row=2,sticky=(W))
+        self.spec_cooler_title = ttk.Label(self,text="COOLER POWER",width=15)
+        self.spec_cooler_title.grid(column=3,row=2,sticky=(W))
         self.spec_cooler = StringVar()
         self.spec_cooler_label = ttk.Label(self, textvariable=self.spec_cooler)
         self.spec_cooler_label.grid(column=4,row=2,sticky=(W,E),padx=10)
@@ -131,7 +146,8 @@ class CameraWgt(ttk.Frame) :
         ttk.Label(self,text="CHILLER",width=8).grid(column=5,row=2,sticky=(W))
         self.chiller_temp = StringVar()
         ttk.Label(self, textvariable=self.chiller_temp).grid(column=6,row=2,sticky=(W,E),padx=10)
-        ttk.Label(self,text="CHILLER FAULT",width=15).grid(column=7,row=2,sticky=(W))
+        self.chiller_fault_title = ttk.Label(self,text="CHILLER FAULT",width=15)
+        self.chiller_fault_title.grid(column=7,row=2,sticky=(W))
         self.chiller_fault = StringVar()
         self.chiller_fault_label = ttk.Label(self, textvariable=self.chiller_fault)
         self.chiller_fault_label.grid(column=8,row=2,sticky=(W,E),padx=10)
@@ -148,7 +164,8 @@ class IodineWgt(ttk.Frame) :
 
         ttk.Label(self,text="IODINE TEMP",width=16).grid(column=3,row=1,sticky=(W))
         self.temp = StringVar()
-        ttk.Label(self, textvariable=self.temp).grid(column=4,row=1,sticky=(W,E),padx=10)
+        self.temp_label=ttk.Label(self, textvariable=self.temp)
+        self.temp_label.grid(column=4,row=1,sticky=(W,E),padx=10)
 
         ttk.Label(self,text="IODINE VOLTAGE",width=16).grid(column=1,row=2,sticky=(W))
         self.voltage = StringVar()
@@ -193,11 +210,11 @@ def postgres_bool(val) :
 def tel_ready() :
     d=database.DBSession()
     tab=d.query('robotic.status')
-    if tab['status'] == 'ready' :
+    if tab[0]['status'] == 'ready' :
         return 1
-    elif tab['status'] == 'observing' :
+    elif tab[0]['status'].find('observing') >= 0 :
         return 2
-    elif tab['status'] == 'focus' :
+    elif tab[0]['status'] == 'focus' :
         return 3
     else :
         return 0
@@ -213,8 +230,14 @@ def postgres_write(telstatus,domestatus) :
     tab['tel_dec_j2000'] = [telstatus.mount.dec_j2000_degs]
     tab['tel_ra'] = [telstatus.mount.ra_apparent_hours]
     tab['tel_dec'] = [telstatus.mount.dec_apparent_degs]
-    tab['tel_alt'] = [telstatus.mount.altitude_degs]
-    tab['tel_azm'] = [telstatus.mount.azimuth_degs]
+    if telstatus.mount.axis0.is_enabled : 
+        tab['tel_azm'] = [telstatus.mount.azimuth_degs]
+    else :
+        tab['tel_azm'] = [999]
+    if telstatus.mount.axis1.is_enabled :
+        tab['tel_alt'] = [telstatus.mount.altitude_degs]
+    else :
+        tab['tel_alt'] = [999]
     tab['tel_alt_rms_error'] = [telstatus.mount.axis1.rms_error_arcsec]
     tab['tel_azm_rms_error'] = [telstatus.mount.axis0.rms_error_arcsec]
     tab['m3_pos'] = [telstatus.m3.port]
@@ -339,7 +362,7 @@ if __name__ == '__main__' :
         except : print('error with spectemps')
 
         try :
-            if niter%60 == 1 :
+            if niter%5 == 1 :
                 ccdok = aposong.isccdok(ccdok,recipients=aposong.config['test_recipients'])
                 ccd_dict={}
                 for i in [0,3] :
@@ -357,20 +380,28 @@ if __name__ == '__main__' :
                 camframe.cooler.set('{:.1f}'.format(ccd_dict['camera_0_power']))
                 if ccd_dict['camera_0_power'] < 0.1 or ccd_dict['camera_0_power'] > 98:
                     camframe.cooler_label.config(foreground='red')    
+                    camframe.cooler_title.config(foreground='red')    
                 else :
                     camframe.cooler_label.config(foreground='black')    
+                    camframe.cooler_title.config(foreground='black')    
                 camframe.spec_temp.set('{:.1f}'.format(ccd_dict['camera_3_temp']))
                 camframe.spec_cooler.set('{:.1f}'.format(ccd_dict['camera_3_power']))
                 if ccd_dict['camera_3_power'] < 0.1 or ccd_dict['camera_3_power'] > 98:
                     camframe.spec_cooler_label.config(foreground='red')    
+                    camframe.spec_cooler_title.config(foreground='red')    
                 else :
                     camframe.spec_cooler_label.config(foreground='black')    
+                    camframe.spec_cooler_title.config(foreground='black')    
                 ctemp = aposong.chiller()
                 camframe.chiller_temp.set('{:.1f}'.format(ctemp))
                 cfault = aposong.chiller_fault()
                 camframe.chiller_fault.set('{:d}'.format(cfault))
-                if cfault != 0 : camframe.chiller_fault_label.config(foreground='red')
-                else :camframe.chiller_fault_label.config(foreground='green3')
+                if cfault != 0 : 
+                    camframe.chiller_fault_label.config(foreground='red')
+                    camframe.chiller_fault_title.config(foreground='red')
+                else :
+                    camframe.chiller_fault_label.config(foreground='green3')
+                    camframe.chiller_fault_title.config(foreground='black')
         except : print('Error with camera')
 
         try :
@@ -391,19 +422,24 @@ if __name__ == '__main__' :
             tset = aposong.iodine_tset().replace('set temperature: ','')
             volt = aposong.iodine_get('voltage')
             curr = aposong.iodine_get('current')
-            iodineframe.iodinestage.set(pos)
-            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green3')
-            elif abs(pos-aposong.config['iodinestage_out_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
-            else : iodineframe.iodinestage_label.config(foreground='yellow')
-            iodineframe.temp.set(temp+' / '+tset)
-            iodineframe.voltage.set(volt)
-            iodineframe.current.set(curr)
-
             # parse temperature channels
             tset1,tset2=tset.split()
             temp1,temp2=temp.split()
             volt1,volt2=volt.split()
             curr1,curr2=curr.split()
+
+            iodineframe.iodinestage.set(pos)
+            if abs(pos-aposong.config['iodinestage_in_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='green3')
+            elif abs(pos-aposong.config['iodinestage_out_pos']) < 0.2 : iodineframe.iodinestage_label.config(foreground='blue')
+            else : iodineframe.iodinestage_label.config(foreground='yellow')
+            iodineframe.temp.set(temp+' / '+tset)
+            if abs(float(temp1)-float(tset1)) > 0.1 or abs(float(temp2)-float(tset2)) > 0.1 :
+                iodineframe.temp_label.config(foreground='red')
+            else :
+                iodineframe.temp_label.config(foreground='green3')
+            iodineframe.voltage.set(volt)
+            iodineframe.current.set(curr)
+
             if float(temp1)>float(tset1)+20 : #or float(temp2)>float(tset2)+20 :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0)
@@ -485,7 +521,18 @@ if __name__ == '__main__' :
             telframe.ha.set('{:02d}:{:02d}:{:04.1f}'.format(int(h),int(m),s))
 
             telframe.az.set('{:.2f}'.format(stat.Azimuth))
+            telframe.az_rms.set('{:.2f}'.format(stat.mount.axis0.rms_error_arcsec))
+            if stat.mount.axis0.rms_error_arcsec > 2 :
+                telframe.az_rms_label.config(foreground='red')
+            else :
+                telframe.az_rms_label.config(foreground='green3')
+                
             telframe.alt.set('{:.2f}'.format(stat.Altitude))
+            telframe.alt_rms.set('{:.2f}'.format(stat.mount.axis1.rms_error_arcsec))
+            if stat.mount.axis1.rms_error_arcsec > 2 :
+                telframe.alt_rms_label.config(foreground='red')
+            else :
+                telframe.alt_rms_label.config(foreground='green3')
 
             telframe.rot.set('{:.1f}'.format(stat.rotator.mech_position_degs))
             telframe.pa.set('{:.1f}'.format(stat.rotator.field_angle_degs))
@@ -523,11 +570,19 @@ if __name__ == '__main__' :
             else :
                 domeframe.stat35m_label.config(foreground='red')
 
+            if coverstate[aposong.Covers.CoverState.value] == 'Open' :
+                domeframe.coverstate_label.config(foreground='green3')
+            elif coverstate[aposong.Covers.CoverState.value] == 'Closed' :
+                domeframe.coverstate_label.config(foreground='black')
+            else :
+                domeframe.coverstate_label.config(foreground='red')
+
             domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
 
         try : postgres_write(stat,domestat)
-        except : pass
+        except : print('error with postgres_write')
+
         try :
             d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
             #motors['spectrograph_foc'] = [aposong.specfoc()]
@@ -535,7 +590,23 @@ if __name__ == '__main__' :
             d.ingest('public.motors',motors,onconflict='update',constraintname='motors_id')
             d.close()
         except : pass
-        root.after(5000,update)
+
+        try :
+            d=database.DBSession()
+            cursor = d.connection.cursor()
+            binary_data = robotic.snapshot(lights=10)
+            query = "UPDATE robotic.snapshot SET snapshot = %s WHERE pk=1;"
+            cursor.execute(query,(psycopg2.Binary(binary_data),))
+            if niter%5 == 1 :
+                binary_data = robotic.snapshot(lights=0)
+                query = "UPDATE robotic.snapshot SET dark_snapshot = %s WHERE pk=1;"
+                cursor.execute(query,(psycopg2.Binary(binary_data),))
+            d.connection.commit()
+            cursor.close()
+            d.close()
+        except :
+            print('error with snapshot')
+        root.after(1000,update)
 
     import signal
     def handler(signum,frame):
