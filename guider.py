@@ -248,7 +248,7 @@ class Guider :
         try : x,y = self.get_offset(name='guide/guide')
         except :
             logger.error('  ERROR in get_offset')
-            self.center.x = -1
+            return
         if self.center.x>0 :
             self.xtot+=self.center.x
             self.ytot+=self.center.y
