@@ -7,7 +7,7 @@ from astroplan import Observer, time_grid_from_range
 import matplotlib
 import matplotlib.pyplot as plt
 from pyvista import imred,tv,spectra
-from holtztools import html, plots
+from holtztools import html, plots, reminder
 import weather
 
 import copy
@@ -412,6 +412,7 @@ def load_song_status(req_no,status,no_exp=None) :
     except :
         logger.exception('  failed loading song_status')
 
+import psycopg2
 def load_status(status) :
     """ Load status into database
     """
@@ -491,22 +492,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
 
   # change if you want to try to run across multiple nights!
   night = 0
-  while night < 1 :
+  while night < 8 :
     # new night
     night+=1
-    guideok = True
-    domeok = True
-    telescopeok = True
-    if not aposong.isguideok(guideok) :
-        print('guider not responding, restart it!')
-        return
-    if not aposong.isdomeok(domeok) :
-        print('dome not responding, restart it!')
-        return
-    if not aposong.istelescopeok(telescopeok) :
-        print('telescope not responding, restart it!')
-        return
-    logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
 
     nightlogger=logging.getLogger('night_logger')
     nightlogger_string = io.StringIO()
@@ -518,6 +506,32 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
 
     nightlogger.info('Starting night!')
     logger.info('Starting night!')
+
+    guideok = True
+    domeok = True
+    telescopeok = True
+
+    addr='https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE'
+    tab=reminder.get(addr,datecol='Start date')
+    load_status('closed, waiting for spreadsheet start')
+    while tab[tab['dayno'] == datetime.datetime.now().timetuple().tm_yday]['Started'] != 'TRUE' :
+        # wait until start box is checked
+        logger.info('waiting for spreadsheet start to be set')
+        guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
+        time.sleep(60)
+        tab=reminder.get(addr,datecol='Start date')
+
+    if not guideok :
+        print('guider not responding, restart it!')
+        return
+    if not domeok :
+        print('dome not responding, restart it!')
+        return
+    if not telescopeok :
+        print('telescope not responding, restart it!')
+        return
+    logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
+
 
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
@@ -535,12 +549,13 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
 
     # open dome when safe after desired time relative to sunset
     opentime = sunset+dt_sunset*u.hour
-    load_status('closed')
+    load_status('closed, waiting for sunset')
     while (Time.now()-opentime)<0 :
         # wait until sunset + dt_sunset hours 
         logger.info('waiting for sunset+dt_sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
+    load_status('closed, waiting for issafe()')
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
@@ -572,6 +587,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
         aposong.domeopen()
     logger.info('open at: {:s}'.format(Time.now().to_string()))
     nightlogger.info('open at: {:s}'.format(Time.now().to_string()))
+    load_status('open, waiting for sunset')
 
     # wait for sunset to open louvers
     while (Time.now()-sunset).to(u.hour) < 0*u.hour :
@@ -584,6 +600,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     if aposong.D.ShutterStatus == 0 : aposong.louvers(True)
 
     # evening cals
+    load_status('evening cals')
     if isinstance(cals,bool) : cals=[cals,cals]
     if cals[0] :
         header={}
@@ -593,6 +610,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
         cal.cals(header=header,flats=1,iodineflats=1,display=display,thar2=90)
 
     # wait for nautical twilight
+    load_status('open, waiting for twilight')
     while (Time.now()-(nautical+dt_nautical*u.hour)).to(u.hour) < 0*u.hour :
         try :
             # if dome has been closed by 3.5m but can now be opened again, do it
@@ -621,7 +639,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     # focus star on meridian 
     if initfoc : 
         load_status('focus')
-        foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=True)
+        #foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=True)
+        foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=False)
     else :
         foc0=focstart
     foctime=Time.now()
@@ -645,7 +664,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
                 logger.info('closing: {:s}'.format(Time.now().to_string()))
                 nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
                 aposong.domeclose()
-                load_status('closed')
+                load_status('closed for not safe')
                 closed = True
             oldtarg=''
             time.sleep(90)
@@ -654,7 +673,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             logger.info('opening: {:s}'.format(Time.now().to_string()))
             nightlogger.info('opening: {:s}'.format(Time.now().to_string()))
             aposong.domeopen()
-            load_status('open')
+            load_status('opened after a closure')
             closed = False
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
@@ -688,7 +707,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             else :
                 nightlogger.info('observe: {:s}'.format(best['targname']))
                 logger.info('observe: {:s}'.format(best['targname']))
-                load_status('observing')
+                load_status('observing {:s}'.format(best['targname']))
                 load_song_status(req_no,'exec',no_exp=0)
                 success = observe_object(best,display=display,acquire=(best['targname']!=oldtarg),
                                          fact=fact,nfact=nfact,req_no=req_no,header=header)
@@ -775,11 +794,17 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             attachments.append(attach)
     mail.send(aposong.config['mail_recipients'],subject=subject,
               message=message.replace('\n','<br>'), attachment=attachments,html=True)
-    subprocess.run('copy {:s}'.format(ut),shell=True)
 
     # remove MJD file to indicate successful completion
     try :os.remove('{:d}'.format(int(nautical.mjd)))
     except : print('no MJD file to remove?')
+
+    # start data sync to NMSU after clearing fail since it may take some time
+    subprocess.run('copy {:s}'.format(ut),shell=True)
+    load_status('robotic stopped')
+
+  load_status('robotic stopped')
+
 
 def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
     """ Do focus run for object on meridian
@@ -1296,6 +1321,8 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
     return out
 
 def check_connections(guideok,domeok,telescopeok) :
+    global nighterror
+
     guideok = aposong.isguideok(guideok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
     if not guideok :
         nighterror += ' guider connection error, '
@@ -1308,13 +1335,18 @@ def check_connections(guideok,domeok,telescopeok) :
 
     return guideok, domeok, telescopeok
 
-def snapshot(file='webcam_snapshot.jpg') :
+import cv2
+def snapshot(file='webcam_snapshot.jpg',lights=10) :
     """ Get a JPG snapshot from webcam
     """
     auth = webrequests.auth.HTTPDigestAuth('snapshot',os.environ['VIDEOPASS'])
+    response=webrequests.get("http://video1m.apo.nmsu.edu/cgi-bin/configManager.cgi?action=setConfig&Lighting[0][0].Mode=Manual&Lighting[0][0].MiddleLight[0].Light={:d}".format(lights),stream=True,auth=auth)
+    time.sleep(2)
     response=webrequests.get("http://video1m.apo.nmsu.edu/cgi-bin/snapshot.cgi",stream=True,auth=auth)
     try : os.remove(file)
     except : pass
     fimg=open(file,'wb')
     fimg.write(response.content)
     fimg.close()
+    return response.content
+
