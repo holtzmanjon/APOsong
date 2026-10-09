@@ -597,7 +597,7 @@ if __name__ == '__main__' :
             binary_data = robotic.snapshot(lights=10)
             query = "UPDATE robotic.snapshot SET snapshot = %s WHERE pk=1;"
             cursor.execute(query,(psycopg2.Binary(binary_data),))
-            if niter%5 == 1 :
+            if niter%30 == 1 :
                 binary_data = robotic.snapshot(lights=0)
                 query = "UPDATE robotic.snapshot SET dark_snapshot = %s WHERE pk=1;"
                 cursor.execute(query,(psycopg2.Binary(binary_data),))
