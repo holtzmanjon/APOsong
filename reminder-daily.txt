@@ -1,0 +1,7 @@
+Check the <a href=http://song-grafana.apo.nmsu.edu/public-dashboards/a38a038d939f491c8aec24bb3e2e47c2 > SONG status dashboard </a>
+
+If robotic status is waiting for spreadsheet, enable SONG observing by checking the Started box for tonight from the spreadsheet link below.
+Otherwise, you need to connect to the SONG desktop to check status and start robotic.observe and/or report an error to astro-song@nmsu.edu 
+for someone else to handle!
+
+By starting observations, you commit to, at a minimum, checking in the morning to confirm that the dome is closed. You can see a webcam image on the dashboard, but you need to confirm that timestamp is recent. Otherwise you need to check the webcam image on the song desktop.

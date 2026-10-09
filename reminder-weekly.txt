@@ -1,0 +1,12 @@
+Routine checks:
+- on song1m
+  - restart influxdb?
+  - check disk space
+- on pwi1m
+  - restart pwi4?
+  - restart fpu_app?
+  - restart ASCOM remote?
+- on spec1m
+  - restart spectro_app?
+  - restart ASCOM remote?
+
