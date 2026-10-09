@@ -514,12 +514,18 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     addr='https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE'
     tab=reminder.get(addr,datecol='Start date')
     load_status('closed, waiting for spreadsheet start')
-    while tab[tab['dayno'] == datetime.datetime.now().timetuple().tm_yday]['Started'] != 'TRUE' :
+    serror = False
+    while serror or tab[tab['dayno'] == datetime.datetime.now().timetuple().tm_yday]['Started'] != 'TRUE' :
         # wait until start box is checked
         logger.info('waiting for spreadsheet start to be set')
         guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
         time.sleep(60)
-        tab=reminder.get(addr,datecol='Start date')
+        try : 
+            tab=reminder.get(addr,datecol='Start date')
+            serror=False
+        except :
+            print('Error reading spreadsheet')
+            serror = True
 
     if not guideok :
         print('guider not responding, restart it!')
