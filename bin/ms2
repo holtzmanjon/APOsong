@@ -14,11 +14,12 @@ commands. This program wraps the SNMP control.
     1;
 
 # The hostname of the APC server. 192.41.211.20
-$SNMP_HOSTNAME = 'power1m.apo.nmsu.edu';
+$SNMP_HOSTNAME = 'powera1m.apo.nmsu.edu';
 
 # The SNMP Community name serves as the access control. It really 
 # should not be here in plain text... - CPL
-$SNMP_COMMUNITY = `hostname`;
+#$SNMP_COMMUNITY = `hostname`;
+$SNMP_COMMUNITY = 'public' ;
 
 # Path to the snmp{get,set} apps.
 $SNMP_PATH = '/usr/bin';
@@ -89,7 +90,7 @@ sub fetch_names($) {
    $community = $SNMP_COMMUNITY ;
    $community =~ s/\..*//;
    chomp($community);
-#   printf STDERR "$SNMP_PATH/snmpget $SNMP_HOSTNAME $community $get_string\n";
+   printf STDERR "$SNMP_PATH/snmpget $SNMP_HOSTNAME $community $get_string\n";
 
     @full_response = `$SNMP_PATH/snmpget -v 1 -c $community $SNMP_HOSTNAME $get_string`;
 

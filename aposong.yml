@@ -21,5 +21,6 @@ iodinestage_out_pos : 120 # 150.
 df_iodine : -4600  #  -5300    # -4600
 hole_pos : [491,811] # [510,805]  # [509,778]
 text_recipients : ['5756217380@tmomail.net','5054313557@tmomail.net']
-mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu','madsfa@phys.au.dk','fgj@phys.au.dk']
+#mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu','madsfa@phys.au.dk','fgj@phys.au.dk']
+mail_recipients : ['holtz@nmsu.edu','jasonj@nmsu.edu','jaklus@nmsu.edu']
 test_recipients : ['holtz@nmsu.edu','bknj5hzjuj@mail.signl4.com']

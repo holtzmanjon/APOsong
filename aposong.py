@@ -19,6 +19,7 @@ import multiprocessing as mp
 import threading
 import yaml
 import subprocess
+import psycopg2
 
 # set up logger
 import logging
@@ -358,6 +359,19 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     if display is not None :
         display.tv(data,min=min,max=max)
+        if min is None : min = 0.
+        if max is None : min,max = image.minmax(data)
+
+        d=database.DBSession()
+        cursor = d.connection.cursor()
+        query = "UPDATE robotic.snapshot SET ccd{:d} = %s WHERE pk=1;".format(cam)
+        import cv2
+        success, encoded_jpg = cv2.imencode('.jpg', (data[::-1,:]-min)/(max-min)*255)
+        cursor.execute(query,(psycopg2.Binary(encoded_jpg),))
+        d.connection.commit()
+        cursor.close()
+        d.close()
+
 
     hdu=fits.PrimaryHDU(data)
     hdu.header['ORIGIN'] = 'SONG/APO'
@@ -549,6 +563,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
         bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1., -1, -1., -1.
         logger.exception('focus failed')
         f=foc(foc0)
+        f=copy.copy(foc0)
 
     tab=Table()
     tab['mjd'] = [Time.now().mjd]

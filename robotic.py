@@ -510,6 +510,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     guideok = True
     domeok = True
     telescopeok = True
+    ok = (guideok, domeok, telescopeok)
 
     addr='https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE'
     tab=reminder.get(addr,datecol='Start date')
@@ -518,7 +519,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     while serror or tab[tab['dayno'] == datetime.datetime.now().timetuple().tm_yday]['Started'] != 'TRUE' :
         # wait until start box is checked
         logger.info('waiting for spreadsheet start to be set')
-        guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
+        ok = check_connections(*ok)
         time.sleep(60)
         try : 
             tab=reminder.get(addr,datecol='Start date')
@@ -527,17 +528,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             print('Error reading spreadsheet')
             serror = True
 
-    if not guideok :
-        print('guider not responding, restart it!')
-        return
-    if not domeok :
-        print('dome not responding, restart it!')
-        return
-    if not telescopeok :
-        print('telescope not responding, restart it!')
-        return
     logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
-
 
     site=Observer.at_site(obs,timezone=tz)
     sunset =site.sun_set_time(Time.now(),which='nearest')
@@ -555,7 +546,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
 
     # open dome when safe after desired time relative to sunset
     opentime = sunset+dt_sunset*u.hour
-    load_status('closed, waiting for sunset')
+    load_status('closed, waiting for sunset+dt_sunset')
     while (Time.now()-opentime)<0 :
         # wait until sunset + dt_sunset hours 
         logger.info('waiting for sunset+dt_sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
@@ -565,7 +556,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
-        guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
+        ok = check_connections(*ok,reenable=True)
         time.sleep(60)
     logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
 
@@ -642,23 +633,16 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     # fans off for observing?
     #aposong.fans_off()
 
-    # focus star on meridian 
-    if initfoc : 
-        load_status('focus')
-        #foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=True)
-        foc0,best=focus(foc0=focstart,delta=100,n=11,display=display,iodine=False)
-    else :
-        foc0=focstart
-    foctime=Time.now()
-
     oldtarg=''
     skiptarg=None
     closed = False
     nfocus = 0
     nerror = 0
+    doneinitfoc = False if initfoc else True
 
     # loop for objects until morning nautical twilight
-    while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour and guideok and domeok and telescopeok : 
+    while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour and False not in ok :
+
       if usesong : load_status('ready')
       try :
         tnow=Time.now()
@@ -683,7 +667,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             closed = False
 
         logger.info('tnow-foctime : {:.3f}'.format((tnow-foctime).to(u.hour).value))
-        if (tnow-foctime).to(u.hour) > dt_focus[nfocus]*u.hour :
+        if not doneinitfoc or (tnow-foctime).to(u.hour) > dt_focus[nfocus]*u.hour :
             # focus if it has been more than dt_focus since last focus
             aposong.guide('stop')
             #foc0,best=focus(foc0=foc0,display=display,decs=[90,85,75,65,55,40],iodine=False)
@@ -753,7 +737,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
           time.sleep(300)
 
       # check if guider, dome, telescope are responding, send text if not
-      guideok, domeok, telescopeok = check_connections(guideok, domeok, telescopeok)
+      ok = check_connection(*ok,reenable=True)
 
     # close
     try: aposong.guide('stop')
@@ -785,7 +769,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     # send completion email and start sync to NMSU via APOsong/copy
     y,m,d,hr,mi,se = Time.now().ymdhms
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
-    message='<A HREF=http://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
+    message='<A HREF=https://astronomy.nmsu.edu/1m/data/'+ut+'/'+ut+'.html>'+ut+' astronomy.nmsu.edu web page</A><P>'
     if nighterror != '' :
         subject='APO SONG observing {:d} completed but with error(s)'.format(int(Time.now().mjd))
         message+='Errors: '+nighterror+'\n'+nightlogger_string.getvalue()
@@ -1326,7 +1310,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
 
     return out
 
-def check_connections(guideok,domeok,telescopeok) :
+def check_connections(guideok,domeok,telescopeok,reenable=False) :
     global nighterror
 
     guideok = aposong.isguideok(guideok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
@@ -1338,6 +1322,9 @@ def check_connections(guideok,domeok,telescopeok) :
     telescopeok = aposong.istelescopeok(telescopeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
     if not telescopeok :
         nighterror += ' telescope connection error, '
+        if reenable :
+            aposong.pwi.mount_enable(0)
+            aposong.pwi.mount_enable(1)
 
     return guideok, domeok, telescopeok
 
