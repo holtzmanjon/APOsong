@@ -639,11 +639,15 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     nfocus = 0
     nerror = 0
     doneinitfoc = False if initfoc else True
+    foctime=Time.now()
+    foc0 = focstart
 
     # loop for objects until morning nautical twilight
     while (Time.now()-nautical_morn).to(u.hour) < 0*u.hour and False not in ok :
 
-      if usesong : load_status('ready')
+      if usesong : 
+          load_status('ready')
+          time.sleep(60)
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
@@ -677,6 +681,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             if best > 0 :
                 nfocus = nfocus+1 if nfocus+1<len(dt_focus) else len(dt_focus)-1
             foctime=tnow
+            doneinitfoc = True
             oldtarg=''
         else :
             # observe best object!
@@ -737,7 +742,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
           time.sleep(300)
 
       # check if guider, dome, telescope are responding, send text if not
-      ok = check_connection(*ok,reenable=True)
+      ok = check_connections(*ok,reenable=True)
 
     # close
     try: aposong.guide('stop')
@@ -1323,8 +1328,16 @@ def check_connections(guideok,domeok,telescopeok,reenable=False) :
     if not telescopeok :
         nighterror += ' telescope connection error, '
         if reenable :
-            aposong.pwi.mount_enable(0)
-            aposong.pwi.mount_enable(1)
+            try :
+                aposong.pwi.mount_enable(0)
+                aposong.pwi.mount_enable(1)
+                logger.info('Automatically re-enabling axes')
+                nightlogger.info('Automatically re-enabling axes')
+            except :
+                print('Error reenabling axes')
+                logger.error('Automatically re-enabling axes')
+                nightlogger.error('Automatically re-enabling axes')
+                raise Exception('Error reenabling axes')
 
     return guideok, domeok, telescopeok
 

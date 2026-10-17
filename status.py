@@ -224,37 +224,57 @@ def postgres_write(telstatus,domestatus) :
     tab=Table()
     tab['tel_dome_id'] = [1]
     tab['tel_ready_state'] = [tel_ready()]
-    tab['tel_con_state'] = [postgres_bool(telstatus.mount.is_connected)]
-    tab['tel_tracking'] = [postgres_bool(telstatus.mount.is_tracking)]
-    tab['tel_ra_j2000'] = [telstatus.mount.ra_j2000_hours]
-    tab['tel_dec_j2000'] = [telstatus.mount.dec_j2000_degs]
-    tab['tel_ra'] = [telstatus.mount.ra_apparent_hours]
-    tab['tel_dec'] = [telstatus.mount.dec_apparent_degs]
-    if telstatus.mount.axis0.is_enabled : 
-        tab['tel_azm'] = [telstatus.mount.azimuth_degs]
-    else :
+    try :
+        tab['tel_con_state'] = [postgres_bool(telstatus.mount.is_connected)]
+        tab['tel_tracking'] = [postgres_bool(telstatus.mount.is_tracking)]
+        tab['tel_ra_j2000'] = [telstatus.mount.ra_j2000_hours]
+        tab['tel_dec_j2000'] = [telstatus.mount.dec_j2000_degs]
+        tab['tel_ra'] = [telstatus.mount.ra_apparent_hours]
+        tab['tel_dec'] = [telstatus.mount.dec_apparent_degs]
+        if telstatus.mount.axis0.is_enabled : 
+            tab['tel_azm'] = [telstatus.mount.azimuth_degs]
+        else :
+            tab['tel_azm'] = [999]
+        if telstatus.mount.axis1.is_enabled :
+            tab['tel_alt'] = [telstatus.mount.altitude_degs]
+        else :
+            tab['tel_alt'] = [999]
+        tab['tel_alt_rms_error'] = [telstatus.mount.axis1.rms_error_arcsec]
+        tab['tel_azm_rms_error'] = [telstatus.mount.axis0.rms_error_arcsec]
+        tab['m3_pos'] = [telstatus.m3.port]
+        tab['tel_lst'] = [telstatus.site.lmst_hours]
+    except :
+        tab['tel_con_state'] = [postgres_bool(False)]
+        tab['tel_tracking'] = [postgres_bool(False)]
+        tab['tel_ra_j2000'] = [-1]
+        tab['tel_dec_j2000'] = [-1]
+        tab['tel_ra'] = [-1]
+        tab['tel_dec'] = [-1]
         tab['tel_azm'] = [999]
-    if telstatus.mount.axis1.is_enabled :
-        tab['tel_alt'] = [telstatus.mount.altitude_degs]
-    else :
         tab['tel_alt'] = [999]
-    tab['tel_alt_rms_error'] = [telstatus.mount.axis1.rms_error_arcsec]
-    tab['tel_azm_rms_error'] = [telstatus.mount.axis0.rms_error_arcsec]
-    tab['m3_pos'] = [telstatus.m3.port]
-    tab['dome_shutterstate'] = [domestatus.shutterstate]
-    tab['dome_az'] = [domestatus.az]
-    tab['dome_slewing'] = [postgres_bool(domestatus.slewing)]
-    tab['dome_light_state'] = [postgres_bool(domestatus.lights)]
+        tab['tel_alt_rms_error'] = [999]
+        tab['tel_azm_rms_error'] = [999]
+        tab['m3_pos'] = [-1]
+        tab['tel_lst'] = [-1]
     tab['temp_m1'] = [None]
     tab['temp_m2'] = [None]
     tab['temp_m3'] = [None]
     tab['temp_back'] = [None]
     tab['temp_amb'] = [None]
-    tab['focuser_1_pos'] = [aposong.foc()]
-    tab['focuser_1_moving'] = [postgres_bool(aposong.F[0].IsMoving)]
+    tab['dome_shutterstate'] = [domestatus.shutterstate]
+    tab['dome_az'] = [domestatus.az]
+    tab['dome_slewing'] = [postgres_bool(domestatus.slewing)]
+    tab['dome_light_state'] = [postgres_bool(domestatus.lights)]
+
+    try: 
+        tab['focuser_1_pos'] = [aposong.foc()]
+        tab['focuser_1_moving'] = [postgres_bool(aposong.F[0].IsMoving)]
+    except :
+        tab['focuser_1_pos'] = [-1]
+        tab['focuser_1_moving'] = [postgres_bool(False)]
     #tab['focuser_2_pos'] = [aposong.specfoc()]
     #tab['focuser_2_moving'] = [postgres_bool(aposong.F[4].IsMoving)]
-    tab['tel_lst'] = [telstatus.site.lmst_hours]
+
     tab['ins_at' ] = [Time.now().fits]
     d=database.DBSession(host='song1m_db.apo.nmsu.edu',database='db_apo',user='song')
     d.ingest('public.tel_dome',tab,onconflict='update',constraintname='tel_dome_id')
@@ -440,7 +460,7 @@ if __name__ == '__main__' :
             iodineframe.voltage.set(volt)
             iodineframe.current.set(curr)
 
-            if float(temp1)>float(tset1)+20 : #or float(temp2)>float(tset2)+20 :
+            if float(temp1)>float(tset1)+10 or float(temp2)>float(tset2)+10 :
                 # if temp is more than 20 degrees above set temp, disable heaters!
                 aposong.iodine_set('enable',0)
 
@@ -554,6 +574,7 @@ if __name__ == '__main__' :
             telframe.rot.set('ERROR')
             telframe.port.set('ERROR')
             telframe.focus.set('ERROR')
+            stat = False
 
         try :
             domestat = aposong.domestatus()
@@ -570,14 +591,18 @@ if __name__ == '__main__' :
             else :
                 domeframe.stat35m_label.config(foreground='red')
 
-            if coverstate[aposong.Covers.CoverState.value] == 'Open' :
-                domeframe.coverstate_label.config(foreground='green3')
-            elif coverstate[aposong.Covers.CoverState.value] == 'Closed' :
-                domeframe.coverstate_label.config(foreground='black')
-            else :
+            try :
+                domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
+                if coverstate[aposong.Covers.CoverState.value] == 'Open' :
+                    domeframe.coverstate_label.config(foreground='green3')
+                elif coverstate[aposong.Covers.CoverState.value] == 'Closed' :
+                    domeframe.coverstate_label.config(foreground='black')
+                else :
+                    domeframe.coverstate_label.config(foreground='red')
+            except :
+                domeframe.coverstate.set('ERROR')
                 domeframe.coverstate_label.config(foreground='red')
 
-            domeframe.coverstate.set('{:s}'.format(coverstate[aposong.Covers.CoverState.value]))
         except : print('error with dome')
 
         try : postgres_write(stat,domestat)
@@ -597,7 +622,7 @@ if __name__ == '__main__' :
             binary_data = robotic.snapshot(lights=10)
             query = "UPDATE robotic.snapshot SET snapshot = %s WHERE pk=1;"
             cursor.execute(query,(psycopg2.Binary(binary_data),))
-            if niter%30 == 1 :
+            if niter%60 == 1 :
                 binary_data = robotic.snapshot(lights=0)
                 query = "UPDATE robotic.snapshot SET dark_snapshot = %s WHERE pk=1;"
                 cursor.execute(query,(psycopg2.Binary(binary_data),))

@@ -61,7 +61,6 @@ import pwi4_client
 
 from pyvista import tv, skycalc, centroid, stars, image, spectra, imred
 import focus
-import status
 import database
 
 from collections import namedtuple
@@ -193,7 +192,8 @@ def wait_moving(Foc) :
         try :
             if not Foc.IsMoving : break
         except : 
-            logger.exception('error with F.IsMoving')
+            logger.exception('Error with F.IsMoving')
+            raise Exception('Error with F.IsMoving')
             break
     time.sleep(1)
     return
@@ -562,8 +562,8 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1., -1, -1., -1.
         logger.exception('focus failed')
-        f=foc(foc0)
-        f=copy.copy(foc0)
+        f=foc(foc0)   # seems to return bad value sometimes?
+        f=foc0
 
     tab=Table()
     tab['mjd'] = [Time.now().mjd]
@@ -857,23 +857,28 @@ def foc_home(port=None) :
 def foc(val=None, relative=False, port=None) :
     """ Change focus, depending on port
     """
-    if port is None :
-        stat = pwi.status()
-        port = stat.m3.port
-    if port == 1 :
-        index = getfocuser('PWI')
-    else :
-        index = getfocuser('Zaber')
-    if val is not None :
-        if port != 1 and val > 45000 :
-            raise Exception('zaber focus should be kept <45000 unless manually commanded')
-            return F[index].Position
-        if relative :
-            if val == 0 : return F[index].Position
-            val += F[index].Position
-        F[index].Move(val)
-        wait_moving(F[index]) 
-    return F[index].Position
+    try :
+        if port is None :
+            stat = pwi.status()
+            port = stat.m3.port
+        if port == 1 :
+            index = getfocuser('PWI')
+        else :
+            index = getfocuser('Zaber')
+        if val is not None :
+            if port != 1 and val > 45000 :
+                raise Exception('zaber focus should be kept <45000 unless manually commanded')
+                return F[index].Position
+            if relative :
+                if val == 0 : return F[index].Position
+                val += F[index].Position
+            F[index].Move(val)
+            wait_moving(F[index]) 
+        return F[index].Position
+    except :
+        print('Error in foc()')
+        raise Exception('Error in foc')
+        return -1
 
 def specfoc(val=None) :
     """ Change spectrograph focus
@@ -941,7 +946,8 @@ def iodine_in(val=None,focoffset=None) :
     if focoffset is None : focoffset = config['df_iodine']
     ipos = iodine_position()
     if ipos < 0 :
-        print("error with iodine stage")
+        print("Error with iodine stage")
+        raise Exception("Error with iodine stage")
         return
     if abs(ipos-val) > 0.1 :
         foc(focoffset,relative=True,port=2)
@@ -959,6 +965,7 @@ def iodine_out(val=None,focoffset=None) :
     ipos = iodine_position()
     if ipos < 0 :
         print("error with iodine stage")
+        raise Exception("Error with iodine stage")
         return
     if abs(ipos-val) > 0.1 :
         iodine_position(val)
@@ -1084,8 +1091,8 @@ def mirror_covers(open=False) :
         Covers.OpenCover()
     elif not open and current != 1 :
         Covers.CloseCover()
-        logger.info('waiting 40 seconds for mirror covers to close...')
-        time.sleep(40)
+        logger.info('waiting 30 seconds for mirror covers to close...')
+        time.sleep(30)
 
 def louvers(open=False) :
     """ Open louvers
@@ -1148,11 +1155,12 @@ def domeopen(dome=True,covers=True,fans=True,louvers=False) :
     if covers and Covers.CoverState.name != 'Open': 
         mirror_covers(True) 
         logger.info('waiting for mirror covers to open...')
-        time.sleep(20)
+        time.sleep(60)
         #while Covers.CoverState.value != 3 :
         #    time.sleep(1)
         if Covers.CoverState.value != 3 :
-            logger.error('Mirror covers did not all open in 20s!') 
+            logger.error('Mirror covers did not all open in 60s!') 
+            raise Exception('Mirror covers did not all open in 60s!') 
     if fans :
         logger.info('turning fans on...')
         fans_on()
@@ -1212,25 +1220,6 @@ def domesync(dosync=True,manual=False) :
         run_sync = False
         sync_process.join()
         sync_process = None
-
-def start_status(camera=True) :
-    """ Start status window thread
-    """
-    global proc
-    # allow for no camera state to avoid command collisions
-    if camera :
-        Cam = C
-    else : 
-        Cam = None
-    proc = mp.Process(target=status.status,
-                 kwargs={'pwi' : pwi, 'T' : T, 'D' : D, 'F' : F, 'Filt' : Filt, 'C' : Cam, 'Covers': Covers})
-    proc.daemon = True
-    proc.start()
-
-def stop_status() :
-    """ Stop status window thread
-    """
-    proc.terminate()
 
 def commands() :
     print()
@@ -1443,6 +1432,7 @@ def isccdok(ok,loggers=None,recipients=None) :
             if not ok :
                 # if CCD has changed state, log and alert
                 alert('CCD temperature OK',loggers=loggers,recipients=recipients)
+                settemp(-20,cam=3)
             return True 
         else : 
             if ok :
