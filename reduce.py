@@ -147,8 +147,12 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         try : imagetyp = imec.header['IMAGETYP']
         except : imagetyp = 'UNKNOWN'
         if outfile.find('thar') >= 0 or imagetyp == 'THAR' :
-            try: wav.identify(imec,thresh=20,plot=False)
-            except : raise Exception('Error in wav.identify')
+            try: 
+                wav.identify(imec,thresh=20,plot=True,plotinter=False)
+                plt.savefig(outfile.replace('_ec','_wav').replace('.fits','.png'))
+                plt.close()
+            except : 
+                raise Exception('Error in wav.identify')
             ngd=len(np.where(wav.weights>0)[0])
             if ngd>100 and wav.rms < wav_rmsmax :
                 wav.write(outfile.replace('_ec','_wav'))
