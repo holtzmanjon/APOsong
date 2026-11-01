@@ -26,7 +26,7 @@ def lamps(close=False,mirror=False,thar=False,quartz=False,led=False) :
 def shutter(openshutter=False) :
     """ Command shutter in direct calibration feed
     """
-    iswitch =  aposong.getswitch('LCUS')
+    iswitch =  aposong.getswitch('Noyito')
     if openshutter :
         aposong.SW[iswitch].SetSwitch(0,True)
     else :
