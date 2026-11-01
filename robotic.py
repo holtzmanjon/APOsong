@@ -658,9 +658,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
                 logger.info('closing: {:s}'.format(Time.now().to_string()))
                 nightlogger.info('closing: {:s}'.format(Time.now().to_string()))
                 aposong.domeclose()
-                load_status('closed for not safe')
                 closed = True
             oldtarg=''
+            load_status('closed for not safe')
             time.sleep(90)
             continue
         elif aposong.D.ShutterStatus != 0 :
@@ -797,6 +797,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     # start data sync to NMSU after clearing fail since it may take some time
     subprocess.run('copy {:s}'.format(ut),shell=True)
     load_status('robotic stopped')
+
+    # reset cals
+    cals=[True,True]
 
   load_status('robotic stopped')
 
@@ -1085,7 +1088,6 @@ def mkhtml(mjd=None) :
     ut = 'UT{:d}{:02d}{:02d}'.format(y-2000,m,d)
     dofocus.mksum(mjd,hard='/data/1m/'+ut+'/focus.png')
     out=reduce.throughput_all(mjd=mjd,hard='/data/1m/'+ut+'/throughput.png')
-    subprocess.run('copy {:s}'.format(ut),shell=True)
 
 def mkmovie(mjd,root='/data/1m/',clobber=False) :
     """ Make guider movies from guide images in guide subdirectory for specified MJD
@@ -1215,13 +1217,22 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
 
     # do ThAr first
     wavs=[]
+    grid=[]
+    row=[]
+    i=0
     for f in out['file'] :
             if f.find('thar') >=0 :
                 try :
                     imec=reduce.specreduce(root+f,red=red,clobber=clobber,write=True,wav_rmsmax=rmsmax,display=display)
                     file=imec.header['FILE'].split('.')
                     outfile='{:s}/{:s}_wav.{:s}.fits'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2])
-                    try: wavs.append(spectra.WaveCal(outfile))
+                    try: 
+                        if i>0 and i%5 == 0 :
+                            grid.append(row)
+                            row=[]
+                        row.append('{:s}/{:s}_wav.{:s}.png'.format(os.path.dirname(root+f).replace('1m/','1m/reduced/'),file[0],file[-2]))
+                        i+=1
+                        wavs.append(spectra.WaveCal(outfile))
                     except: pass
                 except :
                     logger.error('Failed ThAr reduce: {:s}'.format(f))
@@ -1229,6 +1240,11 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
                         nightlogger.error('Failed ThAr reduce: {:s}'.format(f))
                         nighterror += ' ThAr solution error, '
                     except : pass
+    i-=1
+    for ii in range(i%5+1,5) :
+        row.append('')
+    grid.append(row)
+    html.htmltab(grid,file='{:s}/{:s}/thar.html'.format(root,ut),size=250)
 
     if len(wavs) < 1 :
         logger.error('No good ThAr frames? rms>rmsmax?')
@@ -1290,6 +1306,7 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
     fp.write('<h2>{:s}  MJD: {:d}</h2><br>'.format(ut,mjd))
     fp.write('<A HREF=guide.html>Guider movies</A><BR>\n')
     fp.write('<A HREF=focus.html>Focus curves</A><BR>\n')
+    fp.write('<A HREF=thar.html>ThAr solutions</A><BR>\n')
     fp.write('<A HREF=../reduced/{:s}>Reduced data</A><BR>\n'.format(ut))
     fp.write('<A HREF=focus.png><IMG SRC=focus.png WIDTH=30%></A>\n')
     fp.write('<A HREF=throughput.png><IMG SRC=throughput.png WIDTH=30%></A>\n')
