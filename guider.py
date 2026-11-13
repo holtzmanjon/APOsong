@@ -79,8 +79,8 @@ class Guider :
         if display :
             self.disp=tv.TV(figsize=(8,4))
             self.disp.fig.canvas.manager.window.wm_geometry('-0-0')
-        self.prop = prop
-        self.ki = ki
+        self.prop = float(prop)
+        self.ki = float(ki)
         self.navg = np.min([5,np.max([1,int(5/exptime)])])
         self.nseq = 1
         self.xtot = 0.
@@ -187,14 +187,15 @@ class Guider :
         self.navg = np.min([3,np.max([1,int(5/self.exptime)])])
 
         # take full frame acquisition image to save and offset to brightest object
-        exp=aposong.expose(self.exptime,display=self.disp,filt=self.filt,bin=self.bin,name='guide/acquire',fast=True)
-        mad=np.nanmedian(np.abs(hdu.data-np.nanmedian(hdu.data)))
-        objs=stars.find(hdu.data,thresh=thresh*mad,fwhm=fwhm/self.pixscale,brightest=1)
-        x=objs[0]['x']
-        y=objs[0]['y']
-        logger.info('offsetting {:.1f} {:.1f}'.format(x-self.x0,y-self.y0))
-        aposong.offsetxy((x-self.x0),(y-self.y0),scale=self.pixscale)
-        time.sleep(self.settle)
+        for i in range(2) :
+            exp=aposong.expose(self.exptime,avg=self.expavg,display=self.disp,filt=self.filt,bin=self.bin,name='guide/acquire',fast=True)
+            mad=np.nanmedian(np.abs(exp.hdu.data-np.nanmedian(exp.hdu.data)))
+            objs=stars.find(exp.hdu.data,thresh=thresh*mad,fwhm=fwhm/self.pixscale,brightest=1)
+            x=objs[0]['x']
+            y=objs[0]['y']
+            logger.info('offsetting {:.1f} {:.1f}'.format(x-self.x0,y-self.y0))
+            aposong.offsetxy((x-self.x0),(y-self.y0),scale=self.pixscale)
+            time.sleep(self.settle)
         return self.get_offset(name='guide/acquire')
 
     def get_offset(self,data=None,name=None) :
