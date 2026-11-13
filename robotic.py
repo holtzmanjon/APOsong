@@ -445,7 +445,7 @@ def load_object(request,mjd,names) :
 
     return True
 
-def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,dt_nautical=-0.5,obs='apo',tz='US/Mountain',
+def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,dt_nautical=-0.3,obs='apo',tz='US/Mountain',
         criterion='best',maxdec=None,cals=[True,True],gtemp=0, stemp=-20, initfoc=True, fact=1, nfact=1, usesong=True) :
   """ Start full observing night sequence 
 
@@ -458,9 +458,9 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
          if list, increment list index each time focus run is done, e.g. to achieve more frequent focus at beginning of night
   display : pyvista TV object
          if specified, display images as they are taken
-  dt_sunset : float, default=0
+  dt_sunset : float, default=-2
          time relative to sunset to open dome (only if opening conditions are met)
-  dt_nautical : float, default=-0.2
+  dt_nautical : float, default=-0.3
          time relative to nautical twilight to start observations
   obs : str, default='apo'
          observatory name, for getting site coordinates
@@ -507,10 +507,11 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     nightlogger.info('Starting night!')
     logger.info('Starting night!')
 
+    ccdok = True
     guideok = True
     domeok = True
     telescopeok = True
-    ok = (guideok, domeok, telescopeok)
+    ok = (ccdok, guideok, domeok, telescopeok)
 
     addr='https://docs.google.com/spreadsheets/d/10XUbViGVJvek49jQ7xD_HOcFLJYxPkCvgL2VAFeCvFE'
     tab=reminder.get(addr,datecol='Start date')
@@ -519,7 +520,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     while serror or tab[tab['dayno'] == datetime.datetime.now().timetuple().tm_yday]['Started'] != 'TRUE' :
         # wait until start box is checked
         logger.info('waiting for spreadsheet start to be set')
-        ok = check_connections(*ok)
+        ok = check_connections(*ok,tmax=stemp+2)
         time.sleep(60)
         try : 
             tab=reminder.get(addr,datecol='Start date')
@@ -540,10 +541,6 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
     f=open('{:d}'.format(int(nautical.mjd)),'w')
     f.close()
 
-    # set CCD temperatures
-    aposong.settemp(gtemp,cam=0)
-    aposong.settemp(stemp,cam=3)
-
     # open dome when safe after desired time relative to sunset
     opentime = sunset+dt_sunset*u.hour
     load_status('closed, waiting for sunset+dt_sunset')
@@ -552,11 +549,15 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
         logger.info('waiting for sunset+dt_sunset: {:.3f} '.format((opentime-Time.now()).to(u.hour).value,' hours'))
         time.sleep(60)
 
+    # set CCD temperatures
+    aposong.settemp(gtemp,cam=0)
+    aposong.settemp(stemp,cam=3)
+
     load_status('closed, waiting for issafe()')
     while not aposong.issafe() and (Time.now()-nautical_morn).to(u.hour) < 0*u.hour : 
         # wait until safe to open based on Safety
         logger.info('waiting for issafe()')
-        ok = check_connections(*ok,reenable=True)
+        ok = check_connections(*ok,reenable=True,tmax=stemp+2)
         time.sleep(60)
     logger.info('encl35m: {:s}   encl25m: {:s}'.format(aposong.S.Action('stat35m'),aposong.S.Action('stat25m')))
 
@@ -647,7 +648,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
 
       if usesong : 
           load_status('ready')
-          time.sleep(60)
+          time.sleep(30)
       try :
         tnow=Time.now()
         logger.info('nautical twilight in : {:.3f}'.format((nautical_morn-tnow).to(u.hour).value))
@@ -680,8 +681,8 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
             # if successful focus run, increment dt_focus index
             if best > 0 :
                 nfocus = nfocus+1 if nfocus+1<len(dt_focus) else len(dt_focus)-1
-            foctime=tnow
-            doneinitfoc = True
+                foctime=tnow
+                doneinitfoc = True
             oldtarg=''
         else :
             # observe best object!
@@ -742,7 +743,7 @@ def observe(focstart=32400,dt_focus=[0.5,1.0,1.0,2.0],display=None,dt_sunset=-2,
           time.sleep(300)
 
       # check if guider, dome, telescope are responding, send text if not
-      ok = check_connections(*ok,reenable=True)
+      ok = check_connections(*ok,reenable=True,tmax=stemp+2)
 
     # close
     try: aposong.guide('stop')
@@ -811,7 +812,8 @@ def focus(foc0=28800,delta=75,n=9,decs=[52],iodine=True,display=None) :
     for dec in decs :
         t=Time(Time.now(), location=EarthLocation.of_site('APO'))
         lst=t.sidereal_time('mean').value
-        aposong.usno(ra=lst,dec=dec,magmin=9,magmax=10,rad=5*u.degree)
+        ret=aposong.usno(ra=lst,dec=dec,magmin=8,magmax=10,rad=5*u.degree)
+        if ret < 0 : return foc0,-1
 
         # focus run with iodine cell (if desired)
         if iodine :
@@ -1098,6 +1100,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     dir=root+ut+'/guide'
     red=imred.Reducer(dir=dir)
     files=sorted(glob.glob(dir+'/acquire*.fits'))
+    guides=sorted(glob.glob(dir+'/guide*.fits'))
     ims=[]
     seqs=[]
     for file in files :
@@ -1106,6 +1109,9 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
     for i,im in enumerate(ims[1:]) :
         if ims[i+1]-ims[i] > 1 :
             seqs.append([ims[i]+1,ims[i+1]])
+    # get last sequence until final guide image
+    last=int(sorted(glob.glob(dir+'/guide*.fits'))[-1].split('.')[-2])
+    seqs.append([ims[-1],last])
 
     print(ims)
     print(seqs)
@@ -1116,7 +1122,7 @@ def mkmovie(mjd,root='/data/1m/',clobber=False) :
         out='{:s}/{:d}.mp4'.format(dir,seq[0])
         if clobber or not os.path.isfile(out) :
             #red.movie(range(seq[0],seq[1]),display=t,max=10000,out=out)
-            try : red.movie(range(seq[0],seq[1]-1),display=t,max=10000,out=out,text=False)
+            try : red.movie(range(seq[0],seq[1]-1),display=t,max=10000,out=out) # ,text=False)
             except: 
                 logger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
                 nightlogger.error('Failure in mkmovie {:d} {:d}'.format(seq[0],seq[1]))
@@ -1332,9 +1338,12 @@ def mklog(mjd,root='/data/1m/',pause=False,clobber=False,rmsmax=0.0045,display=N
 
     return out
 
-def check_connections(guideok,domeok,telescopeok,reenable=False) :
+def check_connections(ccdok,guideok,domeok,telescopeok,reenable=False,tmax=0) :
     global nighterror
 
+    ccdok = aposong.isccdok(ccdok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
+    if not ccdok :
+        nighterror += ' CCD connection/temperature error, '
     guideok = aposong.isguideok(guideok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
     if not guideok :
         nighterror += ' guider connection error, '
@@ -1350,13 +1359,14 @@ def check_connections(guideok,domeok,telescopeok,reenable=False) :
                 aposong.pwi.mount_enable(1)
                 logger.info('Automatically re-enabling axes')
                 nightlogger.info('Automatically re-enabling axes')
+                telescopeok = aposong.istelescopeok(telescopeok,loggers=[logger,nightlogger],recipients=aposong.config['test_recipients'])
             except :
                 print('Error reenabling axes')
                 logger.error('Automatically re-enabling axes')
                 nightlogger.error('Automatically re-enabling axes')
                 raise Exception('Error reenabling axes')
 
-    return guideok, domeok, telescopeok
+    return ccdok, guideok, domeok, telescopeok
 
 import cv2
 def snapshot(file='webcam_snapshot.jpg',lights=10) :
