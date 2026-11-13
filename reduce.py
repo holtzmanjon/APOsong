@@ -97,9 +97,16 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
         utflat='UT260602'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260423_Trace_fiber2.fits')
         if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT260423_WaveCal_fiber2.fits')
-    else :
+    elif Time(im.header['DATE-OBS']).mjd < 61340 :
         darktimes=np.array([30,60,120,180,240,300,600])
         utdark='UT260424'
+        temp=-20
+        utflat='UT260602'
+        if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260608_Trace_fiber2.fits')
+        if wav is None : wav=spectra.WaveCal(dataroot+'cal/wavecal/UT260608_WaveCal_fiber2.fits')
+    else :
+        darktimes=np.array([30,60,120,180,240,300,600])
+        utdark='UT261101'
         temp=-20
         utflat='UT260602'
         if trace == None : trace=spectra.Trace(dataroot+'cal/trace/UT260608_Trace_fiber2.fits')
@@ -353,7 +360,7 @@ def getobs(targ) :
                 ind.append(i[0])
     ind=np.array(ind)
     sort =np.argsort(out[ind]['sn'])[::-1]
-    tab=Table(out[ind[sort]])['file','filter','throughput','sn']
+    tab=Table(out[ind[sort]])['file','mjd','filter','throughput','sn']
     tab['sn'].format = '.2f'
     tab['throughput'].format = '.2f'
     return tab
