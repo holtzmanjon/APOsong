@@ -72,13 +72,15 @@ def weather(hdu) :
     hdu.header['WIND'] = (float(wdict['winds']),'Wind speed from weather station')
     hdu.header['WIND_DIR'] = (float(wdict['windd']),'Wind direction from weather station')
     hdu.header['DEWPOINT'] = (float(wdict['dewpoint']),'Dewpoint from weather station')
-    hdu.header['PRESSURE'] = (float(wdict['pressure']),'Pressure from weather station')
+    try : hdu.header['PRESSURE'] = (float(wdict['pressure']),'Pressure from weather station')
+    except KeyError : print('PRESSURE missing from weather')
 
 def sunmoon(hdu) :
     hdu.header['---SM---'] = ('-----SUN/MOON-----','-------------------------------------')
 
 def time(hdu,t) :
     hdu.header['---TI---'] = ('-----TIME---------','-------------------------------------')
-    hdu.header['DATE-OBS'] = (t.fits, 'Start time of exposure in UTC')
+    hdu.header['DATE-OBS'] = (t.fits, 'Start time of exposure')
+    hdu.header['TIMESYS'] = ('TAI', 'APO clocks synced to TAI')
     hdu.header['JD-DATE'] = (t.jd, 'Start time of exposure in Julian date')
     hdu.header['MJD-DATE'] =( t.mjd, 'Start time of exposure in modified Julian date')
