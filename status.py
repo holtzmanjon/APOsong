@@ -412,16 +412,16 @@ if __name__ == '__main__' :
                 else :
                     camframe.spec_cooler_label.config(foreground='black')    
                     camframe.spec_cooler_title.config(foreground='black')    
-                ctemp = aposong.chiller()
-                camframe.chiller_temp.set('{:.1f}'.format(ctemp))
-                cfault = aposong.chiller_fault()
-                camframe.chiller_fault.set('{:d}'.format(cfault))
-                if cfault != 0 : 
-                    camframe.chiller_fault_label.config(foreground='red')
-                    camframe.chiller_fault_title.config(foreground='red')
-                else :
-                    camframe.chiller_fault_label.config(foreground='green3')
-                    camframe.chiller_fault_title.config(foreground='black')
+                #ctemp = aposong.chiller()
+                #camframe.chiller_temp.set('{:.1f}'.format(ctemp))
+                #cfault = aposong.chiller_fault()
+                #camframe.chiller_fault.set('{:d}'.format(cfault))
+                #if cfault != 0 : 
+                #    camframe.chiller_fault_label.config(foreground='red')
+                #    camframe.chiller_fault_title.config(foreground='red')
+                #else :
+                #    camframe.chiller_fault_label.config(foreground='green3')
+                #    camframe.chiller_fault_title.config(foreground='black')
         except : print('Error with camera')
 
         try :
