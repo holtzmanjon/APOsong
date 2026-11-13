@@ -33,8 +33,8 @@ from astropy.io import fits
 from astropy.time import Time
 from astropy.table import Table
 
-from astroquery.vo_conesearch import ConeSearch, conesearch
 from astroquery.vizier import Vizier
+from astroquery.gaia import Gaia
 import astroquery.utils
 astroquery.utils.suppress_vo_warnings()
 
@@ -173,7 +173,7 @@ def getswitch(switch) :
     """ Get correct list index for specified switch (ASCOM doesn't always deliver them in order!)
          switch='TC300' : Thorlabs temperature controller
          switch='K8056' : relay for Shelyak calibration control
-         switch='LCUS' : LCUS relay for calibration shutter
+         switch='Noyito' : Noyito relay for calibration shutter
          switch='Yocto' : Thermocouples on QHY600
          switch='Wanderer' : Wanderer PowerBox for spectrograph CCD and focuser USB reset
          switch='TCube' : TCube chiller
@@ -290,6 +290,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         filt = 'None'
 
     try :
+        # turn off spectrograph focuser 
+        if cam == 3 : SW[getswitch('Wanderer')].SetSwitchValue(2,0)
         icam = getcam(cam) 
         C[icam].BinX=bin
         C[icam].BinY=bin
@@ -305,7 +307,8 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             ny = C[icam].CameraYSize//bin
         C[icam].NumX = nx
         C[icam].NumY = ny
-        t = Time.now()
+        # system clock is TAI
+        t=Time(time.time(),format='unix_tai',scale='tai')
         # if using simultaneous ThAr, determine countdown times to start and stop
         if thar > 0 :
             thar_end = np.max([0,int(exptime/2-thar/2)])
@@ -337,6 +340,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
             while not C[icam].ImageReady or C[icam].CameraState != 0:
                 time.sleep(0.25)
                 if time.time()-exp_start > exptime + 30 :
+                    C[icam].AbortExposure()
                     raise Exception('camera not responding')
             if iavg == 0 :
                 if avg == 1 :
@@ -366,7 +370,7 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
         cursor = d.connection.cursor()
         query = "UPDATE robotic.snapshot SET ccd{:d} = %s WHERE pk=1;".format(cam)
         import cv2
-        success, encoded_jpg = cv2.imencode('.jpg', (data[::-1,:]-min)/(max-min)*255)
+        success, encoded_jpg = cv2.imencode('.jpg', ((data[::-1,:]-min)/(max-min)*255).astype(np.uint8))
         cursor.execute(query,(psycopg2.Binary(encoded_jpg),))
         d.connection.commit()
         cursor.close()
@@ -470,6 +474,12 @@ def expose(exptime=1.0,filt='current',bin=3,box=None,light=True,display=None,nam
 
     return exposure
 
+def gettemp() :
+    """ Print detector temperatures
+    """
+    print(SW[getswitch('Yocto')].GetSwitchValue(1),SW[getswitch('Yocto')].GetSwitchValue(0),
+          C[getcam(3)].CCDTemperature,C[getcam(3)].CoolerPower,C[getcam(3)].SetCCDTemperature,C[getcam(3)].CoolerOn)
+
 def settemp(temp,cam=0) :
     """ Change detector temperature set point and turn cooler on
     """
@@ -529,6 +539,7 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     """
 
     foc0=foc()
+    logger.info('foc0: {:d}'.format(foc0))
     files=[]
     names=[]
     images=[]
@@ -562,8 +573,8 @@ def focrun(cent,step,n,exptime=1.0,filt='V',bin=3,box=None,display=None,
     except :
         bestfitfoc, bestfithf,  bestfoc, besthf, best = -1, -1., -1, -1., -1.
         logger.exception('focus failed')
-        f=foc(foc0)   # seems to return bad value sometimes?
-        f=foc0
+        f=foc(cent)   # seems to return bad value sometimes?
+        f=cent
 
     tab=Table()
     tab['mjd'] = [Time.now().mjd]
@@ -680,7 +691,7 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
         coords=SkyCoord("{:s} {:s}".format(ra,dec),unit=(u.hourangle,u.deg))
 
     try :
-      viz=Vizier(columns=['*','+_r'],catalog=cat)
+      viz=Vizier(vizier_server="vizier.cfa.harvard.edu",columns=['*','+_r'],catalog=cat)
       if mag is not None :
         result=viz.query_region(coords,radius=rad,
                 column_filters={mag:'<{:f}'.format(magmax)})[0]
@@ -688,17 +699,31 @@ def usno(ra=None,dec=None,rad=1*u.degree,mag='Rmag',magmin=0,magmax=20,goto=True
         result=result[gd]
       else :
         result=viz.query_region(coords,radius=rad)[0]
+      best = result['_r'].argmin()
+      #adql_query = f"""
+      #SELECT 
+      #    source_id, ra, dec, phot_g_mean_mag, 
+      #    DISTANCE(POINT(ra, dec), POINT({ra}*15, {dec})) AS dist
+      #FROM gaiadr3.gaia_source
+      #WHERE CONTAINS(POINT(ra, dec), CIRCLE({ra}*15, {dec}, {rad.value})) = 1
+      #    AND phot_g_mean_mag<{magmax} AND phot_g_mean_mag>{magmin}
+      #"""
+      #job = Gaia.launch_job(adql_query)
+      #result = job.get_results()
+      #best=result['dist'].argmin()
+
     except :
         logger.warning('usno: no stars found within specified rad and mag range')
-        return
+        return -1
 
-    best = result['_r'].argmin()
     logger.info(result[best])
     if goto: 
         try: 
             slew(result['RAJ2000'][best]/15., result['DEJ2000'][best])
         except : 
-            slew(result['RA_ICRS'][best]/15., result['DE_ICRS'][best])
+            #`slew(result['RA_ICRS'][best]/15., result['DE_ICRS'][best])
+            slew(result['ra'][best]/15., result['dec'][best])
+    return 0
 
 def center(display,x0=None,y0=None,exptime=5,bin=1,filt=None,settle=3,cam=0) :
     """ Center star
@@ -1023,7 +1048,7 @@ def calstage_out(val=None) :
     if val is None : val = config['calstage_out_pos']
     calstage_position(val)
 
-def calstage_find(display=None) :
+def calstage_find(display=None,maxoff=100) :
     """ Find calibration spot location
     """
     calstage_in()
@@ -1040,10 +1065,10 @@ def calstage_find(display=None) :
     if display is not None : 
         display.tvclear()
         display.tvcirc(cent.x,cent.y,50)
-    if abs(cent.y-config['hole_pos'][0]) < 50 :
+    if abs(cent.y-config['hole_pos'][0]) < maxoff :
         config['calstage_in_pos'] -= (cent.y-config['hole_pos'][0])/10*.05
     else :
-        print('spot center too far off, not modifying')
+        print('spot center too far off ({:f}), not modifying'.format(cent.y-config['hole_pos'][0]))
     gexp(0.01,display=display,max=60000).hdu.data
     cal.lamps()
     calstage_in()
@@ -1425,10 +1450,10 @@ def istelescopeok(ok,loggers=None,recipients=None) :
             alert(msg,loggers=loggers,recipients=recipients)
         return False
 
-def isccdok(ok,loggers=None,recipients=None) :
+def isccdok(ok,loggers=None,recipients=None,tmax=0) :
     try :
         temp=C[getcam(3)].CCDTemperature
-        if temp != 0 :
+        if temp != 0 and temp<tmax :
             if not ok :
                 # if CCD has changed state, log and alert
                 alert('CCD temperature OK',loggers=loggers,recipients=recipients)
@@ -1437,7 +1462,7 @@ def isccdok(ok,loggers=None,recipients=None) :
         else : 
             if ok :
                 # if CCD has changed state, log and alert
-                msg='CCD temperature=0. Check spec1m desktop: Is ASCOM remote running? Should it be restarted?'
+                msg='CCD temperature={:f}. Cooler? Check spec1m desktop: Is ASCOM remote running? Should it be restarted?'.format(temp)
                 alert(msg,loggers=loggers,recipients=recipients)
             return False
     except :
