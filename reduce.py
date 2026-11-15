@@ -135,7 +135,7 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
     # Extract
     if retrace : trace.retrace(im,display=display)
     traceshift=trace.find(im,lags=range(-10,11))
-    imec=trace.extract(im,display=display)
+    imec=trace.extract(im,display=display,back=[[-15,10],[10,15]])
     imec.header['T_SHIFT'] = traceshift[0]
 
     # Add wave and response, barycentric
@@ -159,7 +159,8 @@ def specreduce(n, red=None, trace=None, wav=None, retrace=False, cr=True, scat=F
                 plt.savefig(outfile.replace('_ec','_wav').replace('.fits','.png'))
                 plt.close()
             except : 
-                raise Exception('Error in wav.identify')
+                pass
+                #raise Exception('Error in wav.identify')
             ngd=len(np.where(wav.weights>0)[0])
             if ngd>100 and wav.rms < wav_rmsmax :
                 wav.write(outfile.replace('_ec','_wav'))
@@ -371,7 +372,7 @@ def process_thar(pars,outdir='rereduced',clobber=False) :
 def process(pars,outdir='rereduced',clobber=False) :
     specreduce(pars[0],red=pars[1],outdir=outdir,write=True,clobber=clobber,wav=pars[2])
  
-def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
+def reduce_obj(obj,ut=None,threads=24,outdir='rereduced') :
     """ Reduce all frames of specified object, optionally on a single UT. Includes ThAr frames first
     """
     try :
@@ -419,7 +420,7 @@ def reduce_obj(obj,ut=None,threads=48,outdir='rereduced') :
 
     if threads == 0 :
         for par in pars :
-            process_thar(par)
+            process(par)
     else :
         pool = mp.Pool(threads)
         output = pool.map_async(process, pars).get()
